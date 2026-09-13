@@ -5,6 +5,13 @@ set -e
 PUID=${PUID:-1000}
 PGID=${PGID:-1000}
 
+if [ ! -f /config/config.ini ]; then
+    echo "No config file found, copying sample one..."
+    cp /app/docker_sample_config /config/config.ini
+fi
+
+echo "Starting media organizer..."
+
 if [ "$(id -u)" = "0" ]; then
     # Adjust group GID
     CURRENT_GID=$(id -g renamer 2>/dev/null || echo "")
@@ -21,17 +28,22 @@ if [ "$(id -u)" = "0" ]; then
     # Ensure /config directory has proper ownership for renamer
     [ -d /config ] && chown -R renamer:renamer /config 2>/dev/null || true
 
+    if [ "${RUN_AS_ROOT:-false}" = "true" ]; then
+        echo "WARNING: Running as root because RUN_AS_ROOT=true"
+        exec organizer "$@"
+    fi
+
     # If first argument is an existing command in PATH (like bash, sh, ffmpeg, ffprobe) and not a renamer subcommand
     if command -v "$1" > /dev/null 2>&1 && [ "$1" != "config" ] && [ "$1" != "configure" ]; then
         exec gosu renamer:renamer "$@"
     fi
 
-    exec gosu renamer:renamer python /app/main.py "$@"
+    exec gosu renamer:renamer organizer "$@"
 else
     # Running directly as non-root
     if command -v "$1" > /dev/null 2>&1 && [ "$1" != "config" ] && [ "$1" != "configure" ]; then
         exec "$@"
     fi
 
-    exec python /app/main.py "$@"
+    exec organizer "$@"
 fi

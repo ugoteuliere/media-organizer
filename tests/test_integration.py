@@ -295,7 +295,7 @@ def test_integration_gemini_learning_disabled(media_env, monkeypatch):
     monkeypatch.setattr("google.genai.Client", lambda api_key: mock_client)
     monkeypatch.setattr("src.api.GEMINI_API_KEY", "dummy_key")
     monkeypatch.setattr("src.ui.GEMINI_API_KEY", "dummy_key")
-    monkeypatch.setattr(sys, "argv", ["main.py", "-i", "-b"])
+    monkeypatch.setattr(sys, "argv", ["main.py", "-a", "-b"])
 
     with patch("src.mail.send_email") as mock_email:
         exit_code = main.main()

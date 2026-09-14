@@ -64,14 +64,18 @@ def test_ui_daemon_flags(monkeypatch):
     assert ui.LOG_ENABLED is False
     assert ui.POLLING_INTERVAL == 30
 
-    # No backward compatibility with -a / --autonomous -> Must raise SystemExit
-    monkeypatch.setattr(sys, "argv", ["main.py", "-a"])
-    with pytest.raises(SystemExit):
-        ui.parse_arguments()
-
+    # No backward compatibility with --autonomous -> Must raise SystemExit
     monkeypatch.setattr(sys, "argv", ["main.py", "--autonomous"])
     with pytest.raises(SystemExit):
         ui.parse_arguments()
+
+    # -a is now assigned to --ai, not daemon/autonomous
+    monkeypatch.setattr(sys, "argv", ["main.py", "-a"])
+    with patch("src.ui.GEMINI_API_KEY", "fake_key"):
+        args_ai = ui.parse_arguments()
+        assert args_ai.ai is True
+        assert args_ai.daemon is False
+        assert ui.DAEMON_ENABLED is False
 
 
 def test_ui_interval_invalid(monkeypatch):

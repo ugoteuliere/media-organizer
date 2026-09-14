@@ -1226,7 +1226,7 @@ def test_parse_arguments_conflicts(monkeypatch):
 
 def test_parse_arguments_missing_keys(monkeypatch):
     monkeypatch.setattr(ui, "GEMINI_API_KEY", None)
-    monkeypatch.setattr(sys, "argv", ["main.py", "-i"])
+    monkeypatch.setattr(sys, "argv", ["main.py", "-a"])
     with pytest.raises(SystemExit):
         ui.parse_arguments()
 

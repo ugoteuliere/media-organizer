@@ -111,7 +111,7 @@ def parse_arguments():
                             help="Detect and append video resolution tags (e.g. [1080p], [4K]).")
     proc_group.add_argument("-q", "--quality", action="store_true",
                             help="Detect and append video encoding/quality tags (e.g. [FullHD BluRay]).")
-    proc_group.add_argument("-i", "--ai", action="store_true", 
+    proc_group.add_argument("-a", "--ai", action="store_true", 
                             help="Enables the Gemini AI fallback to intelligently parse and correct highly obfuscated filenames.")
     proc_group.add_argument("-L", "--learn", action="store_true",
                             help="Enable AI keyword learning to discover and save missing tags from Gemini.")

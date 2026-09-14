@@ -86,12 +86,20 @@ def test_parse_arguments_daemon(monkeypatch):
     assert ui.DAEMON_ENABLED is True
     assert ui.POLLING_INTERVAL == 10
 
-    # Verify no backward compatibility for -a and --autonomous
-    monkeypatch.setattr(sys, "argv", ["main.py", "-a"])
+    # Verify no backward compatibility for --autonomous
+    monkeypatch.setattr(sys, "argv", ["main.py", "--autonomous"])
     with pytest.raises(SystemExit):
         ui.parse_arguments()
 
-    monkeypatch.setattr(sys, "argv", ["main.py", "--autonomous"])
+    # Verify -a is now the short flag for --ai
+    monkeypatch.setattr(sys, "argv", ["main.py", "-a"])
+    with patch("src.ui.GEMINI_API_KEY", "fake_key"):
+        args = ui.parse_arguments()
+        assert args.ai is True
+        assert ui.AI_FALLBACK_ENABLED is True
+
+    # -i is no longer a valid flag
+    monkeypatch.setattr(sys, "argv", ["main.py", "-i"])
     with pytest.raises(SystemExit):
         ui.parse_arguments()
 
@@ -135,7 +143,7 @@ def test_parse_arguments_ai_missing_key(monkeypatch):
          patch.object(ConfigManager, "GROQ_API_KEY", new_callable=PropertyMock, return_value=None), \
          patch.object(ConfigManager, "OPENROUTER_API_KEY", new_callable=PropertyMock, return_value=None), \
          patch.object(ConfigManager, "CLOUDFLARE_API_TOKEN", new_callable=PropertyMock, return_value=None):
-        monkeypatch.setattr(sys, "argv", ["main.py", "-i"])
+        monkeypatch.setattr(sys, "argv", ["main.py", "-a"])
         with pytest.raises(SystemExit):
             ui.parse_arguments()
 

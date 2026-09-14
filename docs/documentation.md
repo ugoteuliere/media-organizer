@@ -151,13 +151,10 @@ media-organizer --simulate
 ```
 
 ### Daemon Background Watcher
-Runs as a persistent background daemon polling the download folder periodically.
+The daemon polls the download folder periodically.
 ```bash
-media-organizer --daemon --interval 5
-# or using short flag:
-media-organizer -d --interval 5
+media-organizer --daemon --interval 15
 ```
-Daemon mode automatically enables `-b` (`bypass`) for non-interactive execution. File logging (`-l`) is optional and can be enabled with `-l` or `options.log = true` in configuration. Log files older than 14 days (2 weeks) are automatically deleted.
 
 ## 4. Options & CLI Flags
 
@@ -168,7 +165,7 @@ Daemon mode automatically enables `-b` (`bypass`) for non-interactive execution.
 | `-d` | `--daemon` | `options.daemon` | `false` | Runs background watcher daemon. |
 | — | `--interval <min>` | `options.polling_interval` | `15` | Polling interval for daemon mode (minutes). |
 | `-b` | `--bypass` | `options.bypass` | `false` | Bypasses interactive confirmation prompts. |
-| `-i` | `--ai` | `options.ai` | `false` | Enables Cloud AI fallback for unrecognizable filenames. |
+| `-a` | `--ai` | `options.ai` | `false` | Enables Cloud AI fallback for unrecognizable filenames. |
 | `-L` | `--learn` | `options.learn` | `false` | Enables keyword learning to save newly discovered tags. |
 | — | `--provider <p>` | `options.ai_provider` | `auto` | Selects AI provider (`auto`, `gemini`, `groq`, `openrouter`, `cloudflare`). |
 | `-R` | `--resolution` | `options.resolution` | `false` | Appends video resolution tags (`[1080p]`, `[4K]`). Requires `ffprobe`. |
@@ -215,7 +212,7 @@ Raw Filename
 Computes a match probability $P \in [0.0, 1.0]$:
 $$P = 0.50 \cdot \text{SequenceSimilarity} + 0.35 \cdot \text{TokenOverlap} + 0.15 \cdot \text{YearProximity}$$
 * If $P \ge 0.75$, the match is accepted directly.
-* If $P < 0.75$ and AI fallback is enabled (`-i`), the item is queued for cloud AI verification.
+* If $P < 0.75$ and AI fallback is enabled (`-a`), the item is queued for cloud AI verification.
 
 ## 6. Keyword Management
 

@@ -669,8 +669,15 @@ def test_cleanup_old_logs_edge_cases(tmp_path, monkeypatch):
     # 5. stat raising OSError on non-date file
     bad_stat_file = log_dir / "unknown.log"
     bad_stat_file.write_text("bad stat", encoding="utf-8")
-    with patch.object(Path, "is_file", return_value=True), \
-         patch.object(Path, "stat", side_effect=OSError("stat error")):
+    orig_stat = Path.stat
+    def fake_stat(self, *args, **kwargs):
+        if self.name == "unknown.log":
+            import inspect
+            stack = [f.function for f in inspect.stack()]
+            if "cleanup_old_logs" in stack and "is_file" not in stack and "is_dir" not in stack:
+                raise OSError("stat error")
+        return orig_stat(self, *args, **kwargs)
+    with patch.object(Path, "stat", fake_stat):
         # Should not crash, and should not delete
         ui.cleanup_old_logs(log_dir)
         assert bad_stat_file.exists()

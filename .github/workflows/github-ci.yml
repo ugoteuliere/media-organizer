@@ -7,7 +7,7 @@ on:
   push:
     branches: [ "main", "dev" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "dev" ]
   workflow_dispatch:
 
 permissions:
@@ -152,6 +152,25 @@ jobs:
             -v /tmp/docker_test/config:/config \
             -v /tmp/docker_test/data:/data \
             media-organizer:test --simulate --only-rename --bypass --path /data/downloads
+
+      - name: Verify Out-of-the-Box 3-Volume Mount & Dual Logging
+        run: |
+          mkdir -p /tmp/docker_3vol/input /tmp/docker_3vol/movies /tmp/docker_3vol/tv /tmp/docker_3vol/logs
+          chmod -R 777 /tmp/docker_3vol
+          touch "/tmp/docker_3vol/input/Arrival (2016).mkv"
+
+          docker run --rm \
+            -e PUID=1000 \
+            -e PGID=1000 \
+            -e LOG=true \
+            -v /tmp/docker_3vol/input:/data/input \
+            -v /tmp/docker_3vol/movies:/data/Movies \
+            -v /tmp/docker_3vol/tv:/data/TV_Shows \
+            -v /tmp/docker_3vol/logs:/app/log \
+            media-organizer:test --simulate --only-rename --bypass
+
+          # Verify log file was created in /app/log mount
+          test -n "$(ls -A /tmp/docker_3vol/logs)"
 
   sonarqube:
     name: SonarQube Scan

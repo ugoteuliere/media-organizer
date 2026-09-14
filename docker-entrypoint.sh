@@ -10,7 +10,7 @@ if [ ! -f /config/config.ini ]; then
     cp /app/docker_sample_config /config/config.ini
 fi
 
-echo "Starting media organizer..."
+echo "Starting media organizer..." >&2
 
 if [ "$(id -u)" = "0" ]; then
     # Adjust group GID
@@ -30,7 +30,7 @@ if [ "$(id -u)" = "0" ]; then
     [ -d /app/log ] && chown -R renamer:renamer /app/log 2>/dev/null || true
 
     if [ "${RUN_AS_ROOT:-false}" = "true" ]; then
-        echo "WARNING: Running as root because RUN_AS_ROOT=true"
+        echo "WARNING: Running as root because RUN_AS_ROOT=true" >&2
         exec organizer "$@"
     fi
 

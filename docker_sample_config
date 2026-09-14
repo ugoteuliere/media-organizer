@@ -1,7 +1,7 @@
 [paths]
 movies_folder = /data/Movies
 tv_shows_folder = /data/TV_Shows
-not_sorted_media_files_folder = /data/input/test
+not_sorted_media_files_folder = /data/input
 
 [api]
 tmdb_api_key = your_tmdb_api_key
@@ -18,7 +18,7 @@ ai_min_confidence = 0.70
 resolution = false
 quality = false
 bypass = false
-autonomous = false
+daemon = false
 polling_interval = 15
 ai = false
 learn = false

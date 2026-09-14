@@ -312,7 +312,7 @@ def test_resolve_config_path_variations(tmp_path, monkeypatch):
     local_config = tmp_path / "config.ini"
     local_config.touch()
     monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("RENAME_CONFIG_FILE", raising=False)
+    monkeypatch.delenv("CONFIG_FILE", raising=False)
     monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
     assert cm._resolve_config_path() == local_config.resolve()
     local_config.unlink()
@@ -603,7 +603,7 @@ def test_docker_resolve_config_path(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("RENAME_TEST_ALLOW_REAL_PATH", "1")
     monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
-    monkeypatch.delenv("RENAME_CONFIG_FILE", raising=False)
+    monkeypatch.delenv("CONFIG_FILE", raising=False)
 
     # 1. CONFIG_FILE environment variable
     custom_cfg = tmp_path / "custom.ini"
@@ -711,11 +711,12 @@ def test_clean_environment_variables(monkeypatch, tmp_path):
     val, source = cm.get_with_source("options.log")
     assert val is True and source == "ENV"
 
-    # Test backward-compatible alias fallback
-    monkeypatch.delenv("MOVIES_FOLDER")
+    # Verify legacy RENAME_* is NOT recognized (no backward compatibility)
+    monkeypatch.delenv("MOVIES_FOLDER", raising=False)
     monkeypatch.setenv("RENAME_MOVIES_FOLDER", "/mnt/legacy_movies")
     val, source = cm.get_with_source("paths.movies_folder")
-    assert val == "/mnt/legacy_movies" and source == "ENV"
+    assert source != "ENV"
+    assert val != "/mnt/legacy_movies"
 
 
 def test_check_log_dir_permissions(tmp_path):

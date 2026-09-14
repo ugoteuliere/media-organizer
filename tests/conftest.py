@@ -49,7 +49,7 @@ if _source_ini and _source_ini.is_file():
 with open(_global_quarantine_file, "w", encoding="utf-8") as _f:
     _q_parser.write(_f)
 
-os.environ.setdefault("RENAME_CONFIG_FILE", str(_global_quarantine_file))
+os.environ.setdefault("CONFIG_FILE", str(_global_quarantine_file))
 os.environ.setdefault("APPDATA", str(_global_quarantine_dir))
 os.environ.setdefault("XDG_CONFIG_HOME", str(_global_quarantine_dir))
 os.environ.setdefault("HOME", str(_global_quarantine_dir))
@@ -72,8 +72,8 @@ def isolate_user_config(tmp_path, monkeypatch):
     if _global_quarantine_file.is_file():
         shutil.copyfile(str(_global_quarantine_file), str(test_config_file))
 
-    # 1. Point RENAME_CONFIG_FILE to the isolated file
-    monkeypatch.setenv("RENAME_CONFIG_FILE", str(test_config_file))
+    # 1. Point CONFIG_FILE to the isolated file
+    monkeypatch.setenv("CONFIG_FILE", str(test_config_file))
 
     # 2. Also isolate APPDATA / XDG_CONFIG_HOME / HOME to the temp directory
     monkeypatch.setenv("APPDATA", str(test_config_dir))

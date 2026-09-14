@@ -144,7 +144,7 @@ def verify_folders(only_rename=False, custom_path=None, daemon=False, simulate=F
                 "     python main.py config --set paths.movies_folder \"path/to/movies\"\n"
                 "     python main.py config --set paths.tv_shows_folder \"path/to/tv_shows\"\n"
                 "     python main.py config --set paths.not_sorted_media_files_folder \"path/to/downloads\"\n"
-                "  3. Or use environment variables (e.g. RENAME_MOVIES_FOLDER)\n\n"
+                "  3. Or use environment variables (e.g. MOVIES_FOLDER)\n\n"
                 "Stopping program."
             )
         ui.print_log(msg)

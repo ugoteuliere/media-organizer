@@ -277,33 +277,34 @@ Settings are resolved using a **3-tier priority hierarchy**:
 
 ### Environment Variables
 
-All variables accept clean names (without prefix) or legacy `RENAME_*` aliases:
+Each configuration setting is mapped to **exactly one** clean environment variable (without prefix):
 
-| Variable | Clean Alias | Config Key | Default in Docker | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `PUID` | — | — | `1000` | Host user ID for permission matching. |
-| `PGID` | — | — | `1000` | Host group ID for permission matching. |
-| `RUN_AS_ROOT` | — | — | `false` | Set to `true` to bypass `gosu` privilege drop on strict root systems. |
-| `INPUT_FOLDER` | `DOWNLOADS_FOLDER` | `paths.not_sorted_media_files_folder` | `/data/input` | Path to incoming media folder. |
-| `MOVIES_FOLDER` | — | `paths.movies_folder` | `/data/Movies` | Path to destination movies folder. |
-| `TV_SHOWS_FOLDER` | — | `paths.tv_shows_folder` | `/data/TV_Shows` | Path to destination TV shows folder. |
-| `DAEMON` | — | `options.daemon` | `true` | Enables continuous polling background daemon. |
-| `POLLING_INTERVAL` | `INTERVAL` | `options.polling_interval` | `15` | Polling interval in minutes. |
-| `BYPASS` | — | `options.bypass` | `true` | Automatically bypasses confirmation prompts. |
-| `VERBOSE` | — | `options.verbose` | `true` | Displays detailed error tracebacks on failure. |
-| `LOG` | — | `options.log` | `false` | Enables file logging to `/app/log/` in addition to console. |
-| `TMDB_API_KEY` | — | `api.tmdb_api_key` | — | TheMovieDatabase v3 API key for online matching. |
-| `AI` | — | `options.ai` | `false` | Enables cloud AI fallback for unrecognizable titles. |
-| `AI_PROVIDER` | — | `options.ai_provider` | `auto` | AI provider (`auto`, `gemini`, `groq`, `openrouter`, `cloudflare`). |
-| `GEMINI_API_KEY` | — | `api.gemini_api_key` | — | Google Gemini API key. |
-| `GROQ_API_KEY` | — | `api.groq_api_key` | — | Groq API key. |
-| `OPENROUTER_API_KEY`| — | `api.openrouter_api_key` | — | OpenRouter API key. |
-| `CLOUDFLARE_API_TOKEN`| — | `api.cloudflare_api_token` | — | Cloudflare AI API token. |
-| `CLOUDFLARE_ACCOUNT_ID`| — | `api.cloudflare_account_id`| — | Cloudflare Account ID. |
-| `MAIL` | — | `mail.mail` | — | Gmail address for email alerts. |
-| `MAIL_PSWD` | — | `mail.mail_pswd` | — | 16-character Gmail App Password. |
-| `NOTIFY_ON_SUCCESS`| — | `options.notify_on_success`| `false` | Send email notification on successful processing. |
-| `NOTIFY_ON_ERROR` | — | `options.notify_on_error` | `false` | Send email notification on processing errors. |
+| Environment Variable | Config Key | Default in Docker | Description |
+| :--- | :--- | :--- | :--- |
+| `PUID` | — | `1000` | Host user ID for permission matching. |
+| `PGID` | — | `1000` | Host group ID for permission matching. |
+| `RUN_AS_ROOT` | — | `false` | Set to `true` to bypass `gosu` privilege drop on strict root systems. |
+| `INPUT_FOLDER` | `paths.not_sorted_media_files_folder` | `/data/input` | Path to incoming media folder. |
+| `MOVIES_FOLDER` | `paths.movies_folder` | `/data/Movies` | Path to destination movies folder. |
+| `TV_SHOWS_FOLDER` | `paths.tv_shows_folder` | `/data/TV_Shows` | Path to destination TV shows folder. |
+| `DAEMON` | `options.daemon` | `true` | Enables continuous polling background daemon. |
+| `POLLING_INTERVAL` | `options.polling_interval` | `15` | Polling interval in minutes. |
+| `BYPASS` | `options.bypass` | `true` | Automatically bypasses confirmation prompts. |
+| `VERBOSE` | `options.verbose` | `true` | Displays detailed error tracebacks on failure. |
+| `LOG` | `options.log` | `false` | Enables file logging to `/app/log/` in addition to console. |
+| `TMDB_API_KEY` | `api.tmdb_api_key` | — | TheMovieDatabase v3 API key for online matching. |
+| `AI` | `options.ai` | `false` | Enables cloud AI fallback for unrecognizable titles. |
+| `AI_PROVIDER` | `options.ai_provider` | `auto` | AI provider (`auto`, `gemini`, `groq`, `openrouter`, `cloudflare`). |
+| `GEMINI_API_KEY` | `api.gemini_api_key` | — | Google Gemini API key. |
+| `GROQ_API_KEY` | `api.groq_api_key` | — | Groq API key. |
+| `OPENROUTER_API_KEY` | `api.openrouter_api_key` | — | OpenRouter API key. |
+| `CLOUDFLARE_API_TOKEN` | `api.cloudflare_api_token` | — | Cloudflare AI API token. |
+| `CLOUDFLARE_ACCOUNT_ID` | `api.cloudflare_account_id` | — | Cloudflare Account ID. |
+| `MAIL` | `mail.mail` | — | Gmail address for email alerts. |
+| `MAIL_PSWD` | `mail.mail_pswd` | — | 16-character Gmail App Password. |
+| `NOTIFY_ON_SUCCESS` | `options.notify_on_success` | `false` | Send email notification on successful processing. |
+| `NOTIFY_ON_ERROR` | `options.notify_on_error` | `false` | Send email notification on processing errors. |
+| `NOTIFY_ON_TAG` | `options.notify_on_tag` | `false` | Send email notification when a new tag is discovered. |
 
 ---
 

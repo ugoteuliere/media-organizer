@@ -23,35 +23,32 @@ class ConfigManager:
     }
 
     ENV_MAPPING = {
-        "paths.movies_folder": ["MOVIES_FOLDER", "RENAME_MOVIES_FOLDER"],
-        "paths.tv_shows_folder": ["TV_SHOWS_FOLDER", "RENAME_TV_SHOWS_FOLDER"],
-        "paths.not_sorted_media_files_folder": [
-            "INPUT_FOLDER", "DOWNLOADS_FOLDER", "NOT_SORTED_MEDIA_FILES_FOLDER",
-            "RENAME_INPUT_FOLDER", "RENAME_NOT_SORTED_MEDIA_FILES_FOLDER", "RENAME_DOWNLOADS_FOLDER"
-        ],
-        "api.tmdb_api_key": ["TMDB_API_KEY", "RENAME_TMDB_API_KEY"],
-        "api.gemini_api_key": ["GEMINI_API_KEY", "RENAME_GEMINI_API_KEY"],
-        "api.groq_api_key": ["GROQ_API_KEY", "RENAME_GROQ_API_KEY"],
-        "api.openrouter_api_key": ["OPENROUTER_API_KEY", "RENAME_OPENROUTER_API_KEY"],
-        "api.cloudflare_api_token": ["CLOUDFLARE_API_TOKEN", "RENAME_CLOUDFLARE_API_TOKEN"],
-        "api.cloudflare_account_id": ["CLOUDFLARE_ACCOUNT_ID", "RENAME_CLOUDFLARE_ACCOUNT_ID"],
-        "mail.mail": ["MAIL", "RENAME_MAIL"],
-        "mail.mail_pswd": ["MAIL_PSWD", "RENAME_MAIL_PSWD"],
-        "options.bypass": ["BYPASS", "RENAME_BYPASS"],
-        "options.ai": ["AI", "RENAME_AI"],
-        "options.learn": ["LEARN", "RENAME_LEARN"],
-        "options.log": ["LOG", "RENAME_LOG"],
-        "options.verbose": ["VERBOSE", "RENAME_VERBOSE"],
-        "options.resolution": ["RESOLUTION", "RENAME_RESOLUTION"],
-        "options.quality": ["QUALITY", "RENAME_QUALITY"],
-        "options.notify_on_success": ["NOTIFY_ON_SUCCESS", "RENAME_NOTIFY_ON_SUCCESS"],
-        "options.notify_on_error": ["NOTIFY_ON_ERROR", "RENAME_NOTIFY_ON_ERROR"],
-        "options.notify_on_tag": ["NOTIFY_ON_TAG", "RENAME_NOTIFY_ON_TAG"],
-        "options.daemon": ["DAEMON", "RENAME_DAEMON"],
-        "options.polling_interval": ["POLLING_INTERVAL", "INTERVAL", "RENAME_POLLING_INTERVAL"],
-        "options.ai_provider": ["AI_PROVIDER", "RENAME_AI_PROVIDER"],
-        "options.tmdb_min_confidence": ["TMDB_MIN_CONFIDENCE", "RENAME_TMDB_MIN_CONFIDENCE"],
-        "options.ai_min_confidence": ["AI_MIN_CONFIDENCE", "RENAME_AI_MIN_CONFIDENCE"],
+        "paths.movies_folder": "MOVIES_FOLDER",
+        "paths.tv_shows_folder": "TV_SHOWS_FOLDER",
+        "paths.not_sorted_media_files_folder": "INPUT_FOLDER",
+        "api.tmdb_api_key": "TMDB_API_KEY",
+        "api.gemini_api_key": "GEMINI_API_KEY",
+        "api.groq_api_key": "GROQ_API_KEY",
+        "api.openrouter_api_key": "OPENROUTER_API_KEY",
+        "api.cloudflare_api_token": "CLOUDFLARE_API_TOKEN",
+        "api.cloudflare_account_id": "CLOUDFLARE_ACCOUNT_ID",
+        "mail.mail": "MAIL",
+        "mail.mail_pswd": "MAIL_PSWD",
+        "options.bypass": "BYPASS",
+        "options.ai": "AI",
+        "options.learn": "LEARN",
+        "options.log": "LOG",
+        "options.verbose": "VERBOSE",
+        "options.resolution": "RESOLUTION",
+        "options.quality": "QUALITY",
+        "options.notify_on_success": "NOTIFY_ON_SUCCESS",
+        "options.notify_on_error": "NOTIFY_ON_ERROR",
+        "options.notify_on_tag": "NOTIFY_ON_TAG",
+        "options.daemon": "DAEMON",
+        "options.polling_interval": "POLLING_INTERVAL",
+        "options.ai_provider": "AI_PROVIDER",
+        "options.tmdb_min_confidence": "TMDB_MIN_CONFIDENCE",
+        "options.ai_min_confidence": "AI_MIN_CONFIDENCE",
     }
 
     KEY_TO_ATTR = {
@@ -118,10 +115,9 @@ class ConfigManager:
         if custom_path:
             return Path(custom_path).resolve()
 
-        for env_var in ("CONFIG_FILE", "RENAME_CONFIG_FILE"):
-            env_config = os.environ.get(env_var)
-            if env_config:
-                return Path(env_config).resolve()
+        env_config = os.environ.get("CONFIG_FILE")
+        if env_config:
+            return Path(env_config).resolve()
 
         # Check local project override in current working directory
         local_ini = Path(".rename.ini").resolve()
@@ -237,13 +233,12 @@ class ConfigManager:
     def get_with_source(self, section_dot_key: str):
         """Returns tuple of (value, source) where source is 'ENV', 'INI', or 'DEFAULT'."""
         # 1. Check environment variables
-        env_vars = self.ENV_MAPPING.get(section_dot_key, [])
-        for var in env_vars:
-            if var in os.environ:
-                val = os.environ[var]
-                if section_dot_key in self.BOOLEAN_KEYS:
-                    return (val.strip().lower() in ("true", "1", "yes", "y", "t"), "ENV")
-                return (val, "ENV")
+        env_var = self.ENV_MAPPING.get(section_dot_key)
+        if env_var and env_var in os.environ:
+            val = os.environ[env_var]
+            if section_dot_key in self.BOOLEAN_KEYS:
+                return (val.strip().lower() in ("true", "1", "yes", "y", "t"), "ENV")
+            return (val, "ENV")
 
         # 2. Check INI file
         if "." in section_dot_key:

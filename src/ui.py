@@ -277,7 +277,7 @@ def parse_arguments():
 
         if not available_ai:
             parser.error(
-                "❌ Missing configuration: The '--ai' (-i) and '--learn' (-L) options require an AI Cloud Provider API key to be configured (Gemini, Groq, OpenRouter, or Cloudflare).\n\n"
+                "❌ Missing configuration: The '--ai' (-a) and '--learn' (-L) options require an AI Cloud Provider API key to be configured (Gemini, Groq, OpenRouter, or Cloudflare).\n\n"
                 "💡 How to fix:\n"
                 "  1. Run the configuration wizard:\n"
                 "     python main.py configure\n"
@@ -285,8 +285,8 @@ def parse_arguments():
                 "     python main.py config --set api.gemini_api_key \"<your_gemini_key>\"\n"
                 "     python main.py config --set api.groq_api_key \"<your_groq_key>\"\n"
                 "  3. Or use environment variables:\n"
-                "     export RENAME_GEMINI_API_KEY=\"<your_gemini_key>\"\n"
-                "     export RENAME_GROQ_API_KEY=\"<your_groq_key>\""
+                "     export GEMINI_API_KEY=\"<your_gemini_key>\"\n"
+                "     export GROQ_API_KEY=\"<your_groq_key>\""
             )
 
         if args.provider and args.provider != "auto" and args.provider not in available_ai:

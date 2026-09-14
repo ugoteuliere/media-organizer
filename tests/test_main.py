@@ -1706,12 +1706,12 @@ def test_config_manager_file_resolution(tmp_path, monkeypatch):
     cm_custom = ConfigManager(custom_path=str(custom_ini))
     assert cm_custom.config_path == custom_ini
 
-    # 2. Environment variable RENAME_CONFIG_FILE
+    # 2. Environment variable CONFIG_FILE
     env_ini = tmp_path / "env_config.ini"
-    monkeypatch.setenv("RENAME_CONFIG_FILE", str(env_ini))
+    monkeypatch.setenv("CONFIG_FILE", str(env_ini))
     cm_env = ConfigManager()
     assert cm_env.config_path == env_ini
-    monkeypatch.delenv("RENAME_CONFIG_FILE", raising=False)
+    monkeypatch.delenv("CONFIG_FILE", raising=False)
 
     # 3. Local override .rename.ini in cwd
     local_ini = tmp_path / ".rename.ini"
@@ -1728,35 +1728,35 @@ def test_config_manager_env_precedence(tmp_path, monkeypatch):
     assert cm.get("paths.movies_folder") == "D:/IniMovies"
 
     # Environment variable should override INI
-    monkeypatch.setenv("RENAME_MOVIES_FOLDER", "E:/EnvMovies")
+    monkeypatch.setenv("MOVIES_FOLDER", "E:/EnvMovies")
     assert cm.get("paths.movies_folder") == "E:/EnvMovies"
     val, source = cm.get_with_source("paths.movies_folder")
     assert val == "E:/EnvMovies"
     assert source == "ENV"
 
     # Boolean environment variables
-    monkeypatch.setenv("RENAME_RESOLUTION", "1")
+    monkeypatch.setenv("RESOLUTION", "1")
     assert cm.get("options.resolution") is True
-    monkeypatch.setenv("RENAME_RESOLUTION", "false")
+    monkeypatch.setenv("RESOLUTION", "false")
     assert cm.get("options.resolution") is False
 
-    # Test RENAME_LEARN
-    monkeypatch.setenv("RENAME_LEARN", "1")
+    # Test LEARN
+    monkeypatch.setenv("LEARN", "1")
     assert cm.get("options.learn") is True
     assert cm.LEARN is True
-    monkeypatch.setenv("RENAME_LEARN", "0")
+    monkeypatch.setenv("LEARN", "0")
     assert cm.get("options.learn") is False
     assert cm.LEARN is False
-    monkeypatch.delenv("RENAME_LEARN")
+    monkeypatch.delenv("LEARN")
 
-    # Test RENAME_NOTIFY_ON_TAG
-    monkeypatch.setenv("RENAME_NOTIFY_ON_TAG", "1")
+    # Test NOTIFY_ON_TAG
+    monkeypatch.setenv("NOTIFY_ON_TAG", "1")
     assert cm.get("options.notify_on_tag") is True
     assert cm.NOTIFY_ON_TAG is True
-    monkeypatch.setenv("RENAME_NOTIFY_ON_TAG", "0")
+    monkeypatch.setenv("NOTIFY_ON_TAG", "0")
     assert cm.get("options.notify_on_tag") is False
     assert cm.NOTIFY_ON_TAG is False
-    monkeypatch.delenv("RENAME_NOTIFY_ON_TAG")
+    monkeypatch.delenv("NOTIFY_ON_TAG")
 
 
 def test_config_manager_get_set_unset(tmp_path):
@@ -1874,7 +1874,7 @@ def test_config_wizard_mocked(tmp_path, monkeypatch):
 
 def test_cli_config_commands(tmp_path, monkeypatch):
     test_ini = tmp_path / "cli_test.ini"
-    monkeypatch.setenv("RENAME_CONFIG_FILE", str(test_ini))
+    monkeypatch.setenv("CONFIG_FILE", str(test_ini))
 
     import main
     from unittest.mock import MagicMock

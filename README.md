@@ -36,7 +36,7 @@ media-organizer
 | **Rename & Move** | Scans download folder, renames and moves items to Movies/TV Shows. |
 | **Rename Only** | Renames files in a specific folder. |
 | **Simulation** | Dry-run preview: prints proposed renames without modifying files on disk. |
-| **Autonomous** | Continuous background daemon polling download folder every X minutes. |
+| **Daemon** | Continuous background daemon polling download folder every X minutes. |
 | **Cloud AI Fallback** | Uses Cloud AI models to resolve obfuscated filenames when local parsing fails. |
 | **Keyword Learning** | Discovers missing release tags via AI and saves them. |
 

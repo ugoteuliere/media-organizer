@@ -549,7 +549,7 @@ def test_remove_empty_folders_success(tmp_path):
     assert target_path.exists()
 
 
-def test_remove_empty_folders_raises_runtime_error(tmp_path):
+def test_remove_empty_folders_logs_warning_on_os_error(tmp_path):
     # 1. SETUP
     target_path = tmp_path / "main"
     target_path.mkdir()
@@ -557,19 +557,17 @@ def test_remove_empty_folders_raises_runtime_error(tmp_path):
     empty_dir.mkdir()
     
     # 2. ACTION & VERIFY
-    # We force the built-in os.rmdir to fail with a fake OS error
-    with patch('src.ui.VERBOSE_ENABLED', True):
-        with patch('os.rmdir', side_effect=OSError("Folder is locked by another process")):
-            
-            # We expect your custom RuntimeError to be raised
-            with pytest.raises(RuntimeError) as exc_info:
-                files.remove_empty_folders(str(target_path))
-                
-    # 3. VERIFY ERROR MESSAGE
-    error_msg = str(exc_info.value)
-    assert "An error occurred while deleting" in error_msg
-    assert str(empty_dir) in error_msg
-    assert "Folder is locked" in error_msg
+    # When os.rmdir fails with OSError (e.g. Device busy or locked folder), logs warning and does not crash
+    with patch('src.ui.VERBOSE_ENABLED', True), \
+         patch('os.rmdir', side_effect=OSError("Folder is locked by another process")), \
+         patch('src.ui.print_log') as mock_log:
+        files.remove_empty_folders(str(target_path))
+        
+    warning_logs = [str(call[0][0]) for call in mock_log.call_args_list if "Warning" in str(call[0][0])]
+    assert len(warning_logs) > 0
+    assert "Could not delete empty folder" in warning_logs[0]
+    assert str(empty_dir) in warning_logs[0]
+    assert "Folder is locked by another process" in warning_logs[0]
 
 
 @patch('src.files.remove_empty_folders')
@@ -1228,7 +1226,7 @@ def test_parse_arguments_conflicts(monkeypatch):
 
 def test_parse_arguments_missing_keys(monkeypatch):
     monkeypatch.setattr(ui, "GEMINI_API_KEY", None)
-    monkeypatch.setattr(sys, "argv", ["main.py", "-i"])
+    monkeypatch.setattr(sys, "argv", ["main.py", "-a"])
     with pytest.raises(SystemExit):
         ui.parse_arguments()
 
@@ -1841,7 +1839,7 @@ def test_config_wizard_mocked(tmp_path, monkeypatch):
         "15",                   # polling interval
         "groq",                 # ai provider
     ]):
-        with patch("rich.prompt.Confirm.ask", side_effect=[False, False, False, True, False, False, False, True, True, True, False]): # bypass, autonomous, ai, learn, log, verbose, notify_success, notify_error, notify_tag, res, qual
+        with patch("rich.prompt.Confirm.ask", side_effect=[False, False, False, True, False, False, False, True, True, True, False]): # bypass, daemon, ai, learn, log, verbose, notify_success, notify_error, notify_tag, res, qual
             cm.run_wizard()
 
     assert cm.get("paths.movies_folder") == "D:/WizardMovies"
@@ -1861,7 +1859,8 @@ def test_config_wizard_mocked(tmp_path, monkeypatch):
     assert cm.get("options.notify_on_tag") is True
     assert cm.NOTIFY_ON_TAG is True
     assert cm.get("options.bypass") is False
-    assert cm.get("options.autonomous") is False
+    assert cm.get("options.daemon") is False
+    assert cm.DAEMON is False
     assert cm.get("options.polling_interval") == "15"
     assert cm.POLLING_INTERVAL == 15
     assert cm.get("options.ai") is False
@@ -2178,7 +2177,7 @@ def test_process_media_clean_file_only_rename_mode(tmp_path, monkeypatch):
     with patch("src.files.get_file_quality_resolution", return_value=("1080p", "BluRay")), \
          patch("src.ui.user_confirmation"), \
          patch("src.mail.send_media_success_email") as mock_mail:
-        res = main.process_media(args, autonomous=True)
+        res = main.process_media(args, daemon=True)
         assert res == 0
         mock_mail.assert_called_once()
 
@@ -2202,7 +2201,7 @@ def test_process_media_already_clean_file_only_rename_mode(tmp_path, monkeypatch
     args = MagicMock(path=str(downloads), only_rename=True, simulate=False)
 
     with patch("src.ui.print_log") as mock_log:
-        res = main.process_media(args, autonomous=False)
+        res = main.process_media(args, daemon=False)
         assert res == 0
         logged = " ".join([str(c[0][0]) for c in mock_log.call_args_list if c[0]])
         assert "No media files to rename" in logged
@@ -2303,12 +2302,12 @@ def test_process_media_clean_file_simulation_mode(tmp_path, monkeypatch):
         assert "Simulation mode complete" in logged
 
 
-def test_process_media_clean_data_empty_autonomous_logging():
+def test_process_media_clean_data_empty_daemon_logging():
     args = MagicMock(path=None, only_rename=False, simulate=False)
     with patch("src.files.search_media_files", return_value=(pd.DataFrame([{"File": "A.mkv"}]), pd.DataFrame())), \
          patch("src.utils.get_corrected_media_filenames", return_value=pd.DataFrame()), \
          patch("src.ui.print_log") as mock_log:
-        res = main.process_media(args, autonomous=True, cycle=3)
+        res = main.process_media(args, daemon=True, cycle=3)
         assert res == 0
         logged = " ".join([str(c[0][0]) for c in mock_log.call_args_list if c[0]])
         assert "Check 3 : No media to process" in logged

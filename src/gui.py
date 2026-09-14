@@ -96,7 +96,7 @@ class ConfigGUI:
         self.var_resolution = tk.BooleanVar(value=False)
         self.var_quality = tk.BooleanVar(value=False)
         self.var_bypass = tk.BooleanVar(value=False)
-        self.var_autonomous = tk.BooleanVar(value=False)
+        self.var_daemon = tk.BooleanVar(value=False)
         self.var_interval = tk.StringVar(value="15")
         self.var_ai = tk.BooleanVar(value=False)
         self.var_learn = tk.BooleanVar(value=False)
@@ -120,17 +120,18 @@ class ConfigGUI:
         """Reactively colors the status indicator badge based on current state."""
         text = self.var_status.get().lower()
         if "saved" in text or "verified" in text or "sent" in text or "success" in text:
-            self.status_dot.configure(text_color=COLOR_SUCCESS)
-            self.status_label.configure(text_color=COLOR_SUCCESS)
+            color = COLOR_SUCCESS
         elif "error" in text or "failed" in text:
-            self.status_dot.configure(text_color=COLOR_ERROR)
-            self.status_label.configure(text_color=COLOR_ERROR)
+            color = COLOR_ERROR
         elif "testing" in text or "sending" in text:
-            self.status_dot.configure(text_color=COLOR_ACCENT)
-            self.status_label.configure(text_color=COLOR_ACCENT)
+            color = COLOR_ACCENT
         else:
-            self.status_dot.configure(text_color=COLOR_TEXT_MUTED)
-            self.status_label.configure(text_color=COLOR_TEXT_MUTED)
+            color = COLOR_TEXT_MUTED
+
+        if getattr(self, "status_dot", None) is not None:
+            self.status_dot.configure(text_color=color)
+        if getattr(self, "status_label", None) is not None:
+            self.status_label.configure(text_color=color)
 
     def _build_ui(self):
         """Constructs the sidebar navigation and modular content panels."""
@@ -330,7 +331,7 @@ class ConfigGUI:
         titles = {
             "paths": ("Storage Directories", "Configure your media directories. Folders can be local drives, external disks, or NAS network shares."),
             "api": ("API Keys & Cloud AI", "TMDB API key is required for official metadata. Configured Cloud AI providers act as intelligent fallbacks."),
-            "options": ("Automation & Video Tags", "Configure FFmpeg stream inspection, autonomous background monitoring daemon, and diagnostic logging."),
+            "options": ("Automation & Video Tags", "Configure FFmpeg stream inspection, background monitoring daemon, and diagnostic logging."),
             "email": ("Email Alerts & SMTP", "Configure optional Gmail SMTP delivery for headless runs and critical processing alerts.")
         }
 
@@ -764,8 +765,8 @@ class ConfigGUI:
 
         ctk.CTkSwitch(
             card_auto,
-            text="Enable autonomous background watcher daemon by default (-a)",
-            variable=self.var_autonomous,
+            text="Enable background daemon watcher by default (-d)",
+            variable=self.var_daemon,
             progress_color=COLOR_BTN_PRIMARY,
             font=ctk.CTkFont(family="Segoe UI", size=11),
             text_color=COLOR_TEXT_MAIN
@@ -776,7 +777,7 @@ class ConfigGUI:
 
         ctk.CTkLabel(
             row_int,
-            text="Autonomous polling interval (minutes):",
+            text="Daemon polling interval (minutes):",
             font=ctk.CTkFont(family="Segoe UI", size=11),
             text_color=COLOR_TEXT_MAIN
         ).pack(side="left")
@@ -1002,7 +1003,7 @@ class ConfigGUI:
         self.var_resolution.set(bool(self.cm.get("options.resolution", False)))
         self.var_quality.set(bool(self.cm.get("options.quality", False)))
         self.var_bypass.set(bool(self.cm.get("options.bypass", False)))
-        self.var_autonomous.set(bool(self.cm.get("options.autonomous", False)))
+        self.var_daemon.set(bool(self.cm.get("options.daemon", False)))
         self.var_interval.set(str(self.cm.get("options.polling_interval") or "15"))
         self.var_ai.set(bool(self.cm.get("options.ai", False)))
         self.var_learn.set(bool(self.cm.get("options.learn", False)))
@@ -1052,7 +1053,7 @@ class ConfigGUI:
         self.cm.set("options.resolution", "true" if self.var_resolution.get() else "false")
         self.cm.set("options.quality", "true" if self.var_quality.get() else "false")
         self.cm.set("options.bypass", "true" if self.var_bypass.get() else "false")
-        self.cm.set("options.autonomous", "true" if self.var_autonomous.get() else "false")
+        self.cm.set("options.daemon", "true" if self.var_daemon.get() else "false")
         try:
             int_val = int(self.var_interval.get().strip())
             if int_val >= 1:
@@ -1072,8 +1073,8 @@ class ConfigGUI:
         self.cm.set("options.notify_on_error", "true" if self.var_notify_error.get() else "false")
         self.cm.set("options.notify_on_tag", "true" if self.var_notify_tag.get() else "false")
 
-        self.var_status.set("✅ Configuration successfully saved!")
-        messagebox.showinfo("Saved", f"✅ Configuration successfully saved to:\n{self.cm.config_path}")
+        self.var_status.set("Configuration successfully saved!")
+        messagebox.showinfo("Saved", f"Configuration successfully saved to:\n{self.cm.config_path}")
 
 
 def launch_config_gui(cm: Optional[ConfigManager] = None) -> bool:

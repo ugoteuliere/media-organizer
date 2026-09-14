@@ -25,8 +25,9 @@ if [ "$(id -u)" = "0" ]; then
         usermod -o -u "$PUID" -g "$PGID" renamer 2>/dev/null || true
     fi
 
-    # Ensure /config directory has proper ownership for renamer
+    # Ensure /config and /app/log directories have proper ownership for renamer
     [ -d /config ] && chown -R renamer:renamer /config 2>/dev/null || true
+    [ -d /app/log ] && chown -R renamer:renamer /app/log 2>/dev/null || true
 
     if [ "${RUN_AS_ROOT:-false}" = "true" ]; then
         echo "WARNING: Running as root because RUN_AS_ROOT=true"

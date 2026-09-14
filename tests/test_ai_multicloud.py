@@ -614,7 +614,7 @@ def test_ui_provider_flag_and_validation(monkeypatch):
     import sys
 
     # 1. Flag --provider sets config.AI_PROVIDER
-    monkeypatch.setattr(sys, "argv", ["main.py", "--provider", "groq", "-i"])
+    monkeypatch.setattr(sys, "argv", ["main.py", "--provider", "groq", "-a"])
     monkeypatch.setattr(ui, "GEMINI_API_KEY", None)
     with patch.object(ConfigManager, "GROQ_API_KEY", new_callable=PropertyMock, return_value="gsk_valid"):
         args = ui.parse_arguments()
@@ -622,7 +622,7 @@ def test_ui_provider_flag_and_validation(monkeypatch):
         assert config.AI_PROVIDER == "groq"
 
     # 2. Flag --provider requested but credentials not configured
-    monkeypatch.setattr(sys, "argv", ["main.py", "--provider", "cloudflare", "-i"])
+    monkeypatch.setattr(sys, "argv", ["main.py", "--provider", "cloudflare", "-a"])
     with patch.object(ConfigManager, "CLOUDFLARE_API_TOKEN", new_callable=PropertyMock, return_value=None), \
          patch.object(ConfigManager, "GROQ_API_KEY", new_callable=PropertyMock, return_value="gsk_valid"):
         with pytest.raises(SystemExit):
@@ -719,8 +719,8 @@ def test_ui_openrouter_and_cloudflare_keys(monkeypatch):
     import sys
     monkeypatch.setattr(ui, "GEMINI_API_KEY", None)
 
-    # 1. OpenRouter key allows -i without Gemini
-    monkeypatch.setattr(sys, "argv", ["main.py", "-i"])
+    # 1. OpenRouter key allows -a without Gemini
+    monkeypatch.setattr(sys, "argv", ["main.py", "-a"])
     with patch.object(ConfigManager, "GEMINI_API_KEY", new_callable=PropertyMock, return_value=None), \
          patch.object(ConfigManager, "GROQ_API_KEY", new_callable=PropertyMock, return_value=None), \
          patch.object(ConfigManager, "OPENROUTER_API_KEY", new_callable=PropertyMock, return_value="sk-or-valid"):

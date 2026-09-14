@@ -2,6 +2,8 @@ import sys
 import os
 import re
 import difflib
+import uuid
+from typing import Tuple, Optional
 import PTN
 import pandas as pd
 from pathlib import Path
@@ -19,24 +21,54 @@ QUALITY = getattr(config, 'QUALITY', False)
 DEFAULT_DATA_FILE = Path(__file__).resolve().parent.parent / "data" / "data.py"
 DATA_FILE = DEFAULT_DATA_FILE
 
-def verify_folders(only_rename=False, custom_path=None, autonomous=False):
-    if custom_path and only_rename and not autonomous:
-        return 0
+def check_folder_permissions(folder_path) -> Tuple[bool, bool, str]:
+    """
+    Checks whether a folder has both read and write permissions.
+    Returns (can_read, can_write, error_detail).
+    """
+    p = Path(folder_path)
+    # Check Read:
+    try:
+        with os.scandir(p):
+            pass
+        can_read = True
+    except (PermissionError, OSError) as e:
+        return False, False, f"Read permission denied: {e}"
 
+    # Check Write:
+    probe_path = p / f".rename_perm_probe_{uuid.uuid4().hex}"
+    try:
+        probe_path.touch()
+        try:
+            probe_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        can_write = True
+    except (PermissionError, OSError) as e:
+        return True, False, f"Write permission denied: {e}"
+
+    return True, True, ""
+
+def verify_folders(only_rename=False, custom_path=None, daemon=False, simulate=False):
     def _get_folder(attr_name):
         val = globals().get(attr_name)
         if val is None or str(val).strip() == "":
             val = getattr(config, attr_name, None)
         return val
 
-    if autonomous:
+    if daemon:
         required_folders = [
             ("paths.movies_folder", _get_folder("MOVIES_FOLDER"), "MOVIES_FOLDER", "Movies folder"),
             ("paths.tv_shows_folder", _get_folder("TV_SHOWS_FOLDER"), "TV_SHOWS_FOLDER", "TV Shows folder"),
             ("paths.not_sorted_media_files_folder", _get_folder("NOT_SORTED_MEDIA_FILES_FOLDER"), "NOT_SORTED_MEDIA_FILES_FOLDER", "Unsorted downloads folder"),
         ]
+    elif custom_path and only_rename:
+        required_folders = [
+            ("cli.path", custom_path, "PATH", "Custom source folder"),
+        ]
     elif custom_path:
         required_folders = [
+            ("cli.path", custom_path, "PATH", "Custom source folder"),
             ("paths.movies_folder", _get_folder("MOVIES_FOLDER"), "MOVIES_FOLDER", "Movies folder"),
             ("paths.tv_shows_folder", _get_folder("TV_SHOWS_FOLDER"), "TV_SHOWS_FOLDER", "TV Shows folder"),
         ]
@@ -57,10 +89,10 @@ def verify_folders(only_rename=False, custom_path=None, autonomous=False):
             unconfigured.append(f"  • {label} ({key_path} / {attr})")
 
     if unconfigured:
-        if autonomous:
+        if daemon:
             msg = (
                 "❌ Missing configuration:\n"
-                "Autonomous mode requires all library and download folders to be configured:\n"
+                "Daemon mode requires all library and download folders to be configured:\n"
                 + "\n".join(unconfigured) + "\n\n"
                 "💡 How to fix:\n"
                 "  1. Run the interactive setup wizard:\n"
@@ -129,6 +161,28 @@ def verify_folders(only_rename=False, custom_path=None, autonomous=False):
             + "\n".join(missing_folders) + "\n\n"
             "💡 Please create the directory or update your configuration:\n"
             "   python main.py config --set <key> \"correct/path\"\n\n"
+            "Stopping program."
+        )
+        ui.print_log(msg)
+        sys.exit(1)
+
+    permission_issues = []
+    for key_path, folder_path, attr, label in required_folders:
+        can_read, can_write, err_detail = check_folder_permissions(folder_path)
+        if not can_read or (not simulate and not can_write):
+            permission_issues.append(f"  • {folder_path} ({label}): {err_detail}")
+
+    if permission_issues:
+        msg = (
+            "❌ Permission error:\n"
+            "The program does not have the required read and write permissions for the following folder(s):\n"
+            + "\n".join(permission_issues) + "\n\n"
+            "💡 How to fix:\n"
+            "  1. Grant read and write permissions on your system or NAS:\n"
+            "     chmod -R u+rwX \"path/to/folder\"\n"
+            "  2. In Docker, ensure PUID and PGID environment variables match the folder owner:\n"
+            "     PUID=1000, PGID=1000\n"
+            "  3. Check filesystem ACLs or share permissions (e.g. TrueNAS, Unraid, SMB/NFS).\n\n"
             "Stopping program."
         )
         ui.print_log(msg)

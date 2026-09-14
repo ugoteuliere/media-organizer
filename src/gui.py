@@ -96,7 +96,8 @@ class ConfigGUI:
         self.var_resolution = tk.BooleanVar(value=False)
         self.var_quality = tk.BooleanVar(value=False)
         self.var_bypass = tk.BooleanVar(value=False)
-        self.var_autonomous = tk.BooleanVar(value=False)
+        self.var_daemon = tk.BooleanVar(value=False)
+        self.var_autonomous = self.var_daemon
         self.var_interval = tk.StringVar(value="15")
         self.var_ai = tk.BooleanVar(value=False)
         self.var_learn = tk.BooleanVar(value=False)
@@ -764,8 +765,8 @@ class ConfigGUI:
 
         ctk.CTkSwitch(
             card_auto,
-            text="Enable autonomous background watcher daemon by default (-a)",
-            variable=self.var_autonomous,
+            text="Enable background daemon watcher by default (-d)",
+            variable=self.var_daemon,
             progress_color=COLOR_BTN_PRIMARY,
             font=ctk.CTkFont(family="Segoe UI", size=11),
             text_color=COLOR_TEXT_MAIN
@@ -776,7 +777,7 @@ class ConfigGUI:
 
         ctk.CTkLabel(
             row_int,
-            text="Autonomous polling interval (minutes):",
+            text="Daemon polling interval (minutes):",
             font=ctk.CTkFont(family="Segoe UI", size=11),
             text_color=COLOR_TEXT_MAIN
         ).pack(side="left")
@@ -1002,7 +1003,7 @@ class ConfigGUI:
         self.var_resolution.set(bool(self.cm.get("options.resolution", False)))
         self.var_quality.set(bool(self.cm.get("options.quality", False)))
         self.var_bypass.set(bool(self.cm.get("options.bypass", False)))
-        self.var_autonomous.set(bool(self.cm.get("options.autonomous", False)))
+        self.var_daemon.set(bool(self.cm.get("options.daemon", self.cm.get("options.autonomous", False))))
         self.var_interval.set(str(self.cm.get("options.polling_interval") or "15"))
         self.var_ai.set(bool(self.cm.get("options.ai", False)))
         self.var_learn.set(bool(self.cm.get("options.learn", False)))
@@ -1052,7 +1053,8 @@ class ConfigGUI:
         self.cm.set("options.resolution", "true" if self.var_resolution.get() else "false")
         self.cm.set("options.quality", "true" if self.var_quality.get() else "false")
         self.cm.set("options.bypass", "true" if self.var_bypass.get() else "false")
-        self.cm.set("options.autonomous", "true" if self.var_autonomous.get() else "false")
+        self.cm.set("options.daemon", "true" if self.var_daemon.get() else "false")
+        self.cm.set("options.autonomous", "true" if self.var_daemon.get() else "false")
         try:
             int_val = int(self.var_interval.get().strip())
             if int_val >= 1:

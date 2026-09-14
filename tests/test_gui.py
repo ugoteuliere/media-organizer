@@ -99,6 +99,7 @@ def test_config_gui_init_and_load(tk_root, temp_cm):
     assert app.var_resolution.get() is True
     assert app.var_quality.get() is True
     assert app.var_bypass.get() is True
+    assert app.var_daemon.get() is True
     assert app.var_autonomous.get() is True
     assert app.var_interval.get() == "20"
     assert app.var_ai.get() is True

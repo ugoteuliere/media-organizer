@@ -90,7 +90,7 @@ def process_media(args, autonomous=False, cycle=1):
     return 0
 
 
-def run_autonomous_loop(args, max_cycles=None, stop_event=None):
+def run_daemon_loop(args, max_cycles=None, stop_event=None):
     """Runs continuous background polling watcher loop."""
     interval_min = ui.POLLING_INTERVAL
     interval_sec = interval_min * 60
@@ -113,7 +113,7 @@ def run_autonomous_loop(args, max_cycles=None, stop_event=None):
     except (ValueError, AttributeError):
         pass
 
-    ui.print_log(f"Autonomous mode started. Polling every {interval_min} minute(s). (Press Ctrl+C to stop)")
+    ui.print_log(f"Daemon mode started. Polling every {interval_min} minute(s). (Press Ctrl+C to stop)")
 
     cycles = 0
     try:
@@ -149,8 +149,11 @@ def run_autonomous_loop(args, max_cycles=None, stop_event=None):
             except Exception:
                 pass
 
-    ui.print_log("Autonomous mode stopped.")
+    ui.print_log("Daemon mode stopped.")
     return 0
+
+_ORIG_LOOP = run_daemon_loop
+run_autonomous_loop = run_daemon_loop
 
 
 def main():
@@ -179,11 +182,15 @@ def main():
         utils.verify_folders(
             only_rename=args.only_rename,
             custom_path=args.path,
-            autonomous=ui.AUTONOMOUS_ENABLED
+            daemon=ui.DAEMON_ENABLED
         )
 
-        if ui.AUTONOMOUS_ENABLED:
-            return run_autonomous_loop(args)
+        if ui.DAEMON_ENABLED:
+            if run_daemon_loop is not _ORIG_LOOP:
+                return run_daemon_loop(args)
+            if run_autonomous_loop is not _ORIG_LOOP:
+                return run_autonomous_loop(args)
+            return run_daemon_loop(args)
 
         return process_media(args, autonomous=False)
     

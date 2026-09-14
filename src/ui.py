@@ -11,7 +11,8 @@ if hasattr(sys.stdout, "reconfigure"):
 
 from rich.console import Console
 from rich.table import Table
-from datetime import datetime
+from datetime import datetime, timedelta
+from typing import Optional, List
 from pathlib import Path
 import argparse
 
@@ -34,8 +35,10 @@ QUALITY_ENABLED = False
 NOTIFY_SUCCESS_ENABLED = False
 NOTIFY_ERROR_ENABLED = False
 NOTIFY_TAG_ENABLED = False
+DAEMON_ENABLED = False
 AUTONOMOUS_ENABLED = False
 POLLING_INTERVAL = 15
+_last_log_cleanup_date = None
 
 
 def is_double_clicked() -> bool:
@@ -66,7 +69,7 @@ def hide_console_window() -> None:
 def parse_arguments():
     global LOG_ENABLED, MAIL_ENABLED, AI_FALLBACK_ENABLED, LEARN_ENABLED, BYPASS_ENABLED, VERBOSE_ENABLED, SIMULATE_ENABLED
     global RESOLUTION_ENABLED, QUALITY_ENABLED, NOTIFY_SUCCESS_ENABLED, NOTIFY_ERROR_ENABLED, NOTIFY_TAG_ENABLED
-    global AUTONOMOUS_ENABLED, POLLING_INTERVAL
+    global DAEMON_ENABLED, AUTONOMOUS_ENABLED, POLLING_INTERVAL
 
     description_text = (
         "🎬 Media Organizer & Renamer\n"
@@ -78,8 +81,8 @@ def parse_arguments():
         "  python main.py                    (Default: Renames AND moves files)\n"
         "  python main.py -r                 (Only renames the files in place)\n"
         "  python main.py -s                 (Simulation mode: preview changes without modifying disk)\n"
-        "  python main.py -a                 (Autonomous mode: continuous background polling)\n"
-        "  python main.py -a --interval 10   (Autonomous mode with 10-minute polling)\n"
+        "  python main.py -d                 (Daemon mode: continuous background polling)\n"
+        "  python main.py -d --interval 10   (Daemon mode with 10-minute polling)\n"
         "  python main.py -L                 (Enables AI keyword learning)\n"
         "  python main.py -t                 (Sends email notification when an AI keyword is learned)\n"
         "  python main.py -R -q              (Appends resolution & quality tags)\n"
@@ -119,10 +122,10 @@ def parse_arguments():
                             help="Target a specific folder as source (overrides downloads folder, or renames in-place with -r).")
 
     auto_group = parser.add_argument_group("Automation & Logging")
-    auto_group.add_argument("-a", "--autonomous", action="store_true",
-                            help="Run continuously in autonomous mode with periodic background polling.")
+    auto_group.add_argument("-d", "--daemon", "-a", "--autonomous", action="store_true", dest="daemon",
+                            help="Run continuously in background daemon mode with periodic polling.")
     auto_group.add_argument("--interval", type=int, default=None,
-                            help="Polling interval in minutes for autonomous mode (overrides config).")
+                            help="Polling interval in minutes for daemon mode (overrides config).")
     auto_group.add_argument("-b", "--bypass", action="store_true", 
                             help="Bypass user confirmation prompts before renaming or moving files.")
     auto_group.add_argument("-l", "--log", action="store_true", 
@@ -166,6 +169,7 @@ def parse_arguments():
     configure_parser.add_argument("--full", action="store_true", help="Run full step-by-step setup wizard without menu.")
 
     args = parser.parse_args()
+    args.autonomous = getattr(args, "daemon", False)
 
     # If running a configuration subcommand, return immediately
     if getattr(args, "subcommand", None) in ("config", "configure"):
@@ -182,7 +186,15 @@ def parse_arguments():
     current_pswd = MAIL_PSWD or getattr(config, 'MAIL_PSWD', None)
     MAIL_ENABLED = bool(current_mail and current_pswd)
 
-    AUTONOMOUS_ENABLED = bool(args.autonomous or (args.interval is not None) or getattr(config, 'AUTONOMOUS', False))
+    is_daemon = bool(
+        getattr(args, 'daemon', False)
+        or getattr(args, 'autonomous', False)
+        or (args.interval is not None)
+        or getattr(config, 'DAEMON', False)
+        or getattr(config, 'AUTONOMOUS', False)
+    )
+    DAEMON_ENABLED = is_daemon
+    AUTONOMOUS_ENABLED = is_daemon
     if args.interval is not None:
         if args.interval < 1:
             parser.error(
@@ -194,8 +206,8 @@ def parse_arguments():
 
     LEARN_ENABLED = bool(args.learn or getattr(config, 'LEARN', False))
     AI_FALLBACK_ENABLED = bool(args.ai or getattr(config, 'AI', False) or LEARN_ENABLED)
-    BYPASS_ENABLED = bool(args.bypass or getattr(config, 'BYPASS', False) or AUTONOMOUS_ENABLED)
-    LOG_ENABLED = bool(args.log or getattr(config, 'LOG', False) or AUTONOMOUS_ENABLED)
+    BYPASS_ENABLED = bool(args.bypass or getattr(config, 'BYPASS', False) or DAEMON_ENABLED)
+    LOG_ENABLED = bool(args.log or getattr(config, 'LOG', False))
     VERBOSE_ENABLED = bool(args.verbose or getattr(config, 'VERBOSE', False))
     SIMULATE_ENABLED = bool(args.simulate)
     RESOLUTION_ENABLED = bool(args.resolution or getattr(config, 'RESOLUTION', False))
@@ -387,10 +399,60 @@ def get_log_dir() -> Path:
     log_dir.mkdir(parents=True, exist_ok=True)
     return log_dir
 
+def cleanup_old_logs(log_dir: Optional[Path] = None, max_age_days: int = 14) -> List[Path]:
+    """Delete log files in log_dir older than max_age_days (default: 14 days / 2 weeks)."""
+    if log_dir is None:
+        log_dir = get_log_dir()
+    if not log_dir.is_dir():
+        return []
+
+    deleted_files: List[Path] = []
+    cutoff_datetime = datetime.now() - timedelta(days=max_age_days)
+    cutoff_date = cutoff_datetime.date()
+    cutoff_timestamp = cutoff_datetime.timestamp()
+
+    try:
+        entries = list(log_dir.iterdir())
+    except OSError:
+        return []
+
+    for item in entries:
+        if not item.is_file():
+            continue
+
+        if item.suffix.lower() not in (".txt", ".log"):
+            continue
+
+        is_old = False
+        stem_parts = item.stem.split("_")[0]
+        try:
+            file_date = datetime.strptime(stem_parts, "%Y-%m-%d").date()
+            if file_date < cutoff_date:
+                is_old = True
+        except ValueError:
+            try:
+                if item.stat().st_mtime < cutoff_timestamp:
+                    is_old = True
+            except OSError:
+                pass
+
+        if is_old:
+            try:
+                item.unlink(missing_ok=True)
+                deleted_files.append(item)
+            except OSError:
+                pass
+
+    return deleted_files
+
 def print_log(message):
+    global _last_log_cleanup_date
     if LOG_ENABLED:
         log_dir = get_log_dir()
         today = datetime.now().strftime("%Y-%m-%d")
+        if _last_log_cleanup_date != today:
+            cleanup_old_logs(log_dir, max_age_days=14)
+            _last_log_cleanup_date = today
         path = log_dir / f"{today}.txt"
 
         hour = datetime.now().strftime("%H:%M:%S")

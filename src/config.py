@@ -17,7 +17,7 @@ class ConfigManager:
         "mail": ["mail", "mail_pswd"],
         "options": [
             "bypass", "ai", "log", "verbose", "resolution", "quality",
-            "notify_on_success", "notify_on_error", "notify_on_tag", "autonomous", "polling_interval", "learn",
+            "notify_on_success", "notify_on_error", "notify_on_tag", "daemon", "autonomous", "polling_interval", "learn",
             "ai_provider", "tmdb_min_confidence", "ai_min_confidence"
         ]
     }
@@ -44,7 +44,8 @@ class ConfigManager:
         "options.notify_on_success": ["RENAME_NOTIFY_ON_SUCCESS"],
         "options.notify_on_error": ["RENAME_NOTIFY_ON_ERROR"],
         "options.notify_on_tag": ["RENAME_NOTIFY_ON_TAG"],
-        "options.autonomous": ["RENAME_AUTONOMOUS"],
+        "options.daemon": ["RENAME_DAEMON", "RENAME_AUTONOMOUS"],
+        "options.autonomous": ["RENAME_AUTONOMOUS", "RENAME_DAEMON"],
         "options.polling_interval": ["RENAME_POLLING_INTERVAL"],
         "options.ai_provider": ["RENAME_AI_PROVIDER"],
         "options.tmdb_min_confidence": ["RENAME_TMDB_MIN_CONFIDENCE"],
@@ -73,6 +74,7 @@ class ConfigManager:
         "options.notify_on_success": "NOTIFY_ON_SUCCESS",
         "options.notify_on_error": "NOTIFY_ON_ERROR",
         "options.notify_on_tag": "NOTIFY_ON_TAG",
+        "options.daemon": "DAEMON",
         "options.autonomous": "AUTONOMOUS",
         "options.polling_interval": "POLLING_INTERVAL",
         "options.ai_provider": "AI_PROVIDER",
@@ -93,6 +95,7 @@ class ConfigManager:
         "options.notify_on_success",
         "options.notify_on_error",
         "options.notify_on_tag",
+        "options.daemon",
         "options.autonomous"
     }
 
@@ -269,7 +272,12 @@ class ConfigManager:
         # Normalize boolean values
         elif f"{section}.{key}" in self.BOOLEAN_KEYS:
             val_bool = str(value).strip().lower() in ("true", "1", "yes", "y", "t")
-            self.parser.set(section, key, "true" if val_bool else "false")
+            str_val = "true" if val_bool else "false"
+            self.parser.set(section, key, str_val)
+            if section == "options" and key == "daemon":
+                self.parser.set("options", "autonomous", str_val)
+            elif section == "options" and key == "autonomous":
+                self.parser.set("options", "daemon", str_val)
         else:
             self.parser.set(section, key, str(value).strip())
 
@@ -419,12 +427,13 @@ class ConfigManager:
         bypass_input = Confirm.ask("Bypass confirmation prompts and run non-interactively (-b)?", default=cur_bypass)
         self.set("options.bypass", "true" if bypass_input else "false")
 
-        cur_autonomous = bool(self.get("options.autonomous", False))
-        auto_input = Confirm.ask("Enable autonomous background watcher mode by default (-a)?", default=cur_autonomous)
-        self.set("options.autonomous", "true" if auto_input else "false")
+        cur_daemon = bool(self.get("options.daemon", self.get("options.autonomous", False)))
+        daemon_input = Confirm.ask("Enable background daemon watcher mode by default (-d)?", default=cur_daemon)
+        self.set("options.daemon", "true" if daemon_input else "false")
+        self.set("options.autonomous", "true" if daemon_input else "false")
 
         cur_interval = str(self.get("options.polling_interval") or "15")
-        interval_input = Prompt.ask("Polling interval in minutes for autonomous mode", default=cur_interval)
+        interval_input = Prompt.ask("Polling interval in minutes for daemon mode", default=cur_interval)
         try:
             int_val = int(interval_input.strip())
             if int_val >= 1:
@@ -634,12 +643,27 @@ class ConfigManager:
         return bool(self.get("options.quality", False))
 
     @property
+    def DAEMON(self) -> bool:
+        val, src = self.get_with_source("options.daemon")
+        if src != "DEFAULT":
+            return bool(val)
+        val_a, src_a = self.get_with_source("options.autonomous")
+        if src_a != "DEFAULT":
+            return bool(val_a)
+        return False
+
+    @DAEMON.setter
+    def DAEMON(self, value):
+        self.set("options.daemon", "true" if value else "false")
+        self.set("options.autonomous", "true" if value else "false")
+
+    @property
     def AUTONOMOUS(self) -> bool:
-        return bool(self.get("options.autonomous", False))
+        return self.DAEMON
 
     @AUTONOMOUS.setter
     def AUTONOMOUS(self, value):
-        self.set("options.autonomous", "true" if value else "false")
+        self.DAEMON = value
 
     @property
     def POLLING_INTERVAL(self) -> int:

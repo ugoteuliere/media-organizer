@@ -19,8 +19,11 @@ QUALITY = getattr(config, 'QUALITY', False)
 DEFAULT_DATA_FILE = Path(__file__).resolve().parent.parent / "data" / "data.py"
 DATA_FILE = DEFAULT_DATA_FILE
 
-def verify_folders(only_rename=False, custom_path=None, autonomous=False):
-    if custom_path and only_rename and not autonomous:
+def verify_folders(only_rename=False, custom_path=None, daemon=False, autonomous=None):
+    if autonomous is not None:
+        daemon = autonomous
+
+    if custom_path and only_rename and not daemon:
         return 0
 
     def _get_folder(attr_name):
@@ -29,7 +32,7 @@ def verify_folders(only_rename=False, custom_path=None, autonomous=False):
             val = getattr(config, attr_name, None)
         return val
 
-    if autonomous:
+    if daemon:
         required_folders = [
             ("paths.movies_folder", _get_folder("MOVIES_FOLDER"), "MOVIES_FOLDER", "Movies folder"),
             ("paths.tv_shows_folder", _get_folder("TV_SHOWS_FOLDER"), "TV_SHOWS_FOLDER", "TV Shows folder"),
@@ -57,10 +60,10 @@ def verify_folders(only_rename=False, custom_path=None, autonomous=False):
             unconfigured.append(f"  • {label} ({key_path} / {attr})")
 
     if unconfigured:
-        if autonomous:
+        if daemon:
             msg = (
                 "❌ Missing configuration:\n"
-                "Autonomous mode requires all library and download folders to be configured:\n"
+                "Daemon mode requires all library and download folders to be configured:\n"
                 + "\n".join(unconfigured) + "\n\n"
                 "💡 How to fix:\n"
                 "  1. Run the interactive setup wizard:\n"

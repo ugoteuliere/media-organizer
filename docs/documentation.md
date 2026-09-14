@@ -15,7 +15,7 @@ Technical guide and reference for the Media Organizer & Renamer.
    - [Default: Rename & Move](#default-rename--move)
    - [Rename Only](#rename-only)
    - [Simulation Mode](#simulation-mode)
-   - [Autonomous Background Watcher](#autonomous-background-watcher)
+   - [Daemon Background Watcher](#daemon-background-watcher)
 4. [Options & CLI Flags](#4-options--cli-flags)
 5. [Matching & Multi-Cloud AI Architecture](#5-matching--multi-cloud-ai-architecture)
    - [Metadata Extraction Pipeline](#metadata-extraction-pipeline)
@@ -150,12 +150,14 @@ Previews proposed renames and destination paths without writing to disk or sendi
 media-organizer --simulate
 ```
 
-### Autonomous Background Watcher
-Runs as a persistent daemon polling the download folder periodically.
+### Daemon Background Watcher
+Runs as a persistent background daemon polling the download folder periodically.
 ```bash
-media-organizer --autonomous --interval 5
+media-organizer --daemon --interval 5
+# or using short flag:
+media-organizer -d --interval 5
 ```
-Autonomous mode automatically enables `-b` (`bypass`) and `-l` (`log`).
+Daemon mode automatically enables `-b` (`bypass`) for non-interactive execution. File logging (`-l`) is optional and can be enabled with `-l` or `options.log = true` in configuration. Log files older than 14 days (2 weeks) are automatically deleted.
 
 ## 4. Options & CLI Flags
 
@@ -163,15 +165,15 @@ Autonomous mode automatically enables `-b` (`bypass`) and `-l` (`log`).
 | :--- | :--- | :--- | :--- | :--- |
 | `-s` | `--simulate` | — | `false` | Dry-run simulation preview. |
 | `-r` | `--only-rename` | — | `false` | Renames files in-place without moving them. |
-| `-a` | `--autonomous` | `options.autonomous` | `false` | Runs background watcher daemon. |
-| — | `--interval <min>` | `options.polling_interval` | `15` | Polling interval for autonomous mode (minutes). |
+| `-d` | `--daemon` | `options.daemon` | `false` | Runs background watcher daemon (alias: `-a`, `--autonomous`). |
+| — | `--interval <min>` | `options.polling_interval` | `15` | Polling interval for daemon mode (minutes). |
 | `-b` | `--bypass` | `options.bypass` | `false` | Bypasses interactive confirmation prompts. |
 | `-i` | `--ai` | `options.ai` | `false` | Enables Cloud AI fallback for unrecognizable filenames. |
 | `-L` | `--learn` | `options.learn` | `false` | Enables keyword learning to save newly discovered tags. |
 | — | `--provider <p>` | `options.ai_provider` | `auto` | Selects AI provider (`auto`, `gemini`, `groq`, `openrouter`, `cloudflare`). |
 | `-R` | `--resolution` | `options.resolution` | `false` | Appends video resolution tags (`[1080p]`, `[4K]`). Requires `ffprobe`. |
 | `-q` | `--quality` | `options.quality` | `false` | Appends video quality tags (`[BluRay]`, `[WEB-DL]`). Requires `ffprobe`. |
-| `-l` | `--log` | `options.log` | `false` | Writes console output to `log/YYYY-MM-DD.txt`. |
+| `-l` | `--log` | `options.log` | `false` | Writes console output to `log/YYYY-MM-DD.txt` (auto-pruned after 14 days). |
 | `-v` | `--verbose` | `options.verbose` | `false` | Displays full error stack traces on failure. |
 | — | `--notify-success` | `options.notify_on_success` | `false` | Sends email notification on successful processing. |
 | — | `--notify-error` | `options.notify_on_error` | `true` | Sends email notification when an error occurs. |
@@ -243,7 +245,7 @@ docker run -d \
   -e TMDB_API_KEY="your_tmdb_key" \
   -v /path/to/config:/config \
   -v /path/to/media:/data \
-  ghcr.io/ugoteuliere/rename:latest --autonomous --interval 15
+  ghcr.io/ugoteuliere/rename:latest --daemon --interval 15
 
 # One-off dry-run simulation
 docker run --rm \
@@ -271,5 +273,5 @@ services:
     volumes:
       - /path/to/config:/config
       - /path/to/media:/data
-    command: ["--autonomous", "--interval", "15"]
+    command: ["--daemon", "--interval", "15"]
 ```

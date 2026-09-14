@@ -1861,7 +1861,9 @@ def test_config_wizard_mocked(tmp_path, monkeypatch):
     assert cm.get("options.notify_on_tag") is True
     assert cm.NOTIFY_ON_TAG is True
     assert cm.get("options.bypass") is False
+    assert cm.get("options.daemon") is False
     assert cm.get("options.autonomous") is False
+    assert cm.DAEMON is False
     assert cm.get("options.polling_interval") == "15"
     assert cm.POLLING_INTERVAL == 15
     assert cm.get("options.ai") is False

@@ -17,15 +17,15 @@ tmdb_min_confidence = 0.75
 ai_min_confidence = 0.70
 resolution = false
 quality = false
-bypass = false
-daemon = false
+bypass = true
+daemon = true
 polling_interval = 15
 ai = false
 learn = false
 log = false
-verbose = false
+verbose = true
 notify_on_success = false
-notify_on_error = true
+notify_on_error = false
 notify_on_tag = false
 
 [mail]

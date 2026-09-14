@@ -4,6 +4,8 @@ import json
 import runpy
 import pytest
 from pathlib import Path
+from datetime import datetime
+from configparser import ConfigParser
 from unittest.mock import patch, MagicMock
 import pandas as pd
 
@@ -577,3 +579,270 @@ def test_send_email_with_exception_in_details():
         # Exception string is not already in message
         exc = RuntimeError("Strange filesystem error")
         mail.send_email(message="A failure happened", exception=exc)
+
+
+# =========================================================================
+# 6. Tests for Docker features and dual logging
+# =========================================================================
+
+def test_docker_environment_detection(monkeypatch):
+    monkeypatch.delenv("DOCKER_CONTAINER", raising=False)
+    with patch("os.path.exists", return_value=False):
+        assert ConfigManager.is_docker_environment() is False
+
+    monkeypatch.setenv("DOCKER_CONTAINER", "1")
+    assert ConfigManager.is_docker_environment() is True
+
+    monkeypatch.delenv("DOCKER_CONTAINER")
+    with patch("os.path.exists", side_effect=lambda p: str(p) == "/.dockerenv"):
+        assert ConfigManager.is_docker_environment() is True
+
+
+def test_docker_resolve_config_path(monkeypatch, tmp_path):
+    cm = ConfigManager.__new__(ConfigManager)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("RENAME_TEST_ALLOW_REAL_PATH", "1")
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.delenv("RENAME_CONFIG_FILE", raising=False)
+
+    # 1. CONFIG_FILE environment variable
+    custom_cfg = tmp_path / "custom.ini"
+    monkeypatch.setenv("CONFIG_FILE", str(custom_cfg))
+    assert cm._resolve_config_path() == custom_cfg.resolve()
+    monkeypatch.delenv("CONFIG_FILE")
+
+    # 2. In Docker, /config/config.ini is present
+    def mock_path_file_call(p):
+        path_obj = Path(p) if isinstance(p, str) else p
+        mock_p = MagicMock()
+        mock_p.resolve.return_value = path_obj
+        if str(p) in (".rename.ini", "config.ini"):
+            mock_p.is_file.return_value = False
+        elif str(p) == "/config/config.ini":
+            mock_p.is_file.return_value = True
+        elif str(p) == "/config":
+            mock_p.is_dir.return_value = False
+        return mock_p
+
+    with patch.object(ConfigManager, "is_docker_environment", return_value=True), \
+         patch("src.config.Path", side_effect=mock_path_file_call):
+        res = cm._resolve_config_path()
+        assert res == Path("/config/config.ini")
+
+    # 3. In Docker, /config is directory
+    def mock_path_dir_call(p):
+        path_obj = Path(p) if isinstance(p, str) else p
+        mock_p = MagicMock()
+        mock_p.resolve.return_value = path_obj
+        if str(p) in (".rename.ini", "config.ini", "/config/config.ini"):
+            mock_p.is_file.return_value = False
+        elif str(p) == "/config":
+            mock_p.is_dir.return_value = True
+        return mock_p
+
+    with patch.object(ConfigManager, "is_docker_environment", return_value=True), \
+         patch("src.config.Path", side_effect=mock_path_dir_call):
+        res = cm._resolve_config_path()
+        assert res == Path("/config/config.ini")
+
+
+def test_docker_defaults_init_and_fallback(monkeypatch, tmp_path):
+    cm = ConfigManager(custom_path=str(tmp_path / "nonexistent.ini"))
+
+    with patch.object(cm, "is_docker_environment", return_value=True):
+        cm.load()
+        assert cm.get("paths.movies_folder") == "/data/Movies"
+        assert cm.get("paths.tv_shows_folder") == "/data/TV_Shows"
+        assert cm.get("paths.not_sorted_media_files_folder") == "/data/input"
+        assert cm.get("options.daemon") is True
+        assert cm.get("options.bypass") is True
+        assert cm.get("options.verbose") is True
+        assert cm.get("options.notify_on_error") is False
+
+        # Fallback values from get_with_source when section does not have keys
+        cm.parser.clear()
+        assert cm.get_with_source("paths.movies_folder") == ("/data/Movies", "DEFAULT")
+        assert cm.get_with_source("paths.tv_shows_folder") == ("/data/TV_Shows", "DEFAULT")
+        assert cm.get_with_source("paths.not_sorted_media_files_folder") == ("/data/input", "DEFAULT")
+        assert cm.get_with_source("options.daemon") == (True, "DEFAULT")
+        assert cm.get_with_source("options.bypass") == (True, "DEFAULT")
+        assert cm.get_with_source("options.verbose") == (True, "DEFAULT")
+        assert cm.get_with_source("options.notify_on_error") == (False, "DEFAULT")
+
+    # Test save OSError handling in _init_docker_defaults
+    cm2 = ConfigManager.__new__(ConfigManager)
+    cm2.parser = ConfigParser()
+    with patch.object(cm2, "save", side_effect=OSError("Read only fs")):
+        cm2._init_docker_defaults()
+        assert cm2.parser.get("paths", "movies_folder") == "/data/Movies"
+
+
+def test_clean_environment_variables(monkeypatch, tmp_path):
+    cm = ConfigManager(custom_path=str(tmp_path / "test.ini"))
+
+    # Test clean environment variables take effect
+    monkeypatch.setenv("MOVIES_FOLDER", "/mnt/custom_movies")
+    monkeypatch.setenv("TV_SHOWS_FOLDER", "/mnt/custom_tv")
+    monkeypatch.setenv("INPUT_FOLDER", "/mnt/custom_input")
+    monkeypatch.setenv("TMDB_API_KEY", "tmdb12345")
+    monkeypatch.setenv("DAEMON", "true")
+    monkeypatch.setenv("POLLING_INTERVAL", "30")
+    monkeypatch.setenv("LOG", "true")
+
+    val, source = cm.get_with_source("paths.movies_folder")
+    assert val == "/mnt/custom_movies" and source == "ENV"
+
+    val, source = cm.get_with_source("paths.tv_shows_folder")
+    assert val == "/mnt/custom_tv" and source == "ENV"
+
+    val, source = cm.get_with_source("paths.not_sorted_media_files_folder")
+    assert val == "/mnt/custom_input" and source == "ENV"
+
+    val, source = cm.get_with_source("api.tmdb_api_key")
+    assert val == "tmdb12345" and source == "ENV"
+
+    val, source = cm.get_with_source("options.daemon")
+    assert val is True and source == "ENV"
+
+    val, source = cm.get_with_source("options.polling_interval")
+    assert val == "30" and source == "ENV"
+    assert cm.POLLING_INTERVAL == 30
+
+    val, source = cm.get_with_source("options.log")
+    assert val is True and source == "ENV"
+
+    # Test backward-compatible alias fallback
+    monkeypatch.delenv("MOVIES_FOLDER")
+    monkeypatch.setenv("RENAME_MOVIES_FOLDER", "/mnt/legacy_movies")
+    val, source = cm.get_with_source("paths.movies_folder")
+    assert val == "/mnt/legacy_movies" and source == "ENV"
+
+
+def test_check_log_dir_permissions(tmp_path):
+    # Success case
+    ok, err = ui.check_log_dir_permissions(tmp_path)
+    assert ok is True
+    assert err == ""
+
+    # Failure case: PermissionError on mkdir / open
+    with patch("pathlib.Path.mkdir", side_effect=PermissionError("Permission denied")):
+        ok, err = ui.check_log_dir_permissions(tmp_path / "sub")
+        assert ok is False
+        assert "Permission denied" in err
+
+
+def test_parse_arguments_docker_and_logging(monkeypatch, tmp_path):
+    # 1. Docker mode with --log and writable dir -> LOG_MODE == 'both'
+    monkeypatch.setattr(sys, "argv", ["main.py", "--log"])
+    monkeypatch.setenv("DOCKER_CONTAINER", "1")
+    with patch("src.ui.get_log_dir", return_value=tmp_path), \
+         patch("src.ui.check_log_dir_permissions", return_value=(True, "")):
+        ui.parse_arguments()
+        assert ui.LOG_MODE == "both"
+        assert ui.LOG_ENABLED is True
+
+    # 2. Classic mode with --log and writable dir -> LOG_MODE == 'file'
+    monkeypatch.delenv("DOCKER_CONTAINER", raising=False)
+    with patch("os.path.exists", return_value=False), \
+         patch("src.ui.get_log_dir", return_value=tmp_path), \
+         patch("src.ui.check_log_dir_permissions", return_value=(True, "")):
+        ui.parse_arguments()
+        assert ui.LOG_MODE == "file"
+        assert ui.LOG_ENABLED is True
+
+    # 3. Log directory not writable -> fallback to console with stderr warning
+    with patch("src.ui.get_log_dir", return_value=tmp_path), \
+         patch("src.ui.check_log_dir_permissions", return_value=(False, "Read-only file system")), \
+         patch("sys.stderr.write") as mock_stderr:
+        ui.parse_arguments()
+        assert ui.LOG_MODE == "console"
+        assert ui.LOG_ENABLED is False
+        mock_stderr.assert_called()
+        err_out = "".join([str(c[0][0]) for c in mock_stderr.call_args_list])
+        assert "Warning: Log directory" in err_out
+        assert "Falling back to console logging" in err_out
+
+    # 4. Without --log -> LOG_MODE == 'console'
+    monkeypatch.setattr(sys, "argv", ["main.py"])
+    ui.parse_arguments()
+    assert ui.LOG_MODE == "console"
+    assert ui.LOG_ENABLED is False
+
+
+def test_print_log_dual_and_error_handling(monkeypatch, tmp_path):
+    monkeypatch.setattr("src.ui.get_log_dir", lambda: tmp_path)
+    monkeypatch.setattr("src.ui._last_log_cleanup_date", None)
+
+    # LOG_MODE == 'both': prints to console AND writes to file
+    monkeypatch.setattr(ui, "LOG_MODE", "both")
+    monkeypatch.setattr(ui, "LOG_ENABLED", True)
+    with patch("builtins.print") as mock_print:
+        ui.print_log("dual log message")
+        mock_print.assert_called_once_with("dual log message")
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    log_file = tmp_path / f"{today}.txt"
+    assert log_file.is_file()
+    assert "dual log message" in log_file.read_text(encoding="utf-8")
+
+    # LOG_MODE == 'file': writes to file, console silent
+    monkeypatch.setattr(ui, "LOG_MODE", "file")
+    monkeypatch.setattr(ui, "LOG_ENABLED", True)
+    with patch("builtins.print") as mock_print:
+        ui.print_log("file-only log message")
+        mock_print.assert_not_called()
+    assert "file-only log message" in log_file.read_text(encoding="utf-8")
+
+    # LOG_MODE == 'console': prints to console, does not write
+    monkeypatch.setattr(ui, "LOG_MODE", "console")
+    monkeypatch.setattr(ui, "LOG_ENABLED", False)
+    log_file.unlink()
+    with patch("builtins.print") as mock_print:
+        ui.print_log("console-only log message")
+        mock_print.assert_called_once_with("console-only log message")
+    assert not log_file.exists()
+
+    # OSError when writing log file is caught safely
+    monkeypatch.setattr(ui, "LOG_MODE", "file")
+    monkeypatch.setattr(ui, "LOG_ENABLED", True)
+    with patch("builtins.open", side_effect=OSError("Disk full")):
+        ui.print_log("safe fail")
+
+
+def test_rich_print_log_modes(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr("src.ui.get_log_dir", lambda: tmp_path)
+
+    # LOG_MODE == 'both'
+    monkeypatch.setattr(ui, "LOG_MODE", "both")
+    monkeypatch.setattr(ui, "LOG_ENABLED", True)
+    with patch("src.ui.print_log") as mock_pl:
+        ui.rich_print_log("dual rich message")
+        mock_pl.assert_called()
+        out = capsys.readouterr().out
+        assert "dual rich message" in out
+
+    # LOG_MODE == 'file'
+    monkeypatch.setattr(ui, "LOG_MODE", "file")
+    monkeypatch.setattr(ui, "LOG_ENABLED", True)
+    with patch("src.ui.print_log") as mock_pl:
+        ui.rich_print_log("file rich message")
+        mock_pl.assert_called()
+        out = capsys.readouterr().out
+        assert out == ""
+
+    # LOG_MODE == 'console'
+    monkeypatch.setattr(ui, "LOG_MODE", "console")
+    monkeypatch.setattr(ui, "LOG_ENABLED", False)
+    with patch("src.ui.print_log") as mock_pl:
+        ui.rich_print_log("console rich message")
+        mock_pl.assert_not_called()
+        out = capsys.readouterr().out
+        assert "console rich message" in out
+
+    # Empty text in rich_print_log
+    monkeypatch.setattr(ui, "LOG_MODE", "both")
+    monkeypatch.setattr(ui, "LOG_ENABLED", True)
+    with patch("src.ui.print_log") as mock_pl:
+        ui.rich_print_log("")
+        mock_pl.assert_not_called()
+

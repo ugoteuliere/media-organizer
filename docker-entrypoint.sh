@@ -5,9 +5,9 @@ set -e
 PUID=${PUID:-1000}
 PGID=${PGID:-1000}
 
-if [ ! -f /config/config.ini ]; then
-    echo "No config file found, copying sample one..."
-    cp /app/docker_sample_config /config/config.ini
+if [ -d /config ] && [ ! -f /config/config.ini ]; then
+    echo "No config file found in /config, copying sample one..." >&2
+    cp /app/docker_sample_config /config/config.ini 2>/dev/null || true
 fi
 
 echo "Starting media organizer..." >&2

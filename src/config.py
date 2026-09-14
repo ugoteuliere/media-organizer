@@ -23,32 +23,35 @@ class ConfigManager:
     }
 
     ENV_MAPPING = {
-        "paths.movies_folder": ["RENAME_MOVIES_FOLDER"],
-        "paths.tv_shows_folder": ["RENAME_TV_SHOWS_FOLDER"],
-        "paths.not_sorted_media_files_folder": ["RENAME_NOT_SORTED_MEDIA_FILES_FOLDER", "RENAME_DOWNLOADS_FOLDER"],
-        "api.tmdb_api_key": ["RENAME_TMDB_API_KEY", "TMDB_API_KEY"],
-        "api.gemini_api_key": ["RENAME_GEMINI_API_KEY", "GEMINI_API_KEY"],
-        "api.groq_api_key": ["RENAME_GROQ_API_KEY", "GROQ_API_KEY"],
-        "api.openrouter_api_key": ["RENAME_OPENROUTER_API_KEY", "OPENROUTER_API_KEY"],
-        "api.cloudflare_api_token": ["RENAME_CLOUDFLARE_API_TOKEN", "CLOUDFLARE_API_TOKEN"],
-        "api.cloudflare_account_id": ["RENAME_CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_ACCOUNT_ID"],
-        "mail.mail": ["RENAME_MAIL"],
-        "mail.mail_pswd": ["RENAME_MAIL_PSWD"],
-        "options.bypass": ["RENAME_BYPASS"],
-        "options.ai": ["RENAME_AI"],
-        "options.learn": ["RENAME_LEARN"],
-        "options.log": ["RENAME_LOG"],
-        "options.verbose": ["RENAME_VERBOSE"],
-        "options.resolution": ["RENAME_RESOLUTION"],
-        "options.quality": ["RENAME_QUALITY"],
-        "options.notify_on_success": ["RENAME_NOTIFY_ON_SUCCESS"],
-        "options.notify_on_error": ["RENAME_NOTIFY_ON_ERROR"],
-        "options.notify_on_tag": ["RENAME_NOTIFY_ON_TAG"],
-        "options.daemon": ["RENAME_DAEMON"],
-        "options.polling_interval": ["RENAME_POLLING_INTERVAL"],
-        "options.ai_provider": ["RENAME_AI_PROVIDER"],
-        "options.tmdb_min_confidence": ["RENAME_TMDB_MIN_CONFIDENCE"],
-        "options.ai_min_confidence": ["RENAME_AI_MIN_CONFIDENCE"],
+        "paths.movies_folder": ["MOVIES_FOLDER", "RENAME_MOVIES_FOLDER"],
+        "paths.tv_shows_folder": ["TV_SHOWS_FOLDER", "RENAME_TV_SHOWS_FOLDER"],
+        "paths.not_sorted_media_files_folder": [
+            "INPUT_FOLDER", "DOWNLOADS_FOLDER", "NOT_SORTED_MEDIA_FILES_FOLDER",
+            "RENAME_INPUT_FOLDER", "RENAME_NOT_SORTED_MEDIA_FILES_FOLDER", "RENAME_DOWNLOADS_FOLDER"
+        ],
+        "api.tmdb_api_key": ["TMDB_API_KEY", "RENAME_TMDB_API_KEY"],
+        "api.gemini_api_key": ["GEMINI_API_KEY", "RENAME_GEMINI_API_KEY"],
+        "api.groq_api_key": ["GROQ_API_KEY", "RENAME_GROQ_API_KEY"],
+        "api.openrouter_api_key": ["OPENROUTER_API_KEY", "RENAME_OPENROUTER_API_KEY"],
+        "api.cloudflare_api_token": ["CLOUDFLARE_API_TOKEN", "RENAME_CLOUDFLARE_API_TOKEN"],
+        "api.cloudflare_account_id": ["CLOUDFLARE_ACCOUNT_ID", "RENAME_CLOUDFLARE_ACCOUNT_ID"],
+        "mail.mail": ["MAIL", "RENAME_MAIL"],
+        "mail.mail_pswd": ["MAIL_PSWD", "RENAME_MAIL_PSWD"],
+        "options.bypass": ["BYPASS", "RENAME_BYPASS"],
+        "options.ai": ["AI", "RENAME_AI"],
+        "options.learn": ["LEARN", "RENAME_LEARN"],
+        "options.log": ["LOG", "RENAME_LOG"],
+        "options.verbose": ["VERBOSE", "RENAME_VERBOSE"],
+        "options.resolution": ["RESOLUTION", "RENAME_RESOLUTION"],
+        "options.quality": ["QUALITY", "RENAME_QUALITY"],
+        "options.notify_on_success": ["NOTIFY_ON_SUCCESS", "RENAME_NOTIFY_ON_SUCCESS"],
+        "options.notify_on_error": ["NOTIFY_ON_ERROR", "RENAME_NOTIFY_ON_ERROR"],
+        "options.notify_on_tag": ["NOTIFY_ON_TAG", "RENAME_NOTIFY_ON_TAG"],
+        "options.daemon": ["DAEMON", "RENAME_DAEMON"],
+        "options.polling_interval": ["POLLING_INTERVAL", "INTERVAL", "RENAME_POLLING_INTERVAL"],
+        "options.ai_provider": ["AI_PROVIDER", "RENAME_AI_PROVIDER"],
+        "options.tmdb_min_confidence": ["TMDB_MIN_CONFIDENCE", "RENAME_TMDB_MIN_CONFIDENCE"],
+        "options.ai_min_confidence": ["AI_MIN_CONFIDENCE", "RENAME_AI_MIN_CONFIDENCE"],
     }
 
     KEY_TO_ATTR = {
@@ -107,13 +110,18 @@ class ConfigManager:
         self.parser = configparser.ConfigParser()
         self.load()
 
+    @staticmethod
+    def is_docker_environment() -> bool:
+        return os.environ.get("DOCKER_CONTAINER") == "1" or os.path.exists("/.dockerenv")
+
     def _resolve_config_path(self, custom_path=None) -> Path:
         if custom_path:
             return Path(custom_path).resolve()
 
-        env_config = os.environ.get("RENAME_CONFIG_FILE")
-        if env_config:
-            return Path(env_config).resolve()
+        for env_var in ("CONFIG_FILE", "RENAME_CONFIG_FILE"):
+            env_config = os.environ.get(env_var)
+            if env_config:
+                return Path(env_config).resolve()
 
         # Check local project override in current working directory
         local_ini = Path(".rename.ini").resolve()
@@ -135,6 +143,12 @@ class ConfigManager:
             base_dir = Path(tempfile.gettempdir()) / "pytest_rename_quarantine"
             return (base_dir / "config.ini").resolve()
 
+        # Docker environment: Check /config volume first
+        if self.is_docker_environment():
+            docker_config = Path("/config/config.ini")
+            if docker_config.is_file() or Path("/config").is_dir():
+                return docker_config.resolve()
+
         # Standard user config directory
         base_dir = self._get_default_user_dir()
         return (base_dir / "config.ini").resolve()
@@ -155,6 +169,37 @@ class ConfigManager:
         self.parser = configparser.ConfigParser()
         if self.config_path.is_file():
             self.parser.read(str(self.config_path), encoding="utf-8")
+        elif self.is_docker_environment():
+            self._init_docker_defaults()
+
+    def _init_docker_defaults(self):
+        if not self.parser.has_section("paths"):
+            self.parser.add_section("paths")
+        self.parser.set("paths", "movies_folder", "/data/Movies")
+        self.parser.set("paths", "tv_shows_folder", "/data/TV_Shows")
+        self.parser.set("paths", "not_sorted_media_files_folder", "/data/input")
+
+        if not self.parser.has_section("options"):
+            self.parser.add_section("options")
+        self.parser.set("options", "daemon", "true")
+        self.parser.set("options", "bypass", "true")
+        self.parser.set("options", "verbose", "true")
+        self.parser.set("options", "polling_interval", "15")
+        self.parser.set("options", "ai", "false")
+        self.parser.set("options", "learn", "false")
+        self.parser.set("options", "log", "false")
+        self.parser.set("options", "resolution", "false")
+        self.parser.set("options", "quality", "false")
+        self.parser.set("options", "notify_on_success", "false")
+        self.parser.set("options", "notify_on_error", "false")
+        self.parser.set("options", "notify_on_tag", "false")
+        self.parser.set("options", "ai_provider", "auto")
+        self.parser.set("options", "tmdb_min_confidence", "0.75")
+        self.parser.set("options", "ai_min_confidence", "0.70")
+        try:
+            self.save()
+        except OSError:
+            pass
 
     def save(self):
         """Atomic write using temporary file to prevent corruption."""
@@ -210,6 +255,18 @@ class ConfigManager:
                 return (raw if raw.strip() else None, "INI")
 
         # 3. Default fallback
+        if self.is_docker_environment():
+            if section_dot_key == "paths.movies_folder":
+                return ("/data/Movies", "DEFAULT")
+            if section_dot_key == "paths.tv_shows_folder":
+                return ("/data/TV_Shows", "DEFAULT")
+            if section_dot_key == "paths.not_sorted_media_files_folder":
+                return ("/data/input", "DEFAULT")
+            if section_dot_key in ("options.daemon", "options.bypass", "options.verbose"):
+                return (True, "DEFAULT")
+            if section_dot_key == "options.notify_on_error":
+                return (False, "DEFAULT")
+
         if section_dot_key == "options.notify_on_error":
             return (True, "DEFAULT")
         if section_dot_key == "options.polling_interval":

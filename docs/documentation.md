@@ -223,35 +223,103 @@ The cleaning engine uses a dictionary to strip filenames:
 
 ## 7. Docker Deployment
 
-A multi-architecture Docker image (`linux/amd64`, `linux/arm64`) with pre-bundled `ffmpeg` and `ffprobe` is published on GitHub Container Registry: `ghcr.io/ugoteuliere/rename`.
+A multi-architecture Docker image (`linux/amd64`, `linux/arm64`) with pre-bundled `ffmpeg`, `ffprobe`, and `gosu` is published on GitHub Container Registry: `ghcr.io/ugoteuliere/rename`.
 
-### Volumes & Permissions
-* `/config`: Directory containing `config.ini`, `custom_tags.json`, and `gemini_tags.json`.
-* `/data`: Root media storage containing incoming downloads and destination libraries.
-* `PUID` / `PGID`: Set to your host user and group IDs (e.g. `1000:1000` or NAS `99:100`) so processed files are owned by your host user.
+The container is designed to run **out-of-the-box** with zero manual configuration required other than mounting your 3 media folders.
 
-### Docker Run (CLI)
+---
 
-```bash
-# Background watcher daemon
-docker run -d \
-  --name media-organizer \
-  --restart unless-stopped \
-  -e PUID=1000 \
-  -e PGID=1000 \
-  -e TMDB_API_KEY="your_tmdb_key" \
-  -v /path/to/config:/config \
-  -v /path/to/media:/data \
-  ghcr.io/ugoteuliere/rename:latest --daemon --interval 15
+### Quick Start (Zero-Config Minimal Compose)
 
-# One-off dry-run simulation
-docker run --rm \
-  -v /path/to/config:/config \
-  -v /path/to/media:/data \
-  ghcr.io/ugoteuliere/rename:latest --simulate
+By default, the container starts in **daemon mode** with automatic prompt bypass (`bypass = true`), polling every 15 minutes and streaming logs directly to `stdout` (`docker logs`).
+
+```yaml
+services:
+  media-organizer:
+    image: ghcr.io/ugoteuliere/rename:latest
+    container_name: media-organizer
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      - /mnt/storage/downloads:/data/input
+      - /mnt/storage/movies:/data/Movies
+      - /mnt/storage/series:/data/TV_Shows
 ```
 
-### Docker Compose
+---
+
+### Volume Mount Points
+
+| Volume Mount | Type | Purpose | Description |
+| :--- | :--- | :--- | :--- |
+| `/data/input` | **Required** | Source | Incoming / unsorted media directory to scan and organize. |
+| `/data/Movies` | **Required** | Destination | Destination folder for recognized and sorted movies. |
+| `/data/TV_Shows` | **Required** | Destination | Destination folder for recognized and sorted TV series. |
+| `/config` | *Optional* | Configuration | Persistent storage for custom `config.ini`, `custom_tags.json`, `gemini_tags.json`. |
+| `/app/log` | *Optional* | Logs | Persistent storage for daily rotated log files (`YYYY-MM-DD.txt`). |
+
+> [!TIP]
+> If your downloads, movies, and TV shows reside on the same drive, you can also mount a single root volume `-v /path/to/media:/data` containing `input`, `Movies`, and `TV_Shows` subfolders.
+
+---
+
+### Configuration Hierarchy & Priority
+
+Settings are resolved using a **3-tier priority hierarchy**:
+1. **Tier 1 (Highest): Environment Variables** (`TMDB_API_KEY`, `DAEMON`, `LOG`, etc.).
+2. **Tier 2 (Middle): Mounted Volume Config** (`/config/config.ini`).
+3. **Tier 3 (Baseline): Internal Docker Defaults** (generated inside container with `/data/input`, `/data/Movies`, `/data/TV_Shows`, `daemon=true`, `bypass=true`, `verbose=true`, `polling_interval=15`).
+
+---
+
+### Environment Variables
+
+All variables accept clean names (without prefix) or legacy `RENAME_*` aliases:
+
+| Variable | Clean Alias | Config Key | Default in Docker | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `PUID` | — | — | `1000` | Host user ID for permission matching. |
+| `PGID` | — | — | `1000` | Host group ID for permission matching. |
+| `RUN_AS_ROOT` | — | — | `false` | Set to `true` to bypass `gosu` privilege drop on strict root systems. |
+| `INPUT_FOLDER` | `DOWNLOADS_FOLDER` | `paths.not_sorted_media_files_folder` | `/data/input` | Path to incoming media folder. |
+| `MOVIES_FOLDER` | — | `paths.movies_folder` | `/data/Movies` | Path to destination movies folder. |
+| `TV_SHOWS_FOLDER` | — | `paths.tv_shows_folder` | `/data/TV_Shows` | Path to destination TV shows folder. |
+| `DAEMON` | — | `options.daemon` | `true` | Enables continuous polling background daemon. |
+| `POLLING_INTERVAL` | `INTERVAL` | `options.polling_interval` | `15` | Polling interval in minutes. |
+| `BYPASS` | — | `options.bypass` | `true` | Automatically bypasses confirmation prompts. |
+| `VERBOSE` | — | `options.verbose` | `true` | Displays detailed error tracebacks on failure. |
+| `LOG` | — | `options.log` | `false` | Enables file logging to `/app/log/` in addition to console. |
+| `TMDB_API_KEY` | — | `api.tmdb_api_key` | — | TheMovieDatabase v3 API key for online matching. |
+| `AI` | — | `options.ai` | `false` | Enables cloud AI fallback for unrecognizable titles. |
+| `AI_PROVIDER` | — | `options.ai_provider` | `auto` | AI provider (`auto`, `gemini`, `groq`, `openrouter`, `cloudflare`). |
+| `GEMINI_API_KEY` | — | `api.gemini_api_key` | — | Google Gemini API key. |
+| `GROQ_API_KEY` | — | `api.groq_api_key` | — | Groq API key. |
+| `OPENROUTER_API_KEY`| — | `api.openrouter_api_key` | — | OpenRouter API key. |
+| `CLOUDFLARE_API_TOKEN`| — | `api.cloudflare_api_token` | — | Cloudflare AI API token. |
+| `CLOUDFLARE_ACCOUNT_ID`| — | `api.cloudflare_account_id`| — | Cloudflare Account ID. |
+| `MAIL` | — | `mail.mail` | — | Gmail address for email alerts. |
+| `MAIL_PSWD` | — | `mail.mail_pswd` | — | 16-character Gmail App Password. |
+| `NOTIFY_ON_SUCCESS`| — | `options.notify_on_success`| `false` | Send email notification on successful processing. |
+| `NOTIFY_ON_ERROR` | — | `options.notify_on_error` | `false` | Send email notification on processing errors. |
+
+---
+
+### Logging Behavior in Docker (Dual Logging)
+
+1. **Console Logging (Default)**:
+   All events stream live to `stdout`/`stderr` viewable with `docker logs -f media-organizer`.
+2. **Dual Logging (Console + File)**:
+   When `LOG=true` (or `options.log = true`), the container writes daily log files to `/app/log/YYYY-MM-DD.txt` (auto-pruned after 14 days) **WITHOUT silencing console output**.
+3. **Permission Safeguards**:
+   If `/app/log` does not exist or lacks write permissions for `PUID`/`PGID`, the container outputs a clear warning to `stderr` and automatically falls back to console-only logging without crashing.
+
+---
+
+### Advanced Docker Compose Example
+
+Full setup with TMDB, cloud AI, custom config mount, persistent logs, and dual logging:
 
 ```yaml
 version: "3.8"
@@ -264,11 +332,18 @@ services:
     environment:
       - PUID=1000
       - PGID=1000
+      - POLLING_INTERVAL=10
       - TMDB_API_KEY=your_tmdb_api_key
-      # Optional AI keys
-      - GEMINI_API_KEY=your_gemini_key
+      # AI Fallback
+      - AI=true
+      - AI_PROVIDER=groq
+      - GROQ_API_KEY=gsk_your_groq_key
+      # Enable Dual Logging (stdout + /app/log)
+      - LOG=true
     volumes:
-      - /path/to/config:/config
-      - /path/to/media:/data
-    command: ["--daemon", "--interval", "15"]
+      - /mnt/storage/downloads:/data/input
+      - /mnt/storage/movies:/data/Movies
+      - /mnt/storage/series:/data/TV_Shows
+      - /mnt/storage/appdata/rename/config:/config
+      - /mnt/storage/appdata/rename/logs:/app/log
 ```

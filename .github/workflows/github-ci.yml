@@ -131,6 +131,7 @@ jobs:
       - name: Verify Docker Volume Mounts & Simulation Run
         run: |
           mkdir -p /tmp/docker_test/config /tmp/docker_test/data/downloads /tmp/docker_test/data/movies /tmp/docker_test/data/tv
+          chmod -R 777 /tmp/docker_test
           cat << 'EOF' > /tmp/docker_test/config/config.ini
           [paths]
           movies_folder = /data/movies

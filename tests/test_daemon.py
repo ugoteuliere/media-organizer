@@ -12,6 +12,32 @@ from src.config import ConfigManager, config
 import main
 
 
+@pytest.fixture(autouse=True)
+def preserve_signal_handlers():
+    orig_int = None
+    orig_term = None
+    try:
+        orig_int = signal.getsignal(signal.SIGINT)
+    except Exception:
+        pass
+    try:
+        if hasattr(signal, "SIGTERM"):
+            orig_term = signal.getsignal(signal.SIGTERM)
+    except Exception:
+        pass
+    yield
+    if orig_int is not None:
+        try:
+            signal.signal(signal.SIGINT, orig_int)
+        except Exception:
+            pass
+    if orig_term is not None and hasattr(signal, "SIGTERM"):
+        try:
+            signal.signal(signal.SIGTERM, orig_term)
+        except Exception:
+            pass
+
+
 def test_ui_daemon_flags(monkeypatch):
     # -d daemon flag
     monkeypatch.setattr(sys, "argv", ["main.py", "-d"])
@@ -208,14 +234,26 @@ def test_check_folder_permissions(tmp_path):
         assert "Read permission denied" in err
 
     # Write permission denied
-    with patch.object(Path, "touch", side_effect=PermissionError("Touch denied")):
+    orig_touch = Path.touch
+    def fake_touch(self, *args, **kwargs):
+        if ".rename_perm_probe" in self.name:
+            raise PermissionError("Touch denied")
+        return orig_touch(self, *args, **kwargs)
+
+    with patch.object(Path, "touch", fake_touch):
         can_read, can_write, err = utils.check_folder_permissions(folder)
         assert can_read is True
         assert can_write is False
         assert "Write permission denied" in err
 
     # Probe unlink error handled gracefully
-    with patch.object(Path, "unlink", side_effect=OSError("Unlink failed")):
+    orig_unlink = Path.unlink
+    def fake_unlink(self, *args, **kwargs):
+        if ".rename_perm_probe" in self.name:
+            raise OSError("Unlink failed")
+        return orig_unlink(self, *args, **kwargs)
+
+    with patch.object(Path, "unlink", fake_unlink):
         can_read, can_write, err = utils.check_folder_permissions(folder)
         assert can_read is True
         assert can_write is True
@@ -720,13 +758,25 @@ def test_cleanup_old_logs_edge_cases(tmp_path, monkeypatch):
     # 3. iterdir raising OSError
     log_dir = tmp_path / "err_logs"
     log_dir.mkdir()
-    with patch.object(Path, "iterdir", side_effect=OSError("Permission denied")):
+    orig_iterdir = Path.iterdir
+    def fake_iterdir(self, *args, **kwargs):
+        if self.name == "err_logs":
+            raise OSError("Permission denied")
+        return orig_iterdir(self, *args, **kwargs)
+
+    with patch.object(Path, "iterdir", fake_iterdir):
         assert ui.cleanup_old_logs(log_dir) == []
 
     # 4. is_file raising OSError
     err_file = log_dir / "err_file.txt"
     err_file.write_text("err", encoding="utf-8")
-    with patch.object(Path, "is_file", side_effect=OSError("is_file error")):
+    orig_is_file = Path.is_file
+    def fake_is_file(self, *args, **kwargs):
+        if self.name == "err_file.txt":
+            raise OSError("is_file error")
+        return orig_is_file(self, *args, **kwargs)
+
+    with patch.object(Path, "is_file", fake_is_file):
         assert ui.cleanup_old_logs(log_dir) == []
 
     # 5. stat raising OSError on non-date file
@@ -750,7 +800,13 @@ def test_cleanup_old_logs_edge_cases(tmp_path, monkeypatch):
     old_date = (datetime.now() - timedelta(days=20)).strftime("%Y-%m-%d")
     old_file = log_dir / f"{old_date}.txt"
     old_file.write_text("old content", encoding="utf-8")
-    with patch.object(Path, "unlink", side_effect=OSError("unlink error")):
+    orig_unlink = Path.unlink
+    def fake_unlink(self, *args, **kwargs):
+        if self.name == f"{old_date}.txt":
+            raise OSError("unlink error")
+        return orig_unlink(self, *args, **kwargs)
+
+    with patch.object(Path, "unlink", fake_unlink):
         # Should not crash even if unlink fails
         deleted = ui.cleanup_old_logs(log_dir)
         assert deleted == []

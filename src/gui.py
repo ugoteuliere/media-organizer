@@ -120,17 +120,18 @@ class ConfigGUI:
         """Reactively colors the status indicator badge based on current state."""
         text = self.var_status.get().lower()
         if "saved" in text or "verified" in text or "sent" in text or "success" in text:
-            self.status_dot.configure(text_color=COLOR_SUCCESS)
-            self.status_label.configure(text_color=COLOR_SUCCESS)
+            color = COLOR_SUCCESS
         elif "error" in text or "failed" in text:
-            self.status_dot.configure(text_color=COLOR_ERROR)
-            self.status_label.configure(text_color=COLOR_ERROR)
+            color = COLOR_ERROR
         elif "testing" in text or "sending" in text:
-            self.status_dot.configure(text_color=COLOR_ACCENT)
-            self.status_label.configure(text_color=COLOR_ACCENT)
+            color = COLOR_ACCENT
         else:
-            self.status_dot.configure(text_color=COLOR_TEXT_MUTED)
-            self.status_label.configure(text_color=COLOR_TEXT_MUTED)
+            color = COLOR_TEXT_MUTED
+
+        if getattr(self, "status_dot", None) is not None:
+            self.status_dot.configure(text_color=color)
+        if getattr(self, "status_label", None) is not None:
+            self.status_label.configure(text_color=color)
 
     def _build_ui(self):
         """Constructs the sidebar navigation and modular content panels."""

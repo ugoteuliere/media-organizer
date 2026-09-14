@@ -49,7 +49,7 @@ def check_folder_permissions(folder_path) -> Tuple[bool, bool, str]:
 
     return True, True, ""
 
-def verify_folders(only_rename=False, custom_path=None, daemon=False):
+def verify_folders(only_rename=False, custom_path=None, daemon=False, simulate=False):
     def _get_folder(attr_name):
         val = globals().get(attr_name)
         if val is None or str(val).strip() == "":
@@ -169,7 +169,7 @@ def verify_folders(only_rename=False, custom_path=None, daemon=False):
     permission_issues = []
     for key_path, folder_path, attr, label in required_folders:
         can_read, can_write, err_detail = check_folder_permissions(folder_path)
-        if not can_read or not can_write:
+        if not can_read or (not simulate and not can_write):
             permission_issues.append(f"  • {folder_path} ({label}): {err_detail}")
 
     if permission_issues:

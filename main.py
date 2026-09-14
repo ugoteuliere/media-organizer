@@ -179,7 +179,8 @@ def main():
         utils.verify_folders(
             only_rename=args.only_rename,
             custom_path=args.path,
-            daemon=ui.DAEMON_ENABLED
+            daemon=ui.DAEMON_ENABLED,
+            simulate=getattr(args, "simulate", False) or ui.SIMULATE_ENABLED
         )
 
         if ui.DAEMON_ENABLED:

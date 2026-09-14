@@ -1073,8 +1073,8 @@ class ConfigGUI:
         self.cm.set("options.notify_on_error", "true" if self.var_notify_error.get() else "false")
         self.cm.set("options.notify_on_tag", "true" if self.var_notify_tag.get() else "false")
 
-        self.var_status.set("✅ Configuration successfully saved!")
-        messagebox.showinfo("Saved", f"✅ Configuration successfully saved to:\n{self.cm.config_path}")
+        self.var_status.set("Configuration successfully saved!")
+        messagebox.showinfo("Saved", f"Configuration successfully saved to:\n{self.cm.config_path}")
 
 
 def launch_config_gui(cm: Optional[ConfigManager] = None) -> bool:

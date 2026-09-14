@@ -768,6 +768,20 @@ def test_parse_arguments_docker_and_logging(monkeypatch, tmp_path):
     assert ui.LOG_MODE == "console"
     assert ui.LOG_ENABLED is False
 
+    # 5. config.DAEMON is True, but --simulate is passed -> DAEMON_ENABLED is False
+    with patch("src.ui.config") as mock_cfg:
+        mock_cfg.DAEMON = True
+        monkeypatch.setattr(sys, "argv", ["main.py", "--simulate"])
+        ui.parse_arguments()
+        assert ui.DAEMON_ENABLED is False
+
+    # 6. config.DAEMON is True, but --once / --no-daemon is passed -> DAEMON_ENABLED is False
+    with patch("src.ui.config") as mock_cfg:
+        mock_cfg.DAEMON = True
+        monkeypatch.setattr(sys, "argv", ["main.py", "--once"])
+        ui.parse_arguments()
+        assert ui.DAEMON_ENABLED is False
+
 
 def test_print_log_dual_and_error_handling(monkeypatch, tmp_path):
     monkeypatch.setattr("src.ui.get_log_dir", lambda: tmp_path)

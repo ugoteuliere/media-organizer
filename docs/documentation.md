@@ -163,6 +163,7 @@ media-organizer --daemon --interval 15
 | `-s` | `--simulate` | — | `false` | Dry-run simulation preview. |
 | `-r` | `--only-rename` | — | `false` | Renames files in-place without moving them. |
 | `-d` | `--daemon` | `options.daemon` | `false` | Runs background watcher daemon. |
+| — | `--once`, `--no-daemon` | — | `false` | Runs once and exits immediately, overriding `daemon = true`. |
 | — | `--interval <min>` | `options.polling_interval` | `15` | Polling interval for daemon mode (minutes). |
 | `-b` | `--bypass` | `options.bypass` | `false` | Bypasses interactive confirmation prompts. |
 | `-a` | `--ai` | `options.ai` | `false` | Enables Cloud AI fallback for unrecognizable filenames. |

@@ -125,6 +125,8 @@ def parse_arguments():
     auto_group = parser.add_argument_group("Automation & Logging")
     auto_group.add_argument("-d", "--daemon", action="store_true", dest="daemon",
                             help="Run continuously in background daemon mode with periodic polling.")
+    auto_group.add_argument("--once", "--no-daemon", action="store_true", dest="no_daemon",
+                            help="Run once and exit immediately instead of running continuously as a daemon.")
     auto_group.add_argument("--interval", type=int, default=None,
                             help="Polling interval in minutes for daemon mode (overrides config).")
     auto_group.add_argument("-b", "--bypass", action="store_true", 
@@ -187,9 +189,9 @@ def parse_arguments():
     MAIL_ENABLED = bool(current_mail and current_pswd)
 
     is_daemon = bool(
-        getattr(args, 'daemon', False)
-        or (args.interval is not None)
-        or getattr(config, 'DAEMON', False)
+        (getattr(args, 'daemon', False) or (args.interval is not None) or getattr(config, 'DAEMON', False))
+        and not getattr(args, 'no_daemon', False)
+        and not getattr(args, 'simulate', False)
     )
     DAEMON_ENABLED = is_daemon
     if args.interval is not None:

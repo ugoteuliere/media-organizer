@@ -82,7 +82,7 @@ ai_min_confidence = 0.70
 resolution = false
 quality = false
 bypass = false
-autonomous = false
+daemon = false
 polling_interval = 15
 ai = false
 learn = false
@@ -165,7 +165,7 @@ Daemon mode automatically enables `-b` (`bypass`) for non-interactive execution.
 | :--- | :--- | :--- | :--- | :--- |
 | `-s` | `--simulate` | — | `false` | Dry-run simulation preview. |
 | `-r` | `--only-rename` | — | `false` | Renames files in-place without moving them. |
-| `-d` | `--daemon` | `options.daemon` | `false` | Runs background watcher daemon (alias: `-a`, `--autonomous`). |
+| `-d` | `--daemon` | `options.daemon` | `false` | Runs background watcher daemon. |
 | — | `--interval <min>` | `options.polling_interval` | `15` | Polling interval for daemon mode (minutes). |
 | `-b` | `--bypass` | `options.bypass` | `false` | Bypasses interactive confirmation prompts. |
 | `-i` | `--ai` | `options.ai` | `false` | Enables Cloud AI fallback for unrecognizable filenames. |
@@ -236,7 +236,7 @@ A multi-architecture Docker image (`linux/amd64`, `linux/arm64`) with pre-bundle
 ### Docker Run (CLI)
 
 ```bash
-# Autonomous background watcher
+# Background watcher daemon
 docker run -d \
   --name media-organizer \
   --restart unless-stopped \

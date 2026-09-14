@@ -51,7 +51,7 @@ def temp_cm(tmp_path):
     cm.set("options.resolution", "true")
     cm.set("options.quality", "true")
     cm.set("options.bypass", "true")
-    cm.set("options.autonomous", "true")
+    cm.set("options.daemon", "true")
     cm.set("options.polling_interval", "20")
     cm.set("options.ai", "true")
     cm.set("options.learn", "true")
@@ -100,7 +100,6 @@ def test_config_gui_init_and_load(tk_root, temp_cm):
     assert app.var_quality.get() is True
     assert app.var_bypass.get() is True
     assert app.var_daemon.get() is True
-    assert app.var_autonomous.get() is True
     assert app.var_interval.get() == "20"
     assert app.var_ai.get() is True
     assert app.var_learn.get() is True

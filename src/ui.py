@@ -36,7 +36,6 @@ NOTIFY_SUCCESS_ENABLED = False
 NOTIFY_ERROR_ENABLED = False
 NOTIFY_TAG_ENABLED = False
 DAEMON_ENABLED = False
-AUTONOMOUS_ENABLED = False
 POLLING_INTERVAL = 15
 _last_log_cleanup_date = None
 
@@ -69,7 +68,7 @@ def hide_console_window() -> None:
 def parse_arguments():
     global LOG_ENABLED, MAIL_ENABLED, AI_FALLBACK_ENABLED, LEARN_ENABLED, BYPASS_ENABLED, VERBOSE_ENABLED, SIMULATE_ENABLED
     global RESOLUTION_ENABLED, QUALITY_ENABLED, NOTIFY_SUCCESS_ENABLED, NOTIFY_ERROR_ENABLED, NOTIFY_TAG_ENABLED
-    global DAEMON_ENABLED, AUTONOMOUS_ENABLED, POLLING_INTERVAL
+    global DAEMON_ENABLED, POLLING_INTERVAL
 
     description_text = (
         "🎬 Media Organizer & Renamer\n"
@@ -122,7 +121,7 @@ def parse_arguments():
                             help="Target a specific folder as source (overrides downloads folder, or renames in-place with -r).")
 
     auto_group = parser.add_argument_group("Automation & Logging")
-    auto_group.add_argument("-d", "--daemon", "-a", "--autonomous", action="store_true", dest="daemon",
+    auto_group.add_argument("-d", "--daemon", action="store_true", dest="daemon",
                             help="Run continuously in background daemon mode with periodic polling.")
     auto_group.add_argument("--interval", type=int, default=None,
                             help="Polling interval in minutes for daemon mode (overrides config).")
@@ -169,7 +168,6 @@ def parse_arguments():
     configure_parser.add_argument("--full", action="store_true", help="Run full step-by-step setup wizard without menu.")
 
     args = parser.parse_args()
-    args.autonomous = getattr(args, "daemon", False)
 
     # If running a configuration subcommand, return immediately
     if getattr(args, "subcommand", None) in ("config", "configure"):
@@ -188,13 +186,10 @@ def parse_arguments():
 
     is_daemon = bool(
         getattr(args, 'daemon', False)
-        or getattr(args, 'autonomous', False)
         or (args.interval is not None)
         or getattr(config, 'DAEMON', False)
-        or getattr(config, 'AUTONOMOUS', False)
     )
     DAEMON_ENABLED = is_daemon
-    AUTONOMOUS_ENABLED = is_daemon
     if args.interval is not None:
         if args.interval < 1:
             parser.error(

@@ -96,7 +96,6 @@ def isolate_user_config(tmp_path, monkeypatch):
     ui.VERBOSE_ENABLED = False
     ui.AI_FALLBACK_ENABLED = False
     ui.DAEMON_ENABLED = False
-    ui.AUTONOMOUS_ENABLED = False
     ui.POLLING_INTERVAL = 15
 
     yield

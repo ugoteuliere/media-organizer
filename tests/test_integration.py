@@ -157,8 +157,8 @@ def test_integration_simulation_mode_dry_run(media_env, monkeypatch):
     assert len(list(movies.iterdir())) == 0
 
 
-def test_integration_autonomous_multi_cycle_daemon(media_env, monkeypatch):
-    """End-to-end integration test: Autonomous daemon processes files, ignores locked files, and stays alive."""
+def test_integration_daemon_multi_cycle(media_env, monkeypatch):
+    """End-to-end integration test: Background daemon processes files, ignores locked files, and stays alive."""
     downloads = media_env["downloads"]
     movies = media_env["movies"]
 
@@ -192,7 +192,7 @@ def test_integration_autonomous_multi_cycle_daemon(media_env, monkeypatch):
         return current_time
     monkeypatch.setattr("time.time", mock_time)
 
-    exit_code = main.run_autonomous_loop(args, max_cycles=2)
+    exit_code = main.run_daemon_loop(args, max_cycles=2)
     assert exit_code == 0
 
     # Inception should be processed and moved
@@ -410,8 +410,8 @@ def test_integration_rename_only_with_learning(media_env, monkeypatch):
     assert "RenameOnlyGroup" in gemini_content["tags"]
 
 
-def test_integration_autonomous_with_learning(media_env, monkeypatch):
-    """Integration test: In autonomous mode with config.LEARN=True, tags are learned across cycles."""
+def test_integration_daemon_with_learning(media_env, monkeypatch):
+    """Integration test: In daemon mode with config.LEARN=True, tags are learned across cycles."""
     config_dir = media_env["config_dir"]
     downloads = media_env["downloads"]
     movies = media_env["movies"]
@@ -464,7 +464,7 @@ def test_integration_autonomous_with_learning(media_env, monkeypatch):
     monkeypatch.setattr("time.time", mock_time)
 
     with patch("src.mail.send_tag_learned_email"):
-        exit_code = main.run_autonomous_loop(args, max_cycles=1)
+        exit_code = main.run_daemon_loop(args, max_cycles=1)
         assert exit_code == 0
 
     assert (movies / "Arrival (2016).mkv").is_file()
@@ -667,7 +667,7 @@ def test_integration_configure_subcommands_dispatch(monkeypatch):
         mock_wizard.assert_called_once_with(section="options", interactive_menu=False)
 
 
-def test_integration_autonomous_clean_file_with_tags_no_infinite_loop(media_env, monkeypatch):
+def test_integration_daemon_clean_file_with_tags_no_infinite_loop(media_env, monkeypatch):
     """End-to-end integration test: An already clean title missing tags is enriched, moved, and next cycle reports idle."""
     downloads = media_env["downloads"]
     movies = media_env["movies"]
@@ -695,7 +695,7 @@ def test_integration_autonomous_clean_file_with_tags_no_infinite_loop(media_env,
          patch("src.ui.print_log", side_effect=mock_log):
 
         # Cycle 1: Discovers clean file missing tags, renames with tags, and moves to movies library
-        ret1 = main.process_media(args, autonomous=True, cycle=1)
+        ret1 = main.process_media(args, daemon=True, cycle=1)
         assert ret1 == 0
 
         dest_file = movies / "Inception (2010) [BluRay FullHD].mkv"
@@ -704,7 +704,7 @@ def test_integration_autonomous_clean_file_with_tags_no_infinite_loop(media_env,
         assert any("Successfully processed 1 file(s)" in l for l in logs)
 
         # Cycle 2: Downloads folder is now empty, next cycle reports 'No media to process' without looping
-        ret2 = main.process_media(args, autonomous=True, cycle=2)
+        ret2 = main.process_media(args, daemon=True, cycle=2)
         assert ret2 == 0
         assert any("Check 2 : No media to process" in l for l in logs)
 

@@ -285,15 +285,21 @@ def remove_empty_folders(target_path):
         ui.print_log(f"The path '{target_path}' does not exist.")
         return
 
-    for dirpath, dirnames, filenames in os.walk(target_path, topdown=False):
-        if dirpath == target_path:
+    target_dir = Path(target_path).resolve()
+
+    for dirpath, dirnames, filenames in os.walk(target_dir, topdown=False):
+        current_dir = Path(dirpath).resolve()
+        if current_dir == target_dir:
             continue
             
-        if not os.listdir(dirpath):
-            try:
-                os.rmdir(dirpath)
-            except OSError as e:
-                raise RuntimeError(ui.print_error(f" ❌ Error: An error occurred while deleting {dirpath}",e))
+        try:
+            if not os.listdir(dirpath):
+                try:
+                    os.rmdir(dirpath)
+                except OSError as e:
+                    ui.print_log(f"⚠️ Warning: Could not delete empty folder '{dirpath}': {e}")
+        except OSError as e:
+            ui.print_log(f"⚠️ Warning: Could not inspect folder '{dirpath}': {e}")
 
 def move_media_files(paths, clean_data_table=None, source_path=None):
     success_count = 0

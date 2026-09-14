@@ -12,14 +12,12 @@ from src.config import ConfigManager, config
 import main
 
 
-def test_ui_daemon_and_autonomous_flags(monkeypatch):
+def test_ui_daemon_flags(monkeypatch):
     # -d daemon flag
     monkeypatch.setattr(sys, "argv", ["main.py", "-d"])
     args = ui.parse_arguments()
     assert args.daemon is True
-    assert args.autonomous is True
     assert ui.DAEMON_ENABLED is True
-    assert ui.AUTONOMOUS_ENABLED is True
     assert ui.BYPASS_ENABLED is True
     assert ui.LOG_ENABLED is False
     assert ui.POLLING_INTERVAL == 15
@@ -36,28 +34,18 @@ def test_ui_daemon_and_autonomous_flags(monkeypatch):
     args = ui.parse_arguments()
     assert args.daemon is True
     assert ui.DAEMON_ENABLED is True
-    assert ui.AUTONOMOUS_ENABLED is True
     assert ui.BYPASS_ENABLED is True
     assert ui.LOG_ENABLED is False
     assert ui.POLLING_INTERVAL == 30
 
-    # Backward compatibility with -a / --autonomous
+    # No backward compatibility with -a / --autonomous -> Must raise SystemExit
     monkeypatch.setattr(sys, "argv", ["main.py", "-a"])
-    args = ui.parse_arguments()
-    assert args.daemon is True
-    assert args.autonomous is True
-    assert ui.DAEMON_ENABLED is True
-    assert ui.AUTONOMOUS_ENABLED is True
-    assert ui.BYPASS_ENABLED is True
-    assert ui.LOG_ENABLED is False
+    with pytest.raises(SystemExit):
+        ui.parse_arguments()
 
-    monkeypatch.setattr(sys, "argv", ["main.py", "--autonomous", "-l"])
-    args = ui.parse_arguments()
-    assert args.daemon is True
-    assert args.autonomous is True
-    assert ui.DAEMON_ENABLED is True
-    assert ui.AUTONOMOUS_ENABLED is True
-    assert ui.LOG_ENABLED is True
+    monkeypatch.setattr(sys, "argv", ["main.py", "--autonomous"])
+    with pytest.raises(SystemExit):
+        ui.parse_arguments()
 
 
 def test_ui_interval_invalid(monkeypatch):
@@ -65,7 +53,7 @@ def test_ui_interval_invalid(monkeypatch):
     with pytest.raises(SystemExit):
         ui.parse_arguments()
 
-    monkeypatch.setattr(sys, "argv", ["main.py", "-a", "--interval", "-5"])
+    monkeypatch.setattr(sys, "argv", ["main.py", "-d", "--interval", "-5"])
     with pytest.raises(SystemExit):
         ui.parse_arguments()
 
@@ -81,7 +69,6 @@ def test_ui_daemon_from_config(monkeypatch, tmp_path):
 
     args = ui.parse_arguments()
     assert ui.DAEMON_ENABLED is True
-    assert ui.AUTONOMOUS_ENABLED is True
     assert ui.BYPASS_ENABLED is True
     assert ui.LOG_ENABLED is False
     assert ui.POLLING_INTERVAL == 20
@@ -91,35 +78,16 @@ def test_ui_daemon_from_config(monkeypatch, tmp_path):
     ui.parse_arguments()
     assert ui.LOG_ENABLED is True
 
-    # Test backward compatibility with options.autonomous
-    test_ini2 = tmp_path / "auto_config2.ini"
-    cm2 = ConfigManager(custom_path=str(test_ini2))
-    cm2.set("options.autonomous", "true")
-    monkeypatch.setattr("src.ui.config", cm2)
-    ui.parse_arguments()
-    assert ui.DAEMON_ENABLED is True
-    assert ui.AUTONOMOUS_ENABLED is True
 
-
-def test_config_autonomous_properties(tmp_path):
+def test_config_daemon_properties(tmp_path):
     test_ini = tmp_path / "prop_config.ini"
     cm = ConfigManager(custom_path=str(test_ini))
 
     assert cm.DAEMON is False
-    assert cm.AUTONOMOUS is False
     cm.DAEMON = True
     assert cm.DAEMON is True
-    assert cm.AUTONOMOUS is True
-    cm.AUTONOMOUS = False
+    cm.DAEMON = False
     assert cm.DAEMON is False
-    assert cm.AUTONOMOUS is False
-
-    # Legacy INI with only autonomous option (no daemon option)
-    legacy_ini = tmp_path / "legacy.ini"
-    legacy_ini.write_text("[options]\nautonomous = true\n", encoding="utf-8")
-    cm_legacy = ConfigManager(custom_path=str(legacy_ini))
-    assert cm_legacy.DAEMON is True
-    assert cm_legacy.AUTONOMOUS is True
 
     assert cm.POLLING_INTERVAL == 15
     cm.POLLING_INTERVAL = 25
@@ -150,7 +118,7 @@ def test_config_autonomous_properties(tmp_path):
     assert cm.POLLING_INTERVAL == 15
 
 
-def test_config_wizard_autonomous_flow(tmp_path):
+def test_config_wizard_daemon_flow(tmp_path):
     test_ini = tmp_path / "wizard_auto.ini"
     cm = ConfigManager(custom_path=str(test_ini))
 
@@ -169,9 +137,7 @@ def test_config_wizard_autonomous_flow(tmp_path):
             cm.run_wizard()
 
     assert cm.get("options.daemon") is True
-    assert cm.get("options.autonomous") is True
     assert cm.DAEMON is True
-    assert cm.AUTONOMOUS is True
     assert cm.get("options.polling_interval") == "30"
 
     # Test daemon enabled with invalid interval fallback
@@ -221,13 +187,42 @@ def test_config_wizard_autonomous_flow(tmp_path):
             cm.run_wizard()
 
     assert cm.get("options.daemon") is False
-    assert cm.get("options.autonomous") is False
     assert cm.DAEMON is False
-    assert cm.AUTONOMOUS is False
     assert cm.get("options.polling_interval") == "25"
 
 
-def test_verify_folders_daemon(tmp_path, monkeypatch):
+def test_check_folder_permissions(tmp_path):
+    # Valid folder with read and write
+    folder = tmp_path / "valid_folder"
+    folder.mkdir()
+    can_read, can_write, err = utils.check_folder_permissions(folder)
+    assert can_read is True
+    assert can_write is True
+    assert err == ""
+
+    # Read permission denied
+    with patch("os.scandir", side_effect=PermissionError("Scan not allowed")):
+        can_read, can_write, err = utils.check_folder_permissions(folder)
+        assert can_read is False
+        assert can_write is False
+        assert "Read permission denied" in err
+
+    # Write permission denied
+    with patch.object(Path, "touch", side_effect=PermissionError("Touch denied")):
+        can_read, can_write, err = utils.check_folder_permissions(folder)
+        assert can_read is True
+        assert can_write is False
+        assert "Write permission denied" in err
+
+    # Probe unlink error handled gracefully
+    with patch.object(Path, "unlink", side_effect=OSError("Unlink failed")):
+        can_read, can_write, err = utils.check_folder_permissions(folder)
+        assert can_read is True
+        assert can_write is True
+        assert err == ""
+
+
+def test_verify_folders_daemon_and_permissions(tmp_path, monkeypatch):
     movies = tmp_path / "movies"
     tv = tmp_path / "tv"
     dl = tmp_path / "dl"
@@ -241,21 +236,12 @@ def test_verify_folders_daemon(tmp_path, monkeypatch):
 
     # All valid -> returns 0
     assert utils.verify_folders(daemon=True) == 0
-    assert utils.verify_folders(autonomous=True) == 0
 
     # One folder unconfigured -> exits 1 with daemon=True
     monkeypatch.setattr(utils, "MOVIES_FOLDER", None)
     with patch("src.ui.print_log") as mock_log:
         with pytest.raises(SystemExit) as exc:
             utils.verify_folders(daemon=True)
-        assert exc.value.code == 1
-        log_text = "".join(str(call[0][0]) for call in mock_log.call_args_list)
-        assert "Daemon mode requires all library and download folders" in log_text
-
-    # Backwards compatibility: autonomous=True
-    with patch("src.ui.print_log") as mock_log:
-        with pytest.raises(SystemExit) as exc:
-            utils.verify_folders(autonomous=True)
         assert exc.value.code == 1
         log_text = "".join(str(call[0][0]) for call in mock_log.call_args_list)
         assert "Daemon mode requires all library and download folders" in log_text
@@ -268,6 +254,91 @@ def test_verify_folders_daemon(tmp_path, monkeypatch):
         assert exc.value.code == 1
         log_text = "".join(str(call[0][0]) for call in mock_log.call_args_list)
         assert "Missing required folder(s) on disk" in log_text
+
+    # Folder permission error (read or write denied) -> exits 1 with clean explanation
+    monkeypatch.setattr(utils, "MOVIES_FOLDER", str(movies))
+    with patch("src.utils.check_folder_permissions", return_value=(True, False, "Write permission denied: Permission denied")):
+        with patch("src.ui.print_log") as mock_log:
+            with pytest.raises(SystemExit) as exc:
+                utils.verify_folders(daemon=True)
+            assert exc.value.code == 1
+            log_text = "".join(str(call[0][0]) for call in mock_log.call_args_list)
+            assert "Permission error" in log_text
+            assert "chmod -R u+rwX" in log_text
+            assert "PUID=1000, PGID=1000" in log_text
+
+    # Custom path with only_rename
+    custom_dir = tmp_path / "custom_rename"
+    custom_dir.mkdir()
+    assert utils.verify_folders(only_rename=True, custom_path=str(custom_dir)) == 0
+
+    # Custom path with only_rename permission failure
+    with patch("src.utils.check_folder_permissions", return_value=(False, False, "Read permission denied: Permission denied")):
+        with patch("src.ui.print_log") as mock_log:
+            with pytest.raises(SystemExit) as exc:
+                utils.verify_folders(only_rename=True, custom_path=str(custom_dir))
+            assert exc.value.code == 1
+            log_text = "".join(str(call[0][0]) for call in mock_log.call_args_list)
+            assert "Permission error" in log_text
+
+    # Custom path without only_rename
+    assert utils.verify_folders(only_rename=False, custom_path=str(custom_dir)) == 0
+
+
+def test_remove_empty_folders_preserves_target_and_handles_busy_devices(tmp_path):
+    target_dir = tmp_path / "input_folder"
+    target_dir.mkdir()
+
+    # Create nested empty subdirectories
+    sub1 = target_dir / "empty_sub1"
+    sub1.mkdir()
+    sub2 = target_dir / "empty_sub2"
+    sub2.mkdir()
+    sub_nested = sub1 / "nested_empty"
+    sub_nested.mkdir()
+
+    # Create a non-empty subdirectory
+    non_empty = target_dir / "has_file"
+    non_empty.mkdir()
+    (non_empty / "file.txt").touch()
+
+    # Execute remove_empty_folders: target_dir itself MUST be preserved!
+    files.remove_empty_folders(target_dir)
+
+    assert target_dir.exists(), "Target root directory must NOT be deleted!"
+    assert not sub1.exists()
+    assert not sub2.exists()
+    assert not sub_nested.exists()
+    assert non_empty.exists()
+    assert (non_empty / "file.txt").exists()
+
+    # Target directory with no subdirectories at all should still never be deleted
+    files.remove_empty_folders(target_dir)
+    assert target_dir.exists()
+
+    # Non-existent folder logs message and returns
+    with patch("src.ui.print_log") as mock_log:
+        files.remove_empty_folders(tmp_path / "non_existent")
+        mock_log.assert_called_once()
+        assert "does not exist" in mock_log.call_args[0][0]
+
+    # OSError during os.listdir (e.g. permission or I/O error) logs warning and does not crash
+    test_sub = target_dir / "listdir_err_sub"
+    test_sub.mkdir()
+    with patch("os.listdir", side_effect=OSError("Device I/O error")):
+        with patch("src.ui.print_log") as mock_log:
+            files.remove_empty_folders(target_dir)
+            warning_logs = [str(c[0][0]) for c in mock_log.call_args_list if "Warning" in str(c[0][0])]
+            assert len(warning_logs) > 0
+            assert "Could not inspect folder" in warning_logs[0]
+
+    # OSError during os.rmdir (e.g. Errno 16 Device or resource busy) logs warning and does not crash
+    with patch("os.rmdir", side_effect=OSError(16, "Device or resource busy", str(test_sub))):
+        with patch("src.ui.print_log") as mock_log:
+            files.remove_empty_folders(target_dir)
+            warning_logs = [str(c[0][0]) for c in mock_log.call_args_list if "Warning" in str(c[0][0])]
+            assert len(warning_logs) > 0
+            assert "Could not delete empty folder" in warning_logs[0]
 
 
 def test_files_locked_and_partial_extensions(tmp_path):
@@ -326,7 +397,7 @@ def test_files_locked_and_partial_extensions(tmp_path):
     assert c_df.empty
 
 
-def test_run_autonomous_loop_basic(tmp_path, monkeypatch):
+def test_run_daemon_loop_basic(tmp_path, monkeypatch):
     args = MagicMock()
     args.path = str(tmp_path)
     args.only_rename = False
@@ -336,12 +407,12 @@ def test_run_autonomous_loop_basic(tmp_path, monkeypatch):
 
     # Mock process_media to run 1 cycle
     with patch("main.process_media") as mock_proc:
-        ret = main.run_autonomous_loop(args, max_cycles=1)
+        ret = main.run_daemon_loop(args, max_cycles=1)
         assert ret == 0
         assert mock_proc.call_count == 1
 
 
-def test_run_autonomous_loop_interrupt(tmp_path):
+def test_run_daemon_loop_interrupt(tmp_path):
     args = MagicMock()
     args.path = str(tmp_path)
     args.only_rename = False
@@ -350,22 +421,22 @@ def test_run_autonomous_loop_interrupt(tmp_path):
     stop_event = threading.Event()
     stop_event.set()
 
-    ret = main.run_autonomous_loop(args, stop_event=stop_event)
+    ret = main.run_daemon_loop(args, stop_event=stop_event)
     assert ret == 0
 
 
-def test_run_autonomous_loop_keyboard_interrupt(tmp_path):
+def test_run_daemon_loop_keyboard_interrupt(tmp_path):
     args = MagicMock()
     args.path = str(tmp_path)
     args.only_rename = False
     args.simulate = False
 
     with patch("main.process_media", side_effect=KeyboardInterrupt):
-        ret = main.run_autonomous_loop(args, max_cycles=1)
+        ret = main.run_daemon_loop(args, max_cycles=1)
         assert ret == 0
 
 
-def test_run_autonomous_loop_cycle_exception(tmp_path):
+def test_run_daemon_loop_cycle_exception(tmp_path):
     args = MagicMock()
     args.path = str(tmp_path)
     args.only_rename = False
@@ -373,12 +444,12 @@ def test_run_autonomous_loop_cycle_exception(tmp_path):
 
     with patch("main.process_media", side_effect=RuntimeError("Transient API failure")), \
          patch("src.mail.send_error_email") as mock_mail:
-        ret = main.run_autonomous_loop(args, max_cycles=1)
+        ret = main.run_daemon_loop(args, max_cycles=1)
         assert ret == 0
         assert mock_mail.call_count == 1
 
 
-def test_run_autonomous_loop_sleep_execution(tmp_path):
+def test_run_daemon_loop_sleep_execution(tmp_path):
     args = MagicMock()
     args.path = str(tmp_path)
     args.only_rename = False
@@ -387,7 +458,7 @@ def test_run_autonomous_loop_sleep_execution(tmp_path):
     ui.POLLING_INTERVAL = 1
     call_count = 0
 
-    def mock_proc(a, autonomous=True, **kwargs):
+    def mock_proc(a, daemon=True, **kwargs):
         nonlocal call_count
         call_count += 1
 
@@ -400,12 +471,12 @@ def test_run_autonomous_loop_sleep_execution(tmp_path):
 
     with patch("main.process_media", side_effect=mock_proc), \
          patch("time.time", side_effect=lambda: next(times)):
-        ret = main.run_autonomous_loop(args, max_cycles=2)
+        ret = main.run_daemon_loop(args, max_cycles=2)
         assert ret == 0
         assert call_count == 2
 
 
-def test_run_autonomous_loop_signals(tmp_path):
+def test_run_daemon_loop_signals(tmp_path):
     args = MagicMock()
     args.path = str(tmp_path)
     args.only_rename = False
@@ -421,14 +492,14 @@ def test_run_autonomous_loop_signals(tmp_path):
     with patch("signal.signal", side_effect=mock_signal):
         stop_event = threading.Event()
         with patch("main.process_media"):
-            ret = main.run_autonomous_loop(args, max_cycles=1, stop_event=stop_event)
+            ret = main.run_daemon_loop(args, max_cycles=1, stop_event=stop_event)
             assert ret == 0
             assert int_handler is not None
             int_handler(signal.SIGINT, None)
             assert stop_event.is_set()
 
 
-def test_run_autonomous_loop_signal_exceptions(tmp_path):
+def test_run_daemon_loop_signal_exceptions(tmp_path):
     args = MagicMock()
     args.path = str(tmp_path)
     args.only_rename = False
@@ -436,11 +507,11 @@ def test_run_autonomous_loop_signal_exceptions(tmp_path):
 
     # Mock signal.signal raising ValueError during registration and restoration
     with patch("signal.signal", side_effect=ValueError("Signal only works in main thread")):
-        ret = main.run_autonomous_loop(args, max_cycles=1)
+        ret = main.run_daemon_loop(args, max_cycles=1)
         assert ret == 0
 
 
-def test_run_autonomous_restore_signals_exception(tmp_path):
+def test_run_daemon_restore_signals_exception(tmp_path):
     args = MagicMock()
     args.path = str(tmp_path)
     args.only_rename = False
@@ -456,7 +527,7 @@ def test_run_autonomous_restore_signals_exception(tmp_path):
 
     with patch("signal.signal", side_effect=flaky_signal), \
          patch("main.process_media"):
-        ret = main.run_autonomous_loop(args, max_cycles=1)
+        ret = main.run_daemon_loop(args, max_cycles=1)
         assert ret == 0
 
 
@@ -479,28 +550,20 @@ def test_main_daemon_execution(monkeypatch, tmp_path):
         assert ret == 0
         assert mock_loop.call_count == 1
 
-    # Test -a backward compatibility with patched run_autonomous_loop
-    monkeypatch.setattr(sys, "argv", ["main.py", "-a"])
-    mock_auto = MagicMock(return_value=0)
-    with patch("main.run_autonomous_loop", mock_auto):
-        ret = main.main()
-        assert ret == 0
-        assert mock_auto.call_count == 1
 
-
-def test_process_media_empty_in_autonomous(tmp_path):
+def test_process_media_empty_in_daemon(tmp_path):
     args = MagicMock()
     args.path = str(tmp_path)
     args.only_rename = False
     args.simulate = False
 
-    # Empty folder in autonomous mode logs idle notice and returns 0
+    # Empty folder in daemon mode logs idle notice and returns 0
     with patch("src.files.search_media_files", return_value=(pd.DataFrame(), pd.DataFrame())):
-        assert main.process_media(args, autonomous=True) == 0
+        assert main.process_media(args, daemon=True) == 0
 
     # None returned by search_media_files
     with patch("src.files.search_media_files", return_value=None):
-        assert main.process_media(args, autonomous=True) == 0
+        assert main.process_media(args, daemon=True) == 0
 
 
 def test_process_media_full_flow(tmp_path):
@@ -538,13 +601,13 @@ def test_process_media_full_flow(tmp_path):
          patch("src.ui.display_sorted_files"), \
          patch("src.files.move_media_files") as mock_move, \
          patch("src.ui.user_confirmation"):
-        ret = main.process_media(args, autonomous=True)
+        ret = main.process_media(args, daemon=True)
         assert ret == 0
         assert mock_rename.call_count == 1
         assert mock_move.call_count == 1
 
 
-def test_process_media_autonomous_edge_cases(tmp_path):
+def test_process_media_daemon_edge_cases(tmp_path):
     media_file = tmp_path / "Movie.2024.mkv"
     media_file.touch()
 
@@ -562,13 +625,13 @@ def test_process_media_autonomous_edge_cases(tmp_path):
         'Episode': None
     }])
 
-    # 1. only_rename in autonomous mode prints cycle completion message
+    # 1. only_rename in daemon mode prints cycle completion message
     with patch("src.files.search_media_files", return_value=(clean_df, pd.DataFrame())), \
          patch("src.utils.get_corrected_media_filenames", return_value=clean_df), \
          patch("src.files.rename_media_files", return_value=clean_df), \
          patch("src.ui.user_confirmation"), \
          patch("src.mail.send_media_success_email"):
-        ret = main.process_media(args, autonomous=True)
+        ret = main.process_media(args, daemon=True)
         assert ret == 0
 
     # 2. clean_data_table has no files to rename
@@ -583,7 +646,7 @@ def test_process_media_autonomous_edge_cases(tmp_path):
     with patch("src.files.search_media_files", return_value=(unrenamed_df, pd.DataFrame())), \
          patch("src.utils.get_corrected_media_filenames", return_value=unrenamed_df), \
          patch("src.utils.has_files_to_rename", return_value=False):
-        ret = main.process_media(args, autonomous=True)
+        ret = main.process_media(args, daemon=True)
         assert ret == 0
 
 
@@ -682,7 +745,7 @@ def test_cleanup_old_logs_edge_cases(tmp_path, monkeypatch):
         ui.cleanup_old_logs(log_dir)
         assert bad_stat_file.exists()
 
-    # 5. unlink raising OSError
+    # 6. unlink raising OSError
     from datetime import datetime, timedelta
     old_date = (datetime.now() - timedelta(days=20)).strftime("%Y-%m-%d")
     old_file = log_dir / f"{old_date}.txt"
@@ -711,4 +774,3 @@ def test_cleanup_old_logs_in_print_log(tmp_path, monkeypatch):
         # Second call on same day should not invoke cleanup_old_logs again
         ui.print_log("Second log message today")
         assert mock_cleanup.call_count == 1
-

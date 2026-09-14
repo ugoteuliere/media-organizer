@@ -59,12 +59,10 @@ def test_parse_arguments_bypass(monkeypatch):
     assert ui.BYPASS_ENABLED is True
 
 
-def test_parse_arguments_autonomous(monkeypatch):
-    monkeypatch.setattr(sys, "argv", ["main.py", "-a"])
+def test_parse_arguments_daemon(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["main.py", "-d"])
     args = ui.parse_arguments()
-    assert args.autonomous is True
     assert args.daemon is True
-    assert ui.AUTONOMOUS_ENABLED is True
     assert ui.DAEMON_ENABLED is True
     assert ui.BYPASS_ENABLED is True
     assert ui.LOG_ENABLED is False
@@ -72,34 +70,30 @@ def test_parse_arguments_autonomous(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["main.py", "-d", "-l"])
     args = ui.parse_arguments()
     assert args.daemon is True
-    assert args.autonomous is True
     assert ui.DAEMON_ENABLED is True
-    assert ui.AUTONOMOUS_ENABLED is True
     assert ui.BYPASS_ENABLED is True
     assert ui.LOG_ENABLED is True
-
-    monkeypatch.setattr(sys, "argv", ["main.py", "--autonomous"])
-    args = ui.parse_arguments()
-    assert args.autonomous is True
-    assert args.daemon is True
-    assert ui.AUTONOMOUS_ENABLED is True
-    assert ui.DAEMON_ENABLED is True
-    assert ui.LOG_ENABLED is False
 
     monkeypatch.setattr(sys, "argv", ["main.py", "--daemon"])
     args = ui.parse_arguments()
     assert args.daemon is True
-    assert args.autonomous is True
     assert ui.DAEMON_ENABLED is True
-    assert ui.AUTONOMOUS_ENABLED is True
     assert ui.LOG_ENABLED is False
 
     # --interval implies daemon mode
     monkeypatch.setattr(sys, "argv", ["main.py", "--interval", "10"])
     args = ui.parse_arguments()
-    assert ui.AUTONOMOUS_ENABLED is True
     assert ui.DAEMON_ENABLED is True
     assert ui.POLLING_INTERVAL == 10
+
+    # Verify no backward compatibility for -a and --autonomous
+    monkeypatch.setattr(sys, "argv", ["main.py", "-a"])
+    with pytest.raises(SystemExit):
+        ui.parse_arguments()
+
+    monkeypatch.setattr(sys, "argv", ["main.py", "--autonomous"])
+    with pytest.raises(SystemExit):
+        ui.parse_arguments()
 
 def test_parse_arguments_only_rename_aliases(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["main.py", "--only-rename"])

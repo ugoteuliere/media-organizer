@@ -97,7 +97,6 @@ class ConfigGUI:
         self.var_quality = tk.BooleanVar(value=False)
         self.var_bypass = tk.BooleanVar(value=False)
         self.var_daemon = tk.BooleanVar(value=False)
-        self.var_autonomous = self.var_daemon
         self.var_interval = tk.StringVar(value="15")
         self.var_ai = tk.BooleanVar(value=False)
         self.var_learn = tk.BooleanVar(value=False)
@@ -331,7 +330,7 @@ class ConfigGUI:
         titles = {
             "paths": ("Storage Directories", "Configure your media directories. Folders can be local drives, external disks, or NAS network shares."),
             "api": ("API Keys & Cloud AI", "TMDB API key is required for official metadata. Configured Cloud AI providers act as intelligent fallbacks."),
-            "options": ("Automation & Video Tags", "Configure FFmpeg stream inspection, autonomous background monitoring daemon, and diagnostic logging."),
+            "options": ("Automation & Video Tags", "Configure FFmpeg stream inspection, background monitoring daemon, and diagnostic logging."),
             "email": ("Email Alerts & SMTP", "Configure optional Gmail SMTP delivery for headless runs and critical processing alerts.")
         }
 
@@ -1003,7 +1002,7 @@ class ConfigGUI:
         self.var_resolution.set(bool(self.cm.get("options.resolution", False)))
         self.var_quality.set(bool(self.cm.get("options.quality", False)))
         self.var_bypass.set(bool(self.cm.get("options.bypass", False)))
-        self.var_daemon.set(bool(self.cm.get("options.daemon", self.cm.get("options.autonomous", False))))
+        self.var_daemon.set(bool(self.cm.get("options.daemon", False)))
         self.var_interval.set(str(self.cm.get("options.polling_interval") or "15"))
         self.var_ai.set(bool(self.cm.get("options.ai", False)))
         self.var_learn.set(bool(self.cm.get("options.learn", False)))
@@ -1054,7 +1053,6 @@ class ConfigGUI:
         self.cm.set("options.quality", "true" if self.var_quality.get() else "false")
         self.cm.set("options.bypass", "true" if self.var_bypass.get() else "false")
         self.cm.set("options.daemon", "true" if self.var_daemon.get() else "false")
-        self.cm.set("options.autonomous", "true" if self.var_daemon.get() else "false")
         try:
             int_val = int(self.var_interval.get().strip())
             if int_val >= 1:

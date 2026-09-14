@@ -660,15 +660,17 @@ def test_cleanup_old_logs_edge_cases(tmp_path, monkeypatch):
     with patch.object(Path, "iterdir", side_effect=OSError("Permission denied")):
         assert ui.cleanup_old_logs(log_dir) == []
 
-    # 4. stat raising OSError on non-date file
+    # 4. is_file raising OSError
+    err_file = log_dir / "err_file.txt"
+    err_file.write_text("err", encoding="utf-8")
+    with patch.object(Path, "is_file", side_effect=OSError("is_file error")):
+        assert ui.cleanup_old_logs(log_dir) == []
+
+    # 5. stat raising OSError on non-date file
     bad_stat_file = log_dir / "unknown.log"
     bad_stat_file.write_text("bad stat", encoding="utf-8")
-    orig_stat = Path.stat
-    def fake_stat(self, *args, **kwargs):
-        if self.name == "unknown.log":
-            raise OSError("stat error")
-        return orig_stat(self, *args, **kwargs)
-    with patch.object(Path, "stat", fake_stat):
+    with patch.object(Path, "is_file", return_value=True), \
+         patch.object(Path, "stat", side_effect=OSError("stat error")):
         # Should not crash, and should not delete
         ui.cleanup_old_logs(log_dir)
         assert bad_stat_file.exists()

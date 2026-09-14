@@ -417,7 +417,10 @@ def cleanup_old_logs(log_dir: Optional[Path] = None, max_age_days: int = 14) -> 
         return []
 
     for item in entries:
-        if not item.is_file():
+        try:
+            if not item.is_file():
+                continue
+        except OSError:
             continue
 
         if item.suffix.lower() not in (".txt", ".log"):

@@ -30,14 +30,14 @@ if [ "$(id -u)" = "0" ]; then
     [ -d /app/log ] && chown -R renamer:renamer /app/log 2>/dev/null || true
 
     # If first argument is an existing command in PATH (like bash, sh, ffmpeg, ffprobe) and not a renamer subcommand
-    if command -v "$1" > /dev/null 2>&1 && [ "$1" != "config" ] && [ "$1" != "configure" ]; then
+    if [ $# -gt 0 ] && command -v "$1" > /dev/null 2>&1 && [ "$1" != "config" ] && [ "$1" != "configure" ]; then
         exec gosu renamer:renamer "$@"
     fi
 
     exec gosu renamer:renamer organizer "$@"
 else
     # Running directly as non-root
-    if command -v "$1" > /dev/null 2>&1 && [ "$1" != "config" ] && [ "$1" != "configure" ]; then
+    if [ $# -gt 0 ] && command -v "$1" > /dev/null 2>&1 && [ "$1" != "config" ] && [ "$1" != "configure" ]; then
         exec "$@"
     fi
 

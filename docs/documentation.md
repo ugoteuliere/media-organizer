@@ -261,9 +261,6 @@ services:
 | `/config` | *Optional* | Configuration | Persistent storage for custom `config.ini`, `custom_tags.json`, `gemini_tags.json`. |
 | `/app/log` | *Optional* | Logs | Persistent storage for daily rotated log files (`YYYY-MM-DD.txt`). |
 
-> [!TIP]
-> If your downloads, movies, and TV shows reside on the same drive, you can also mount a single root volume `-v /path/to/media:/data` containing `input`, `Movies`, and `TV_Shows` subfolders.
-
 ---
 
 ### Configuration Hierarchy & Priority

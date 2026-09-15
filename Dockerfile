@@ -45,4 +45,4 @@ RUN printf '#!/bin/sh\nexec python /app/main.py "$@"\n' > /usr/local/bin/organiz
     && chmod +x /usr/local/bin/organizer
 
 ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["--help"]
+CMD ["--daemon"]

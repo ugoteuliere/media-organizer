@@ -473,7 +473,7 @@ def check_log_dir_permissions(log_dir: Path) -> Tuple[bool, str]:
             f.write("probe")
         probe_file.unlink(missing_ok=True)
         return (True, "")
-    except (OSError, PermissionError) as e:
+    except OSError as e:
         return (False, str(e))
 
 def print_log(message):

@@ -21,21 +21,19 @@ QUALITY = getattr(config, 'QUALITY', False)
 DEFAULT_DATA_FILE = Path(__file__).resolve().parent.parent / "data" / "data.py"
 DATA_FILE = DEFAULT_DATA_FILE
 
-def check_folder_permissions(folder_path) -> Tuple[bool, bool, str]:
-    """
-    Checks whether a folder has both read and write permissions.
-    Returns (can_read, can_write, error_detail).
-    """
+def check_folder_read_permission(folder_path) -> Tuple[bool, str]:
+    """Checks whether a folder can be read. Returns (can_read, error_msg)."""
     p = Path(folder_path)
-    # Check Read:
     try:
         with os.scandir(p):
             pass
-        can_read = True
-    except (PermissionError, OSError) as e:
-        return False, False, f"Read permission denied: {e}"
+        return True, ""
+    except OSError as e:
+        return False, f"Read permission denied: {e}"
 
-    # Check Write:
+def check_folder_write_permission(folder_path) -> Tuple[bool, str]:
+    """Checks whether a folder can be written to. Returns (can_write, error_msg)."""
+    p = Path(folder_path)
     probe_path = p / f".rename_perm_probe_{uuid.uuid4().hex}"
     try:
         probe_path.touch()
@@ -43,118 +41,121 @@ def check_folder_permissions(folder_path) -> Tuple[bool, bool, str]:
             probe_path.unlink(missing_ok=True)
         except OSError:
             pass
-        can_write = True
-    except (PermissionError, OSError) as e:
-        return True, False, f"Write permission denied: {e}"
+        return True, ""
+    except OSError as e:
+        return False, f"Write permission denied: {e}"
+
+def check_folder_permissions(folder_path) -> Tuple[bool, bool, str]:
+    """
+    Checks whether a folder has both read and write permissions.
+    Returns (can_read, can_write, error_detail).
+    """
+    can_read, read_err = check_folder_read_permission(folder_path)
+    if not can_read:
+        return False, False, read_err
+
+    can_write, write_err = check_folder_write_permission(folder_path)
+    if not can_write:
+        return True, False, write_err
 
     return True, True, ""
 
-def verify_folders(only_rename=False, custom_path=None, daemon=False, simulate=False):
+def determine_required_folders(daemon=False, custom_path=None, only_rename=False) -> List[Tuple[str, Any, str, str]]:
+    """Returns list of (key_path, val, attr_name, label) based on runtime mode."""
     def _get_folder(attr_name):
         val = globals().get(attr_name)
         if val is None or str(val).strip() == "":
             val = getattr(config, attr_name, None)
         return val
 
+    if daemon or (not custom_path and not only_rename):
+        return [
+            ("paths.movies_folder", _get_folder("MOVIES_FOLDER"), "MOVIES_FOLDER", "Movies folder"),
+            ("paths.tv_shows_folder", _get_folder("TV_SHOWS_FOLDER"), "TV_SHOWS_FOLDER", "TV Shows folder"),
+            ("paths.not_sorted_media_files_folder", _get_folder("NOT_SORTED_MEDIA_FILES_FOLDER"), "NOT_SORTED_MEDIA_FILES_FOLDER", "Unsorted downloads folder"),
+        ]
+    if custom_path and only_rename:
+        return [
+            ("cli.path", custom_path, "PATH", "Custom source folder"),
+        ]
+    if custom_path:
+        return [
+            ("cli.path", custom_path, "PATH", "Custom source folder"),
+            ("paths.movies_folder", _get_folder("MOVIES_FOLDER"), "MOVIES_FOLDER", "Movies folder"),
+            ("paths.tv_shows_folder", _get_folder("TV_SHOWS_FOLDER"), "TV_SHOWS_FOLDER", "TV Shows folder"),
+        ]
+    return [
+        ("paths.not_sorted_media_files_folder", _get_folder("NOT_SORTED_MEDIA_FILES_FOLDER"), "NOT_SORTED_MEDIA_FILES_FOLDER", "Unsorted downloads folder"),
+    ]
+
+def format_missing_config_message(unconfigured: List[str], daemon=False, custom_path=None, only_rename=False) -> str:
+    """Generates user-friendly error message for unconfigured folders."""
+    prefix = "\n".join(unconfigured)
     if daemon:
-        required_folders = [
-            ("paths.movies_folder", _get_folder("MOVIES_FOLDER"), "MOVIES_FOLDER", "Movies folder"),
-            ("paths.tv_shows_folder", _get_folder("TV_SHOWS_FOLDER"), "TV_SHOWS_FOLDER", "TV Shows folder"),
-            ("paths.not_sorted_media_files_folder", _get_folder("NOT_SORTED_MEDIA_FILES_FOLDER"), "NOT_SORTED_MEDIA_FILES_FOLDER", "Unsorted downloads folder"),
-        ]
-    elif custom_path and only_rename:
-        required_folders = [
-            ("cli.path", custom_path, "PATH", "Custom source folder"),
-        ]
-    elif custom_path:
-        required_folders = [
-            ("cli.path", custom_path, "PATH", "Custom source folder"),
-            ("paths.movies_folder", _get_folder("MOVIES_FOLDER"), "MOVIES_FOLDER", "Movies folder"),
-            ("paths.tv_shows_folder", _get_folder("TV_SHOWS_FOLDER"), "TV_SHOWS_FOLDER", "TV Shows folder"),
-        ]
-    elif only_rename:
-        required_folders = [
-            ("paths.not_sorted_media_files_folder", _get_folder("NOT_SORTED_MEDIA_FILES_FOLDER"), "NOT_SORTED_MEDIA_FILES_FOLDER", "Unsorted downloads folder"),
-        ]
-    else:
-        required_folders = [
-            ("paths.movies_folder", _get_folder("MOVIES_FOLDER"), "MOVIES_FOLDER", "Movies folder"),
-            ("paths.tv_shows_folder", _get_folder("TV_SHOWS_FOLDER"), "TV_SHOWS_FOLDER", "TV Shows folder"),
-            ("paths.not_sorted_media_files_folder", _get_folder("NOT_SORTED_MEDIA_FILES_FOLDER"), "NOT_SORTED_MEDIA_FILES_FOLDER", "Unsorted downloads folder"),
-        ]
-    
-    unconfigured = []
-    for key_path, val, attr, label in required_folders:
-        if val is None or str(val).strip() == "":
-            unconfigured.append(f"  • {label} ({key_path} / {attr})")
+        return (
+            "❌ Missing configuration:\n"
+            "Daemon mode requires all library and download folders to be configured:\n"
+            f"{prefix}\n\n"
+            "💡 How to fix:\n"
+            "  1. Run the interactive setup wizard:\n"
+            "     python main.py configure\n"
+            "  2. Or set individual values via CLI:\n"
+            "     python main.py config --set paths.movies_folder \"path/to/movies\"\n"
+            "     python main.py config --set paths.tv_shows_folder \"path/to/tv_shows\"\n"
+            "     python main.py config --set paths.not_sorted_media_files_folder \"path/to/downloads\"\n\n"
+            "Stopping program."
+        )
+    if custom_path:
+        return (
+            "❌ Missing configuration:\n"
+            "Moving renamed files requires the destination library folders to be configured:\n"
+            f"{prefix}\n\n"
+            "💡 How to fix:\n"
+            "  1. Run the interactive setup wizard:\n"
+            "     python main.py configure\n"
+            "  2. Or set library paths via CLI:\n"
+            "     python main.py config --set paths.movies_folder \"path/to/movies\"\n"
+            "     python main.py config --set paths.tv_shows_folder \"path/to/tv_shows\"\n"
+            "  3. Or rename files in-place without moving them (standalone):\n"
+            f"     python main.py -r --path=\"{custom_path}\"\n\n"
+            "Stopping program."
+        )
+    if only_rename:
+        return (
+            "❌ Missing configuration:\n"
+            "The following required folder path is not configured:\n"
+            f"{prefix}\n\n"
+            "💡 How to fix:\n"
+            "  1. Run the interactive setup wizard:\n"
+            "     python main.py configure\n"
+            "  2. Or specify a folder directly with --path:\n"
+            "     python main.py -r --path \"path/to/folder\"\n"
+            "  3. Or set the downloads folder via CLI:\n"
+            "     python main.py config --set paths.not_sorted_media_files_folder \"path/to/downloads\"\n\n"
+            "Stopping program."
+        )
+    return (
+        "❌ Missing configuration:\n"
+        "The following required folder paths are not configured:\n"
+        f"{prefix}\n\n"
+        "💡 How to fix:\n"
+        "  1. Run the interactive setup wizard:\n"
+        "     python main.py configure\n"
+        "  2. Or set individual values via CLI:\n"
+        "     python main.py config --set paths.movies_folder \"path/to/movies\"\n"
+        "     python main.py config --set paths.tv_shows_folder \"path/to/tv_shows\"\n"
+        "     python main.py config --set paths.not_sorted_media_files_folder \"path/to/downloads\"\n"
+        "  3. Or use environment variables (e.g. MOVIES_FOLDER)\n\n"
+        "Stopping program."
+    )
 
-    if unconfigured:
-        if daemon:
-            msg = (
-                "❌ Missing configuration:\n"
-                "Daemon mode requires all library and download folders to be configured:\n"
-                + "\n".join(unconfigured) + "\n\n"
-                "💡 How to fix:\n"
-                "  1. Run the interactive setup wizard:\n"
-                "     python main.py configure\n"
-                "  2. Or set individual values via CLI:\n"
-                "     python main.py config --set paths.movies_folder \"path/to/movies\"\n"
-                "     python main.py config --set paths.tv_shows_folder \"path/to/tv_shows\"\n"
-                "     python main.py config --set paths.not_sorted_media_files_folder \"path/to/downloads\"\n\n"
-                "Stopping program."
-            )
-        elif custom_path:
-            msg = (
-                "❌ Missing configuration:\n"
-                "Moving renamed files requires the destination library folders to be configured:\n"
-                + "\n".join(unconfigured) + "\n\n"
-                "💡 How to fix:\n"
-                "  1. Run the interactive setup wizard:\n"
-                "     python main.py configure\n"
-                "  2. Or set library paths via CLI:\n"
-                "     python main.py config --set paths.movies_folder \"path/to/movies\"\n"
-                "     python main.py config --set paths.tv_shows_folder \"path/to/tv_shows\"\n"
-                "  3. Or rename files in-place without moving them (standalone):\n"
-                f"     python main.py -r --path=\"{custom_path}\"\n\n"
-                "Stopping program."
-            )
-        elif only_rename:
-            msg = (
-                "❌ Missing configuration:\n"
-                "The following required folder path is not configured:\n"
-                + "\n".join(unconfigured) + "\n\n"
-                "💡 How to fix:\n"
-                "  1. Run the interactive setup wizard:\n"
-                "     python main.py configure\n"
-                "  2. Or specify a folder directly with --path:\n"
-                "     python main.py -r --path \"path/to/folder\"\n"
-                "  3. Or set the downloads folder via CLI:\n"
-                "     python main.py config --set paths.not_sorted_media_files_folder \"path/to/downloads\"\n\n"
-                "Stopping program."
-            )
-        else:
-            msg = (
-                "❌ Missing configuration:\n"
-                "The following required folder paths are not configured:\n"
-                + "\n".join(unconfigured) + "\n\n"
-                "💡 How to fix:\n"
-                "  1. Run the interactive setup wizard:\n"
-                "     python main.py configure\n"
-                "  2. Or set individual values via CLI:\n"
-                "     python main.py config --set paths.movies_folder \"path/to/movies\"\n"
-                "     python main.py config --set paths.tv_shows_folder \"path/to/tv_shows\"\n"
-                "     python main.py config --set paths.not_sorted_media_files_folder \"path/to/downloads\"\n"
-                "  3. Or use environment variables (e.g. MOVIES_FOLDER)\n\n"
-                "Stopping program."
-            )
-        ui.print_log(msg)
-        sys.exit(1)
-
-    missing_folders = []
-    for key_path, folder_path, attr, label in required_folders:
-        if not os.path.isdir(str(folder_path)):
-            missing_folders.append(f"  • {folder_path} ({label})")
-
+def validate_folder_existence_and_permissions(required_folders, simulate=False):
+    """Checks that all folders exist on disk and have proper permissions. Exits on failure."""
+    missing_folders = [
+        f"  • {folder_path} ({label})"
+        for _, folder_path, _, label in required_folders
+        if not os.path.isdir(str(folder_path))
+    ]
     if missing_folders:
         msg = (
             "❌ Missing required folder(s) on disk:\n"
@@ -167,7 +168,7 @@ def verify_folders(only_rename=False, custom_path=None, daemon=False, simulate=F
         sys.exit(1)
 
     permission_issues = []
-    for key_path, folder_path, attr, label in required_folders:
+    for _, folder_path, _, label in required_folders:
         can_read, can_write, err_detail = check_folder_permissions(folder_path)
         if not can_read or (not simulate and not can_write):
             permission_issues.append(f"  • {folder_path} ({label}): {err_detail}")
@@ -188,6 +189,20 @@ def verify_folders(only_rename=False, custom_path=None, daemon=False, simulate=F
         ui.print_log(msg)
         sys.exit(1)
 
+def verify_folders(only_rename=False, custom_path=None, daemon=False, simulate=False):
+    required_folders = determine_required_folders(daemon, custom_path, only_rename)
+
+    unconfigured = [
+        f"  • {label} ({key_path} / {attr})"
+        for key_path, val, attr, label in required_folders
+        if val is None or str(val).strip() == ""
+    ]
+    if unconfigured:
+        msg = format_missing_config_message(unconfigured, daemon, custom_path, only_rename)
+        ui.print_log(msg)
+        sys.exit(1)
+
+    validate_folder_existence_and_permissions(required_folders, simulate=simulate)
     return 0
 
 def add_new_tags(missing_tags):

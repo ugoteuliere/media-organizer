@@ -690,26 +690,33 @@ def test_clean_environment_variables(monkeypatch, tmp_path):
     monkeypatch.setenv("LOG", "true")
 
     val, source = cm.get_with_source("paths.movies_folder")
-    assert val == "/mnt/custom_movies" and source == "ENV"
+    assert val == "/mnt/custom_movies"
+    assert source == "ENV"
 
     val, source = cm.get_with_source("paths.tv_shows_folder")
-    assert val == "/mnt/custom_tv" and source == "ENV"
+    assert val == "/mnt/custom_tv"
+    assert source == "ENV"
 
     val, source = cm.get_with_source("paths.not_sorted_media_files_folder")
-    assert val == "/mnt/custom_input" and source == "ENV"
+    assert val == "/mnt/custom_input"
+    assert source == "ENV"
 
     val, source = cm.get_with_source("api.tmdb_api_key")
-    assert val == "tmdb12345" and source == "ENV"
+    assert val == "tmdb12345"
+    assert source == "ENV"
 
     val, source = cm.get_with_source("options.daemon")
-    assert val is True and source == "ENV"
+    assert val is True
+    assert source == "ENV"
 
     val, source = cm.get_with_source("options.polling_interval")
-    assert val == "30" and source == "ENV"
+    assert val == "30"
+    assert source == "ENV"
     assert cm.POLLING_INTERVAL == 30
 
     val, source = cm.get_with_source("options.log")
-    assert val is True and source == "ENV"
+    assert val is True
+    assert source == "ENV"
 
     # Verify legacy RENAME_* is NOT recognized (no backward compatibility)
     monkeypatch.delenv("MOVIES_FOLDER", raising=False)

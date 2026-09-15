@@ -29,11 +29,6 @@ if [ "$(id -u)" = "0" ]; then
     [ -d /config ] && chown -R renamer:renamer /config 2>/dev/null || true
     [ -d /app/log ] && chown -R renamer:renamer /app/log 2>/dev/null || true
 
-    if [ "${RUN_AS_ROOT:-false}" = "true" ]; then
-        echo "WARNING: Running as root because RUN_AS_ROOT=true" >&2
-        exec organizer "$@"
-    fi
-
     # If first argument is an existing command in PATH (like bash, sh, ffmpeg, ffprobe) and not a renamer subcommand
     if command -v "$1" > /dev/null 2>&1 && [ "$1" != "config" ] && [ "$1" != "configure" ]; then
         exec gosu renamer:renamer "$@"

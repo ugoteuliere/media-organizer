@@ -265,22 +265,19 @@ services:
 
 ### Configuration
 
-| Method | Description | Priority |
-| :--- | :--- | :--- |
-| **Environment Variables** | Set options directly in `docker-compose.yml` or container commands (e.g. `TMDB_API_KEY`, `DAEMON`, `LOG`, `POLLING_INTERVAL`). | Highest (overrides `config.ini`) |
-| **Configuration File (`config.ini`)** | Mount a folder to `/config` (e.g. `-v /path/to/config:/config`) to supply a custom `config.ini` and persist keyword tag files. | Applied unless overridden by environment variables |
+| Method | Description |
+| :--- | :--- |
+| **Environment Variables** | Set options directly in `docker-compose.yml`. See [Environment Variables](#environment-variables). |
+| **Configuration File (`config.ini`)** | Mount a folder to `/config` to supply a custom `config.ini`. |
 
 ---
 
 ### Environment Variables
 
-Each configuration setting is mapped to **exactly one** clean environment variable (without prefix):
+Each configuration setting is mapped to an environment variable:
 
 | Environment Variable | Config Key | Default in Docker | Description |
 | :--- | :--- | :--- | :--- |
-| `PUID` | — | `1000` | Host user ID for permission matching. |
-| `PGID` | — | `1000` | Host group ID for permission matching. |
-| `RUN_AS_ROOT` | — | `false` | Set to `true` to bypass `gosu` privilege drop on strict root systems. |
 | `INPUT_FOLDER` | `paths.not_sorted_media_files_folder` | `/data/input` | Path to incoming media folder. |
 | `MOVIES_FOLDER` | `paths.movies_folder` | `/data/Movies` | Path to destination movies folder. |
 | `TV_SHOWS_FOLDER` | `paths.tv_shows_folder` | `/data/TV_Shows` | Path to destination TV shows folder. |

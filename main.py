@@ -45,7 +45,7 @@ def process_media(args, daemon=False, cycle=1):
             ui.print_log(f"Check {cycle} : No media to process")
         return 0
 
-    if has_renames:
+    if has_renames and not daemon:
         ui.display_corrected_filenames(clean_data_table)
 
     # Simulation Mode: Preview renames and target paths without touching disk
@@ -65,9 +65,12 @@ def process_media(args, daemon=False, cycle=1):
     if args.only_rename:
         for _, row in clean_data_table.iterrows():
             p = Path(str(row['Path']))
+            orig_name = str(row.get('File', row.get('Original', p.name)))
+            if daemon:
+                ui.log_success(orig_name, p.name, f"{p} (in-place)")
             mail.send_media_success_email(
                 media_name=p.name,
-                original_name=str(row.get('File', row.get('Original', p.name))),
+                original_name=orig_name,
                 media_type=str(row.get('Media', 'unknown')),
                 destination_path=str(p)
             )
@@ -78,14 +81,17 @@ def process_media(args, daemon=False, cycle=1):
     # Sort and move files
     if not clean_data_table.empty:
         paths = files.sort_media_files(clean_data_table)
-        ui.display_sorted_files(paths)
         if not daemon:
+            ui.display_sorted_files(paths)
             ui.user_confirmation("move the files to the correct folder")
         files.move_media_files(paths, clean_data_table, source_path=args.path)
         if daemon:
             ui.print_log(f"Check {cycle} : Successfully processed {len(clean_data_table)} file(s).")
     else:
-        ui.print_log("❌ No media files to sort and move\n")
+        if not daemon:
+            ui.print_log("❌ No media files to sort and move\n")
+        else:
+            ui.print_log(f"Check {cycle} : No media to process")
 
     return 0
 
@@ -123,9 +129,8 @@ def run_daemon_loop(args, max_cycles=None, stop_event=None):
                 process_media(args, daemon=True, cycle=cycles)
             except Exception as e:
                 full_tb = traceback.format_exc()
-                err_msg = f"Check {cycles} : Error: {e} \n\n ⤷ Error logs: {full_tb}"
-                ui.print_log(err_msg)
-                mail.send_error_email(error_message=err_msg, exception=e)
+                ui.log_error(f"Check {cycles}: Error: {e}")
+                mail.send_error_email(error_message=f"Check {cycles}: Error: {e}\n\n{full_tb}", exception=e)
 
             if max_cycles is not None and cycles >= max_cycles:
                 break

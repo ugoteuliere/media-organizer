@@ -621,9 +621,67 @@ class ConfigManager:
     def TMDB_API_KEY(self):
         return self.get(KEY_TMDB_API_KEY)
 
+    @TMDB_API_KEY.setter
+    def TMDB_API_KEY(self, value):
+        if value is None:
+            self.unset(KEY_TMDB_API_KEY)
+        else:
+            self.set(KEY_TMDB_API_KEY, str(value))
+
     @property
     def GEMINI_API_KEY(self):
         return self.get(KEY_GEMINI_API_KEY)
+
+    @GEMINI_API_KEY.setter
+    def GEMINI_API_KEY(self, value):
+        if value is None:
+            self.unset(KEY_GEMINI_API_KEY)
+        else:
+            self.set(KEY_GEMINI_API_KEY, str(value))
+
+    @property
+    def GROQ_API_KEY(self):
+        return self.get(KEY_GROQ_API_KEY)
+
+    @GROQ_API_KEY.setter
+    def GROQ_API_KEY(self, value):
+        if value is None:
+            self.unset(KEY_GROQ_API_KEY)
+        else:
+            self.set(KEY_GROQ_API_KEY, str(value))
+
+    @property
+    def OPENROUTER_API_KEY(self):
+        return self.get(KEY_OPENROUTER_API_KEY)
+
+    @OPENROUTER_API_KEY.setter
+    def OPENROUTER_API_KEY(self, value):
+        if value is None:
+            self.unset(KEY_OPENROUTER_API_KEY)
+        else:
+            self.set(KEY_OPENROUTER_API_KEY, str(value))
+
+    @property
+    def CLOUDFLARE_API_TOKEN(self):
+        return self.get(KEY_CLOUDFLARE_API_TOKEN)
+
+    @CLOUDFLARE_API_TOKEN.setter
+    def CLOUDFLARE_API_TOKEN(self, value):
+        if value is None:
+            self.unset(KEY_CLOUDFLARE_API_TOKEN)
+        else:
+            self.set(KEY_CLOUDFLARE_API_TOKEN, str(value))
+
+    @property
+    def CLOUDFLARE_ACCOUNT_ID(self):
+        return self.get(KEY_CLOUDFLARE_ACCOUNT_ID)
+
+    @CLOUDFLARE_ACCOUNT_ID.setter
+    def CLOUDFLARE_ACCOUNT_ID(self, value):
+        if value is None:
+            self.unset(KEY_CLOUDFLARE_ACCOUNT_ID)
+        else:
+            self.set(KEY_CLOUDFLARE_ACCOUNT_ID, str(value))
 
     @property
     def MAIL(self):

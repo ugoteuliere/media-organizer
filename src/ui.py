@@ -2,6 +2,7 @@ from __future__ import annotations
 import sys
 import os
 import shutil
+import re
 
 if hasattr(sys.stdout, "reconfigure"):
     try:
@@ -477,8 +478,78 @@ def check_log_dir_permissions(log_dir: Path) -> Tuple[bool, str]:
     except OSError as e:
         return (False, str(e))
 
+def format_daemon_log(level: str, message: str) -> str:
+    """Formats a message for daemon mode: strictly single-line with timestamp and level."""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    clean_msg = re.sub(r'\s+', ' ', str(message)).strip()
+    return f"{timestamp} [{level}] {clean_msg}"
+
+def _emit_daemon_log(level: str, message: str, stream=None):
+    """Outputs a single-line formatted log in daemon mode to console stream and log file if enabled."""
+    global _last_log_cleanup_date
+    if stream is None:
+        stream = sys.stderr if level == "ERROR" else sys.stdout
+
+    line = format_daemon_log(level, message)
+    should_write_file = LOG_ENABLED or LOG_MODE in ("file", "both")
+    should_print_console = (not should_write_file) or LOG_MODE == "both"
+
+    if should_write_file:
+        try:
+            log_dir = get_log_dir()
+            today = datetime.now().strftime("%Y-%m-%d")
+            if _last_log_cleanup_date != today:
+                cleanup_old_logs(log_dir, max_age_days=14)
+                _last_log_cleanup_date = today
+            path = log_dir / f"{today}.txt"
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(f"{line}\n")
+        except OSError:
+            pass
+
+    if should_print_console:
+        stream.write(f"{line}\n")
+        stream.flush()
+
+def log_info(message: str):
+    """Logs an operational/informational message (single line to stdout in daemon mode)."""
+    if DAEMON_ENABLED:
+        _emit_daemon_log("INFO", message, stream=sys.stdout)
+    else:
+        print_log(message)
+
+def log_error(message: str):
+    """Logs an error message (single line to stderr in daemon mode)."""
+    if DAEMON_ENABLED:
+        _emit_daemon_log("ERROR", message, stream=sys.stderr)
+    else:
+        print_log(message)
+
+def log_success(original_name: str, new_name: str, destination_path: str):
+    """Logs a successful media rename and move operation (single line to stdout in daemon mode)."""
+    msg = f"'{original_name}' -> '{new_name}' (Destination: {destination_path})"
+    if DAEMON_ENABLED:
+        _emit_daemon_log("SUCCESS", msg, stream=sys.stdout)
+    else:
+        print_log(f"✅ {msg}")
+
 def print_log(message):
     global _last_log_cleanup_date
+    if DAEMON_ENABLED:
+        msg_str = str(message).strip()
+        level = "INFO"
+        if msg_str.startswith("[ERROR]") or "❌" in msg_str or "Error:" in msg_str or "error:" in msg_str:
+            level = "ERROR"
+            msg_str = re.sub(r'^(?:❌\s*|\[ERROR\]\s*)', '', msg_str).strip()
+        elif msg_str.startswith("[SUCCESS]"):
+            level = "SUCCESS"
+            msg_str = re.sub(r'^\[SUCCESS\]\s*', '', msg_str).strip()
+        elif msg_str.startswith("[INFO]"):
+            level = "INFO"
+            msg_str = re.sub(r'^\[INFO\]\s*', '', msg_str).strip()
+        _emit_daemon_log(level, msg_str)
+        return
+
     should_write_file = LOG_ENABLED or LOG_MODE in ("file", "both")
     should_print_console = (not should_write_file) or LOG_MODE == "both"
 
@@ -508,6 +579,15 @@ def print_error(message, logs):
 
 def rich_print_log(*args, **kwargs):
     global LOG_MODE
+    if DAEMON_ENABLED:
+        console_capture = Console(force_terminal=False, no_color=True, width=150)
+        with console_capture.capture() as capture:
+            console_capture.print(*args, **kwargs)
+        raw_text = " ".join(capture.get().strip().splitlines())
+        if raw_text:
+            _emit_daemon_log("INFO", raw_text)
+        return
+
     should_write_file = LOG_ENABLED or LOG_MODE in ("file", "both")
     should_print_console = (not should_write_file) or LOG_MODE == "both"
 
@@ -635,6 +715,13 @@ def display_sorted_files(paths):
 
 def display_skipped_filenames(failed_files):
     if not failed_files:
+        return
+
+    if DAEMON_ENABLED:
+        for fail in failed_files:
+            orig = str(fail.get('Original', 'Unknown'))
+            reason = str(fail.get('Reason', 'No reason provided'))
+            log_error(f"Skipped file '{orig}': {reason}")
         return
 
     rich_print_log()

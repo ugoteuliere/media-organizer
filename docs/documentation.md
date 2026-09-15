@@ -18,7 +18,6 @@ Technical guide and reference for the Media Organizer & Renamer.
    - [Simulation Mode](#simulation-mode)
    - [Daemon Background Watcher](#daemon-background-watcher)
 4. [Options & CLI Flags](#4-options--cli-flags)
-   - [FFmpeg Setup](#ffmpeg-setup)
 5. [Matching & Multi-Cloud AI Architecture](#5-matching--multi-cloud-ai-architecture)
    - [Metadata Extraction Pipeline](#metadata-extraction-pipeline)
    - [TMDB Match Probability Scorer](#tmdb-match-probability-scorer)
@@ -182,40 +181,6 @@ media-organizer --daemon --interval 15
 | — | `--notify-error` | `options.notify_on_error` | `true` | Sends email notification when an error occurs. |
 | `-t` | `--notify-tag` | `options.notify_on_tag` | `false` | Sends email notification when a new keyword tag is learned. |
 | — | `--path="<dir>"` | — | Incoming dir | Targets a specific folder. |
-
-### FFmpeg Setup
-
-The `--resolution` (`-R`) and `--quality` (`-q`) flags use `ffprobe` (included with FFmpeg) to extract media metadata (resolution and video quality/source) directly from video files.
-
-If `ffprobe` is not found in your system's `PATH`, resolution and quality tags are omitted automatically.
-
-#### Installation
-
-* **Windows**:
-  ```powershell
-  winget install Gyan.FFmpeg
-  # or with Chocolatey:
-  choco install ffmpeg
-  ```
-* **macOS**:
-  ```bash
-  brew install ffmpeg
-  ```
-* **Linux (Debian / Ubuntu)**:
-  ```bash
-  sudo apt update && sudo apt install -y ffmpeg
-  ```
-* **Linux (Arch Linux)**:
-  ```bash
-  sudo pacman -S ffmpeg
-  ```
-* **Docker**:
-  FFmpeg and `ffprobe` are already pre-installed in the official Docker image.
-
-After installation, verify that `ffprobe` is available from your terminal:
-```bash
-ffprobe -version
-```
 
 ## 5. Matching & Multi-Cloud AI Architecture
 

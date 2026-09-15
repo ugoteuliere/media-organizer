@@ -1226,6 +1226,11 @@ def test_parse_arguments_conflicts(monkeypatch):
 
 def test_parse_arguments_missing_keys(monkeypatch):
     monkeypatch.setattr(ui, "GEMINI_API_KEY", None)
+    monkeypatch.setattr(ui.config, "GEMINI_API_KEY", None)
+    monkeypatch.setattr(ui.config, "GROQ_API_KEY", None)
+    monkeypatch.setattr(ui.config, "OPENROUTER_API_KEY", None)
+    monkeypatch.setattr(ui.config, "CLOUDFLARE_API_TOKEN", None)
+    monkeypatch.setattr(ui.config, "CLOUDFLARE_ACCOUNT_ID", None)
     monkeypatch.setattr(sys, "argv", ["main.py", "-a"])
     with pytest.raises(SystemExit):
         ui.parse_arguments()
@@ -1271,6 +1276,7 @@ def test_ui_display_tables_smoke(monkeypatch):
 
 def test_api_call_missing_key_exits(monkeypatch):
     monkeypatch.setattr(api, "TMDB_API_KEY", None)
+    monkeypatch.setattr(api.config, "TMDB_API_KEY", None)
     with pytest.raises(SystemExit) as exc:
         api.api_call("Inception", "2010", "en-US", "movie")
     assert exc.value.code == 1
@@ -1293,6 +1299,7 @@ def test_api_call_http_errors_and_empty_results(mock_get):
 
 def test_gemini_api_call_missing_key(monkeypatch):
     monkeypatch.setattr(api, "GEMINI_API_KEY", None)
+    monkeypatch.setattr(api.config, "GEMINI_API_KEY", None)
     dummy_info = {
         'File': 'test.mkv',
         'Folder': 'downloads',
@@ -1928,6 +1935,7 @@ def test_actionable_error_messages(tmp_path, monkeypatch, capsys):
 
     # 3. api.api_call() with missing TMDB key shows tips
     monkeypatch.setattr(api, "TMDB_API_KEY", None)
+    monkeypatch.setattr(api.config, "TMDB_API_KEY", None)
     with patch("src.api.print_log") as mock_log:
         with pytest.raises(SystemExit):
             api.api_call("Inception", "2010", "en-US", "movie")
@@ -1937,6 +1945,7 @@ def test_actionable_error_messages(tmp_path, monkeypatch, capsys):
 
     # 4. api.gemini_api_call() with missing Gemini key shows tips
     monkeypatch.setattr(api, "GEMINI_API_KEY", None)
+    monkeypatch.setattr(api.config, "GEMINI_API_KEY", None)
     with patch("src.api.print_log") as mock_log:
         with pytest.raises(SystemExit):
             api.gemini_api_call({'File': 't.mkv', 'Folder': 'd', 'Path': '/d/t.mkv', 'Clean': 't', 'Parse': 't', 'Media': 'movie'})

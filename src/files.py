@@ -268,10 +268,11 @@ def rename_media_files(clean_data_table):
         except Exception as e:
             raise RuntimeError(ui.print_error(f" ❌ Error: Impossible to rename {original_path.name[:30]}...",e))
 
-    if renamed_count == 0:
-        ui.print_log("\n ❌ No files have been renamed.")
-    else:
-        ui.print_log(f"\n🎉 Done ! {renamed_count}/{len(clean_data_table)-already_clean_files_count} file(s) have been successfully renamed.\n\n")
+    if not getattr(ui, "DAEMON_ENABLED", False):
+        if renamed_count == 0:
+            ui.print_log("\n ❌ No files have been renamed.")
+        else:
+            ui.print_log(f"\n🎉 Done ! {renamed_count}/{len(clean_data_table)-already_clean_files_count} file(s) have been successfully renamed.\n\n")
     
     return clean_data_table
 
@@ -397,6 +398,9 @@ def execute_single_file_move(old, new, lookup: dict, movies_dir: Optional[Path] 
         if media_type == "unknown":
             media_type = infer_media_type_from_destination(p_new, movies_dir, tv_dir)
 
+        if getattr(ui, "DAEMON_ENABLED", False):
+            ui.log_success(orig_name, p_new.name, str(p_new))
+
         mail.send_media_success_email(
             media_name=p_new.name,
             original_name=orig_name,
@@ -405,14 +409,20 @@ def execute_single_file_move(old, new, lookup: dict, movies_dir: Optional[Path] 
         )
         return True, None
     except (FileExistsError, RuntimeError) as e:
-        ui.print_log(f" ⚠️ Skipping {p_old.name}: {e} \n")
+        if getattr(ui, "DAEMON_ENABLED", False):
+            ui.log_error(f"Failed to move '{p_old.name}': {e}")
+        else:
+            ui.print_log(f" ⚠️ Skipping {p_old.name}: {e} \n")
         try:
             mail.send_error_email(
                 error_message=str(e),
                 affected_file=p_old.name
             )
         except Exception as mail_err:
-            ui.print_log(f"⚠️ Warning: Failed to send error email: {mail_err}")
+            if getattr(ui, "DAEMON_ENABLED", False):
+                ui.log_error(f"Failed to send error email: {mail_err}")
+            else:
+                ui.print_log(f"⚠️ Warning: Failed to send error email: {mail_err}")
         return False, p_old.name
 
 def move_media_files(paths, clean_data_table=None, source_path=None):
@@ -430,11 +440,12 @@ def move_media_files(paths, clean_data_table=None, source_path=None):
         else:
             failed_moves.append(failed_file)
 
-    if success_count > 0:
-        ui.print_log(f"\n✅ {success_count} files moved successfully!")
+    if not getattr(ui, "DAEMON_ENABLED", False):
+        if success_count > 0:
+            ui.print_log(f"\n✅ {success_count} files moved successfully!")
 
-    if failed_moves:
-        ui.print_log(f"❌ {len(failed_moves)} files could not be moved")
+        if failed_moves:
+            ui.print_log(f"❌ {len(failed_moves)} files could not be moved")
 
     cleanup_target = Path(source_path) if source_path else (Path(NOT_SORTED_MEDIA_FILES_FOLDER) if NOT_SORTED_MEDIA_FILES_FOLDER else None)
     if cleanup_target:

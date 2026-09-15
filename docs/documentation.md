@@ -265,11 +265,10 @@ services:
 
 ### Configuration
 
-You can configure the application in several ways depending on your setup:
-
-- **Environment Variables**: Define settings directly in your `docker-compose.yml` or container run command (e.g. `TMDB_API_KEY`, `DAEMON`, `LOG`, `POLLING_INTERVAL`). Environment variables take precedence over settings in `config.ini`.
-- **Configuration File (`config.ini`)**: Mount a directory to `/config` (e.g. `-v /path/to/config:/config`) to provide and persist a custom `config.ini` file, along with custom keyword tag files (`custom_tags.json`, `gemini_tags.json`).
-- **Default Out-of-the-Box Settings**: Without any extra configuration, the container runs automatically using default media paths (`/data/input`, `/data/Movies`, `/data/TV_Shows`) and polls in the background every 15 minutes.
+| Method | Description | Priority |
+| :--- | :--- | :--- |
+| **Environment Variables** | Set options directly in `docker-compose.yml` or container commands (e.g. `TMDB_API_KEY`, `DAEMON`, `LOG`, `POLLING_INTERVAL`). | Highest (overrides `config.ini`) |
+| **Configuration File (`config.ini`)** | Mount a folder to `/config` (e.g. `-v /path/to/config:/config`) to supply a custom `config.ini` and persist keyword tag files. | Applied unless overridden by environment variables |
 
 ---
 

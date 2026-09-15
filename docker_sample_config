@@ -1,0 +1,33 @@
+[paths]
+movies_folder = /data/Movies
+tv_shows_folder = /data/TV_Shows
+not_sorted_media_files_folder = /data/input
+
+[api]
+tmdb_api_key = 
+gemini_api_key = 
+groq_api_key = 
+openrouter_api_key = 
+cloudflare_api_token = 
+cloudflare_account_id = 
+
+[options]
+ai_provider = auto
+tmdb_min_confidence = 0.75
+ai_min_confidence = 0.70
+resolution = false
+quality = false
+bypass = true
+daemon = true
+polling_interval = 15
+ai = false
+learn = false
+log = false
+verbose = true
+notify_on_success = false
+notify_on_error = false
+notify_on_tag = false
+
+[mail]
+mail = your_email@gmail.com
+mail_pswd = your_16_char_app_password

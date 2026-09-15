@@ -37,6 +37,7 @@ COLOR_BTN_TEST = "#172554"     # Test badge button surface
 COLOR_BTN_TEST_BORDER = "#1f6feb"
 COLOR_SUCCESS = "#3fb950"      # Green status
 COLOR_ERROR = "#f85149"        # Red status
+FONT_FAMILY = "Segoe UI"
 
 
 class ConfigGUI:
@@ -151,7 +152,7 @@ class ConfigGUI:
         lbl_brand = ctk.CTkLabel(
             self.sidebar,
             text="🎬 Media Renamer",
-            font=ctk.CTkFont(family="Segoe UI", size=16, weight="bold"),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=16, weight="bold"),
             text_color=COLOR_TEXT_MAIN
         )
         lbl_brand.pack(anchor="w", padx=20, pady=(22, 2))
@@ -159,7 +160,7 @@ class ConfigGUI:
         lbl_sub = ctk.CTkLabel(
             self.sidebar,
             text="Configuration Hub",
-            font=ctk.CTkFont(family="Segoe UI", size=11),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
             text_color=COLOR_TEXT_MUTED
         )
         lbl_sub.pack(anchor="w", padx=20, pady=(0, 16))
@@ -179,7 +180,7 @@ class ConfigGUI:
                 anchor="w",
                 height=38,
                 corner_radius=8,
-                font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+                font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
                 fg_color="transparent",
                 hover_color=COLOR_NAV_HOVER,
                 text_color=COLOR_TEXT_MAIN,
@@ -201,14 +202,14 @@ class ConfigGUI:
         ctk.CTkLabel(
             card_path,
             text="Active Config",
-            font=ctk.CTkFont(family="Segoe UI", size=9, weight="bold"),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=9, weight="bold"),
             text_color=COLOR_ACCENT
         ).pack(anchor="w", padx=10, pady=(6, 0))
 
         lbl_path_text = ctk.CTkLabel(
             card_path,
             text=str(self.cm.config_path),
-            font=ctk.CTkFont(family="Segoe UI", size=8),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=8),
             text_color=COLOR_TEXT_MUTED,
             wraplength=180,
             justify="left"
@@ -226,7 +227,7 @@ class ConfigGUI:
         self.lbl_title = ctk.CTkLabel(
             self.header_frame,
             text="Storage Directories",
-            font=ctk.CTkFont(family="Segoe UI", size=18, weight="bold"),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=18, weight="bold"),
             text_color=COLOR_TEXT_MAIN
         )
         self.lbl_title.pack(anchor="w")
@@ -234,7 +235,7 @@ class ConfigGUI:
         self.lbl_desc = ctk.CTkLabel(
             self.header_frame,
             text="Configure your media directories. Folders can be local drives, external disks, or NAS shares.",
-            font=ctk.CTkFont(family="Segoe UI", size=11),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
             text_color=COLOR_TEXT_MUTED,
             wraplength=600,
             justify="left"
@@ -277,7 +278,7 @@ class ConfigGUI:
         self.status_label = ctk.CTkLabel(
             status_box,
             textvariable=self.var_status,
-            font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=10, weight="bold"),
             text_color=COLOR_TEXT_MUTED
         )
         self.status_label.pack(side="left", padx=(0, 10), pady=4)
@@ -287,7 +288,7 @@ class ConfigGUI:
         btn_save = ctk.CTkButton(
             self.footer,
             text="💾 Save Configuration",
-            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
             corner_radius=8,
             width=160,
             height=32,
@@ -300,7 +301,7 @@ class ConfigGUI:
         btn_reload = ctk.CTkButton(
             self.footer,
             text="🔄 Reload",
-            font=ctk.CTkFont(family="Segoe UI", size=11),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
             corner_radius=8,
             width=90,
             height=32,
@@ -313,7 +314,7 @@ class ConfigGUI:
         btn_close = ctk.CTkButton(
             self.footer,
             text="Close",
-            font=ctk.CTkFont(family="Segoe UI", size=11),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
             corner_radius=8,
             width=70,
             height=32,
@@ -367,7 +368,7 @@ class ConfigGUI:
             ctk.CTkLabel(
                 card,
                 text=title_text,
-                font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+                font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
                 text_color=COLOR_ACCENT
             ).pack(anchor="w", padx=16, pady=(12, 6))
 
@@ -391,7 +392,7 @@ class ConfigGUI:
                 width=90,
                 height=36,
                 corner_radius=8,
-                font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
+                font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
                 fg_color=COLOR_BTN_SEC,
                 hover_color=COLOR_BTN_SEC_HOVER,
                 text_color=COLOR_ACCENT,
@@ -426,7 +427,7 @@ class ConfigGUI:
             variable=self.var_show_secrets,
             command=self._toggle_secret_visibility,
             progress_color=COLOR_NAV_ACTIVE,
-            font=ctk.CTkFont(family="Segoe UI", size=11),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
             text_color=COLOR_TEXT_MUTED
         )
         sw_secrets.pack(side="right")
@@ -438,7 +439,7 @@ class ConfigGUI:
         ctk.CTkLabel(
             card_creds,
             text="🔑 API Authentication Keys",
-            font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
             text_color=COLOR_ACCENT
         ).pack(anchor="w", padx=16, pady=(12, 8))
 
@@ -451,7 +452,7 @@ class ConfigGUI:
                 text=label_text,
                 width=200,
                 anchor="w",
-                font=ctk.CTkFont(family="Segoe UI", size=11),
+                font=ctk.CTkFont(family=FONT_FAMILY, size=11),
                 text_color=COLOR_TEXT_MAIN
             )
             lbl.pack(side="left")
@@ -476,7 +477,7 @@ class ConfigGUI:
                     width=65,
                     height=32,
                     corner_radius=8,
-                    font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"),
+                    font=ctk.CTkFont(family=FONT_FAMILY, size=10, weight="bold"),
                     fg_color=COLOR_BTN_TEST,
                     hover_color="#1e3a8a",
                     border_width=1,
@@ -503,14 +504,14 @@ class ConfigGUI:
         ctk.CTkLabel(
             card_orch,
             text="⚙️ Orchestration & Confidence Thresholds",
-            font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
             text_color=COLOR_ACCENT
         ).pack(anchor="w", padx=16, pady=(12, 8))
 
         # Default Provider Row
         r1 = ctk.CTkFrame(card_orch, fg_color="transparent")
         r1.pack(fill="x", padx=16, pady=5)
-        ctk.CTkLabel(r1, text="Default AI Provider:", width=200, anchor="w", font=ctk.CTkFont(family="Segoe UI", size=11), text_color=COLOR_TEXT_MAIN).pack(side="left")
+        ctk.CTkLabel(r1, text="Default AI Provider:", width=200, anchor="w", font=ctk.CTkFont(family=FONT_FAMILY, size=11), text_color=COLOR_TEXT_MAIN).pack(side="left")
         cbo = ctk.CTkOptionMenu(
             r1,
             variable=self.var_ai_provider,
@@ -528,9 +529,9 @@ class ConfigGUI:
         # TMDB Confidence Slider Row
         r2 = ctk.CTkFrame(card_orch, fg_color="transparent")
         r2.pack(fill="x", padx=16, pady=6)
-        ctk.CTkLabel(r2, text="TMDB Min Confidence:", width=200, anchor="w", font=ctk.CTkFont(family="Segoe UI", size=11), text_color=COLOR_TEXT_MAIN).pack(side="left")
+        ctk.CTkLabel(r2, text="TMDB Min Confidence:", width=200, anchor="w", font=ctk.CTkFont(family=FONT_FAMILY, size=11), text_color=COLOR_TEXT_MAIN).pack(side="left")
 
-        self.lbl_tmdb_conf = ctk.CTkLabel(r2, text="75% (0.75)", width=80, anchor="w", font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), text_color=COLOR_ACCENT)
+        self.lbl_tmdb_conf = ctk.CTkLabel(r2, text="75% (0.75)", width=80, anchor="w", font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"), text_color=COLOR_ACCENT)
         self.lbl_tmdb_conf.pack(side="right")
 
         self.slider_tmdb = ctk.CTkSlider(
@@ -548,9 +549,9 @@ class ConfigGUI:
         # AI Confidence Slider Row
         r3 = ctk.CTkFrame(card_orch, fg_color="transparent")
         r3.pack(fill="x", padx=16, pady=6)
-        ctk.CTkLabel(r3, text="AI Min Confidence:", width=200, anchor="w", font=ctk.CTkFont(family="Segoe UI", size=11), text_color=COLOR_TEXT_MAIN).pack(side="left")
+        ctk.CTkLabel(r3, text="AI Min Confidence:", width=200, anchor="w", font=ctk.CTkFont(family=FONT_FAMILY, size=11), text_color=COLOR_TEXT_MAIN).pack(side="left")
 
-        self.lbl_ai_conf = ctk.CTkLabel(r3, text="70% (0.70)", width=80, anchor="w", font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), text_color=COLOR_ACCENT)
+        self.lbl_ai_conf = ctk.CTkLabel(r3, text="70% (0.70)", width=80, anchor="w", font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"), text_color=COLOR_ACCENT)
         self.lbl_ai_conf.pack(side="right")
 
         self.slider_ai = ctk.CTkSlider(
@@ -692,7 +693,7 @@ class ConfigGUI:
         ctk.CTkLabel(
             card_video,
             text="🎞️ Video Stream Tags (FFmpeg)",
-            font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
             text_color=COLOR_ACCENT
         ).pack(anchor="w", padx=16, pady=(12, 6))
 
@@ -701,7 +702,7 @@ class ConfigGUI:
             text="Detect and append resolution tags (e.g., [1080p], [4K])",
             variable=self.var_resolution,
             progress_color=COLOR_BTN_PRIMARY,
-            font=ctk.CTkFont(family="Segoe UI", size=11),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
             text_color=COLOR_TEXT_MAIN
         ).pack(anchor="w", padx=16, pady=4)
 
@@ -710,7 +711,7 @@ class ConfigGUI:
             text="Detect and append encoding quality tags (e.g., [BluRay], [WEB-DL])",
             variable=self.var_quality,
             progress_color=COLOR_BTN_PRIMARY,
-            font=ctk.CTkFont(family="Segoe UI", size=11),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
             text_color=COLOR_TEXT_MAIN
         ).pack(anchor="w", padx=16, pady=(4, 12))
 
@@ -721,7 +722,7 @@ class ConfigGUI:
         ctk.CTkLabel(
             card_ai,
             text="🧠 Cloud AI Fallback & Keyword Learning",
-            font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
             text_color=COLOR_ACCENT
         ).pack(anchor="w", padx=16, pady=(12, 6))
 
@@ -730,7 +731,7 @@ class ConfigGUI:
             text="Enable Cloud AI fallback by default (-i)",
             variable=self.var_ai,
             progress_color=COLOR_BTN_PRIMARY,
-            font=ctk.CTkFont(family="Segoe UI", size=11),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
             text_color=COLOR_TEXT_MAIN
         ).pack(anchor="w", padx=16, pady=4)
 
@@ -739,7 +740,7 @@ class ConfigGUI:
             text="Enable AI keyword learning by default (-L) (save discovered tags)",
             variable=self.var_learn,
             progress_color=COLOR_BTN_PRIMARY,
-            font=ctk.CTkFont(family="Segoe UI", size=11),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
             text_color=COLOR_TEXT_MAIN
         ).pack(anchor="w", padx=16, pady=(4, 12))
 
@@ -750,7 +751,7 @@ class ConfigGUI:
         ctk.CTkLabel(
             card_auto,
             text="⚡ Automation & Background Watcher",
-            font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
             text_color=COLOR_ACCENT
         ).pack(anchor="w", padx=16, pady=(12, 6))
 
@@ -759,7 +760,7 @@ class ConfigGUI:
             text="Bypass interactive confirmation prompts (-b)",
             variable=self.var_bypass,
             progress_color=COLOR_BTN_PRIMARY,
-            font=ctk.CTkFont(family="Segoe UI", size=11),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
             text_color=COLOR_TEXT_MAIN
         ).pack(anchor="w", padx=16, pady=4)
 
@@ -768,7 +769,7 @@ class ConfigGUI:
             text="Enable background daemon watcher by default (-d)",
             variable=self.var_daemon,
             progress_color=COLOR_BTN_PRIMARY,
-            font=ctk.CTkFont(family="Segoe UI", size=11),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
             text_color=COLOR_TEXT_MAIN
         ).pack(anchor="w", padx=16, pady=4)
 
@@ -778,7 +779,7 @@ class ConfigGUI:
         ctk.CTkLabel(
             row_int,
             text="Daemon polling interval (minutes):",
-            font=ctk.CTkFont(family="Segoe UI", size=11),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
             text_color=COLOR_TEXT_MAIN
         ).pack(side="left")
 
@@ -800,7 +801,7 @@ class ConfigGUI:
         ctk.CTkLabel(
             card_log,
             text="📝 Logging & Diagnostics",
-            font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
             text_color=COLOR_ACCENT
         ).pack(anchor="w", padx=16, pady=(12, 6))
 
@@ -809,7 +810,7 @@ class ConfigGUI:
             text="Write console output to daily log files (log/YYYY-MM-DD.txt) (-l)",
             variable=self.var_log,
             progress_color=COLOR_BTN_PRIMARY,
-            font=ctk.CTkFont(family="Segoe UI", size=11),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
             text_color=COLOR_TEXT_MAIN
         ).pack(anchor="w", padx=16, pady=4)
 
@@ -818,7 +819,7 @@ class ConfigGUI:
             text="Display verbose diagnostic logs and exception tracebacks (-v)",
             variable=self.var_verbose,
             progress_color=COLOR_BTN_PRIMARY,
-            font=ctk.CTkFont(family="Segoe UI", size=11),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
             text_color=COLOR_TEXT_MAIN
         ).pack(anchor="w", padx=16, pady=(4, 12))
 
@@ -836,14 +837,14 @@ class ConfigGUI:
         ctk.CTkLabel(
             card_creds,
             text="📧 Gmail SMTP Credentials",
-            font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
             text_color=COLOR_ACCENT
         ).pack(anchor="w", padx=16, pady=(12, 6))
 
         # Email Row
         r1 = ctk.CTkFrame(card_creds, fg_color="transparent")
         r1.pack(fill="x", padx=16, pady=5)
-        ctk.CTkLabel(r1, text="Gmail Address:", width=180, anchor="w", font=ctk.CTkFont(family="Segoe UI", size=11), text_color=COLOR_TEXT_MAIN).pack(side="left")
+        ctk.CTkLabel(r1, text="Gmail Address:", width=180, anchor="w", font=ctk.CTkFont(family=FONT_FAMILY, size=11), text_color=COLOR_TEXT_MAIN).pack(side="left")
         ctk.CTkEntry(
             r1,
             textvariable=self.var_mail,
@@ -857,7 +858,7 @@ class ConfigGUI:
         # Password Row
         r2 = ctk.CTkFrame(card_creds, fg_color="transparent")
         r2.pack(fill="x", padx=16, pady=5)
-        ctk.CTkLabel(r2, text="Gmail App Password:", width=180, anchor="w", font=ctk.CTkFont(family="Segoe UI", size=11), text_color=COLOR_TEXT_MAIN).pack(side="left")
+        ctk.CTkLabel(r2, text="Gmail App Password:", width=180, anchor="w", font=ctk.CTkFont(family=FONT_FAMILY, size=11), text_color=COLOR_TEXT_MAIN).pack(side="left")
         ent_pswd = ctk.CTkEntry(
             r2,
             textvariable=self.var_mail_pswd,
@@ -878,7 +879,7 @@ class ConfigGUI:
             width=130,
             height=32,
             corner_radius=8,
-            font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=10, weight="bold"),
             fg_color=COLOR_BTN_TEST,
             hover_color="#1e3a8a",
             border_width=1,
@@ -895,7 +896,7 @@ class ConfigGUI:
         ctk.CTkLabel(
             card_triggers,
             text="🔔 Notification Triggers",
-            font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
             text_color=COLOR_ACCENT
         ).pack(anchor="w", padx=16, pady=(12, 6))
 
@@ -904,7 +905,7 @@ class ConfigGUI:
             text="Send notification email when media files are successfully renamed",
             variable=self.var_notify_success,
             progress_color=COLOR_BTN_PRIMARY,
-            font=ctk.CTkFont(family="Segoe UI", size=11),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
             text_color=COLOR_TEXT_MAIN
         ).pack(anchor="w", padx=16, pady=4)
 
@@ -913,7 +914,7 @@ class ConfigGUI:
             text="Send notification email when an unexpected processing error occurs",
             variable=self.var_notify_error,
             progress_color=COLOR_BTN_PRIMARY,
-            font=ctk.CTkFont(family="Segoe UI", size=11),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
             text_color=COLOR_TEXT_MAIN
         ).pack(anchor="w", padx=16, pady=4)
 
@@ -922,7 +923,7 @@ class ConfigGUI:
             text="Send notification email when a new AI keyword tag is discovered (-t)",
             variable=self.var_notify_tag,
             progress_color=COLOR_BTN_PRIMARY,
-            font=ctk.CTkFont(family="Segoe UI", size=11),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
             text_color=COLOR_TEXT_MAIN
         ).pack(anchor="w", padx=16, pady=(4, 12))
 

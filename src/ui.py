@@ -1,3 +1,4 @@
+from __future__ import annotations
 import sys
 import os
 import shutil
@@ -12,9 +13,10 @@ if hasattr(sys.stdout, "reconfigure"):
 from rich.console import Console
 from rich.table import Table
 from datetime import datetime, timedelta
-from typing import Optional, List
+from typing import Optional, List, Tuple
 from pathlib import Path
 import argparse
+import uuid
 
 from src.config import config
 MOVIES_FOLDER = getattr(config, 'MOVIES_FOLDER', None)
@@ -24,6 +26,7 @@ MAIL = getattr(config, 'MAIL', None)
 MAIL_PSWD = getattr(config, 'MAIL_PSWD', None)
 
 LOG_ENABLED = False
+LOG_MODE = "console"
 MAIL_ENABLED = False
 AI_FALLBACK_ENABLED = False
 LEARN_ENABLED = False
@@ -66,7 +69,7 @@ def hide_console_window() -> None:
 
 
 def parse_arguments():
-    global LOG_ENABLED, MAIL_ENABLED, AI_FALLBACK_ENABLED, LEARN_ENABLED, BYPASS_ENABLED, VERBOSE_ENABLED, SIMULATE_ENABLED
+    global LOG_ENABLED, LOG_MODE, MAIL_ENABLED, AI_FALLBACK_ENABLED, LEARN_ENABLED, BYPASS_ENABLED, VERBOSE_ENABLED, SIMULATE_ENABLED
     global RESOLUTION_ENABLED, QUALITY_ENABLED, NOTIFY_SUCCESS_ENABLED, NOTIFY_ERROR_ENABLED, NOTIFY_TAG_ENABLED
     global DAEMON_ENABLED, POLLING_INTERVAL
 
@@ -123,6 +126,8 @@ def parse_arguments():
     auto_group = parser.add_argument_group("Automation & Logging")
     auto_group.add_argument("-d", "--daemon", action="store_true", dest="daemon",
                             help="Run continuously in background daemon mode with periodic polling.")
+    auto_group.add_argument("--once", "--no-daemon", action="store_true", dest="no_daemon",
+                            help="Run once and exit immediately instead of running continuously as a daemon.")
     auto_group.add_argument("--interval", type=int, default=None,
                             help="Polling interval in minutes for daemon mode (overrides config).")
     auto_group.add_argument("-b", "--bypass", action="store_true", 
@@ -185,9 +190,9 @@ def parse_arguments():
     MAIL_ENABLED = bool(current_mail and current_pswd)
 
     is_daemon = bool(
-        getattr(args, 'daemon', False)
-        or (args.interval is not None)
-        or getattr(config, 'DAEMON', False)
+        (getattr(args, 'daemon', False) or (args.interval is not None) or getattr(config, 'DAEMON', False))
+        and not getattr(args, 'no_daemon', False)
+        and not getattr(args, 'simulate', False)
     )
     DAEMON_ENABLED = is_daemon
     if args.interval is not None:
@@ -202,7 +207,24 @@ def parse_arguments():
     LEARN_ENABLED = bool(args.learn or getattr(config, 'LEARN', False))
     AI_FALLBACK_ENABLED = bool(args.ai or getattr(config, 'AI', False) or LEARN_ENABLED)
     BYPASS_ENABLED = bool(args.bypass or getattr(config, 'BYPASS', False) or DAEMON_ENABLED)
-    LOG_ENABLED = bool(args.log or getattr(config, 'LOG', False))
+    is_docker = os.environ.get("DOCKER_CONTAINER") == "1" or os.path.exists("/.dockerenv")
+    wants_log = bool(args.log or getattr(config, 'LOG', False))
+    if wants_log:
+        log_dir = get_log_dir()
+        has_perm, reason = check_log_dir_permissions(log_dir)
+        if has_perm:
+            LOG_MODE = "both" if is_docker else "file"
+            LOG_ENABLED = True
+        else:
+            sys.stderr.write(
+                f"\n⚠️ Warning: Log directory '{log_dir}' is not writable ({reason}).\n"
+                "💡 Falling back to console logging (stdout/stderr) only.\n\n"
+            )
+            LOG_MODE = "console"
+            LOG_ENABLED = False
+    else:
+        LOG_MODE = "console"
+        LOG_ENABLED = False
     VERBOSE_ENABLED = bool(args.verbose or getattr(config, 'VERBOSE', False))
     SIMULATE_ENABLED = bool(args.simulate)
     RESOLUTION_ENABLED = bool(args.resolution or getattr(config, 'RESOLUTION', False))
@@ -256,7 +278,7 @@ def parse_arguments():
 
         if not available_ai:
             parser.error(
-                "❌ Missing configuration: The '--ai' (-i) and '--learn' (-L) options require an AI Cloud Provider API key to be configured (Gemini, Groq, OpenRouter, or Cloudflare).\n\n"
+                "❌ Missing configuration: The '--ai' (-a) and '--learn' (-L) options require an AI Cloud Provider API key to be configured (Gemini, Groq, OpenRouter, or Cloudflare).\n\n"
                 "💡 How to fix:\n"
                 "  1. Run the configuration wizard:\n"
                 "     python main.py configure\n"
@@ -264,8 +286,8 @@ def parse_arguments():
                 "     python main.py config --set api.gemini_api_key \"<your_gemini_key>\"\n"
                 "     python main.py config --set api.groq_api_key \"<your_groq_key>\"\n"
                 "  3. Or use environment variables:\n"
-                "     export RENAME_GEMINI_API_KEY=\"<your_gemini_key>\"\n"
-                "     export RENAME_GROQ_API_KEY=\"<your_groq_key>\""
+                "     export GEMINI_API_KEY=\"<your_gemini_key>\"\n"
+                "     export GROQ_API_KEY=\"<your_groq_key>\""
             )
 
         if args.provider and args.provider != "auto" and args.provider not in available_ai:
@@ -443,20 +465,39 @@ def cleanup_old_logs(log_dir: Optional[Path] = None, max_age_days: int = 14) -> 
 
     return deleted_files
 
+def check_log_dir_permissions(log_dir: Path) -> Tuple[bool, str]:
+    """Verify read and write permissions on log directory using a probe file."""
+    try:
+        log_dir.mkdir(parents=True, exist_ok=True)
+        probe_file = log_dir / f".log_probe_{uuid.uuid4().hex}"
+        with open(probe_file, "w", encoding="utf-8") as f:
+            f.write("probe")
+        probe_file.unlink(missing_ok=True)
+        return (True, "")
+    except OSError as e:
+        return (False, str(e))
+
 def print_log(message):
     global _last_log_cleanup_date
-    if LOG_ENABLED:
-        log_dir = get_log_dir()
-        today = datetime.now().strftime("%Y-%m-%d")
-        if _last_log_cleanup_date != today:
-            cleanup_old_logs(log_dir, max_age_days=14)
-            _last_log_cleanup_date = today
-        path = log_dir / f"{today}.txt"
+    should_write_file = LOG_ENABLED or LOG_MODE in ("file", "both")
+    should_print_console = (not should_write_file) or LOG_MODE == "both"
 
-        hour = datetime.now().strftime("%H:%M:%S")
-        with open(path, "a", encoding="utf-8") as f:
-            f.write(f"[{hour}] {str(message)}\n")
-    else:
+    if should_write_file:
+        try:
+            log_dir = get_log_dir()
+            today = datetime.now().strftime("%Y-%m-%d")
+            if _last_log_cleanup_date != today:
+                cleanup_old_logs(log_dir, max_age_days=14)
+                _last_log_cleanup_date = today
+            path = log_dir / f"{today}.txt"
+
+            hour = datetime.now().strftime("%H:%M:%S")
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(f"[{hour}] {str(message)}\n")
+        except OSError:
+            pass
+
+    if should_print_console:
         print(message)
 
 def print_error(message, logs):
@@ -466,15 +507,26 @@ def print_error(message, logs):
         return f"\n {message} \n"
 
 def rich_print_log(*args, **kwargs):
-    if LOG_ENABLED:
+    global LOG_MODE
+    should_write_file = LOG_ENABLED or LOG_MODE in ("file", "both")
+    should_print_console = (not should_write_file) or LOG_MODE == "both"
+
+    if should_write_file:
         console_capture = Console(force_terminal=False, no_color=True, width=150)
         with console_capture.capture() as capture:
             console_capture.print(*args, **kwargs)
             
         raw_text = capture.get()
         if raw_text.strip():
-            print_log("\n" + raw_text.rstrip("\n"))
-    else:
+            saved_mode = LOG_MODE
+            try:
+                if LOG_MODE == "both":
+                    LOG_MODE = "file"
+                print_log("\n" + raw_text.rstrip("\n"))
+            finally:
+                LOG_MODE = saved_mode
+
+    if should_print_console:
         console = Console()
         console.print(*args, **kwargs)
 

@@ -1,3 +1,5 @@
+from __future__ import annotations
+from typing import Optional, List, Dict, Tuple, Any
 from pathlib import Path
 import pandas as pd
 import re
@@ -23,10 +25,15 @@ def is_file_locked(file_path: Path) -> bool:
     try:
         os.rename(file_path, file_path)
         return False
-    except (PermissionError, OSError):
+    except OSError:
         return True
 
-def search_media_files(path, exit_if_empty=True):
+VIDEO_EXTENSIONS = {'.mkv', '.mp4', '.avi', '.mov', '.wmv', '.m4v'}
+MOVIE_REGEX = r"^.+? \(\d{4}\)(?: \[[^\]]+\])?$"
+SERIES_REGEX = r"^.+?(?<! \(\d{4}\)) - S\d{2}E\d{2}(?: \[[^\]]+\])?$"
+
+def resolve_search_directory(path=None) -> Optional[Path]:
+    """Resolves and validates the target directory to scan for media files."""
     folder_val = NOT_SORTED_MEDIA_FILES_FOLDER or getattr(config, 'NOT_SORTED_MEDIA_FILES_FOLDER', None)
     if path is not None:
         target_dir = Path(path).resolve()
@@ -35,128 +42,184 @@ def search_media_files(path, exit_if_empty=True):
     else:
         ui.print_log("Error: No media directory specified or configured.")
         return None
-    
-    # check if the directory actually exists
+
     if not target_dir.exists() or not target_dir.is_dir():
         ui.print_log(f"Error: The directory '{target_dir}' does not exist.")
         return None
 
-    video_extensions = {'.mkv', '.mp4', '.avi', '.mov', '.wmv', '.m4v'}
-    movie_re = r"^.+? \(\d{4}\)(?: \[[^\]]+\])?$"
-    series_re = r"^.+?(?<! \(\d{4}\)) - S\d{2}E\d{2}(?: \[[^\]]+\])?$"
-    
-    messy_data_table = []
-    clean_data_table = []
+    return target_dir
 
-    # recursively searches all folders
+def collect_candidate_video_files(target_dir: Path) -> List[Path]:
+    """Recursively scans target_dir and returns video files excluding locked or partial downloads."""
+    candidates = []
     for file_path in target_dir.rglob('*'):
         if file_path.suffix.lower() in PARTIAL_EXTENSIONS:
             continue
-        
-        # filter video file type (case-insensitive)
-        if file_path.suffix.lower() in video_extensions:
+        if file_path.suffix.lower() in VIDEO_EXTENSIONS:
             if is_file_locked(file_path):
                 ui.print_log(f"Skipping active/locked download: {file_path.name}")
                 continue
+            candidates.append(file_path)
+    return candidates
 
-            # filters video that already match the format Movie title (Year) or TV Show title SXXEXX
-            name_without_ext = file_path.stem.strip()
+def extract_parse_tokens(parse: tuple, media: str, is_movie: bool) -> Tuple[Optional[str], Optional[str]]:
+    """Extracts raw resolution and quality pattern candidates from parse results."""
+    if is_movie or media == "movie":
+        res_ptn = parse[2] if len(parse) > 2 else None
+        qual_ptn = parse[3] if len(parse) > 3 else None
+    else:
+        res_ptn = parse[4] if len(parse) > 4 else None
+        qual_ptn = parse[5] if len(parse) > 5 else None
+    return res_ptn, qual_ptn
 
-            is_movie = re.fullmatch(movie_re, name_without_ext)
-            is_series = re.fullmatch(series_re, name_without_ext)
+def format_stream_tags(final_res: Optional[str], final_qual: Optional[str], res_enabled: bool, qual_enabled: bool) -> List[str]:
+    """Builds formatted resolution/quality tag tokens if present and enabled."""
+    metadata_parts: List[str] = []
+    if qual_enabled and final_qual:
+        cleaned_qual = str(final_qual).strip()
+        if cleaned_qual:
+            metadata_parts.append(cleaned_qual)
+    if res_enabled and final_res:
+        cleaned_res = str(final_res).strip()
+        if cleaned_res:
+            metadata_parts.append(cleaned_res)
+    return metadata_parts
 
-            if not is_movie and not is_series:
-                parse, media = utils.parse_filename(file_path.name)
-                
-                messy_data_table.append({
-                    'File': file_path.name,
-                    'Folder': file_path.parent.name,
-                    'Path': str(file_path),
-                    'Clean': utils.clean_filename(file_path.name),
-                    'Parse': parse,
-                    'Media': media
-                })
-            else:
-                parse, media = utils.parse_filename(file_path.name)
+def append_resolution_quality_tags(file_path: Path, name_without_ext: str, parse: tuple, media: str, is_movie: bool) -> str:
+    """Appends resolution and quality tags to an already normalized media title if enabled."""
+    res_enabled = bool(getattr(utils, 'RESOLUTION', False) or getattr(ui, 'RESOLUTION_ENABLED', False) or getattr(config, 'RESOLUTION', False))
+    qual_enabled = bool(getattr(utils, 'QUALITY', False) or getattr(ui, 'QUALITY_ENABLED', False) or getattr(config, 'QUALITY', False))
+    has_tags = bool(re.search(r" \[[^\]]+\]$", name_without_ext))
 
-                # Check if resolution or quality tags are enabled
-                res_enabled = bool(getattr(utils, 'RESOLUTION', False) or getattr(ui, 'RESOLUTION_ENABLED', False) or getattr(config, 'RESOLUTION', False))
-                qual_enabled = bool(getattr(utils, 'QUALITY', False) or getattr(ui, 'QUALITY_ENABLED', False) or getattr(config, 'QUALITY', False))
-                has_tags = bool(re.search(r" \[[^\]]+\]$", name_without_ext))
+    if not (res_enabled or qual_enabled) or has_tags:
+        return name_without_ext
 
-                corrected_name = name_without_ext
-                if (res_enabled or qual_enabled) and not has_tags:
-                    if res_enabled:
-                        utils.RESOLUTION = True
-                    if qual_enabled:
-                        utils.QUALITY = True
+    if res_enabled:
+        utils.RESOLUTION = True
+    if qual_enabled:
+        utils.QUALITY = True
 
-                    if is_movie or media == "movie":
-                        res_ptn = parse[2] if len(parse) > 2 else None
-                        qual_ptn = parse[3] if len(parse) > 3 else None
-                    else:
-                        res_ptn = parse[4] if len(parse) > 4 else None
-                        qual_ptn = parse[5] if len(parse) > 5 else None
+    res_ptn, qual_ptn = extract_parse_tokens(parse, media, is_movie)
+    final_res, final_qual = utils.parse_resolution_quality(
+        res_ptn, qual_ptn, None, None, str(file_path)
+    )
+    metadata_parts = format_stream_tags(final_res, final_qual, res_enabled, qual_enabled)
 
-                    final_res, final_qual = utils.parse_resolution_quality(
-                        res_ptn, qual_ptn, None, None, str(file_path)
-                    )
-                    metadata_parts = []
-                    if qual_enabled and final_qual and str(final_qual).strip():
-                        metadata_parts.append(str(final_qual).strip())
-                    if res_enabled and final_res and str(final_res).strip():
-                        metadata_parts.append(str(final_res).strip())
+    if metadata_parts:
+        return f"{name_without_ext} [{' '.join(metadata_parts)}]"
+    return name_without_ext
 
-                    if metadata_parts:
-                        corrected_name = f"{name_without_ext} [{' '.join(metadata_parts)}]"
+def extract_season_episode(name_without_ext: str, parse: tuple) -> Tuple[Optional[str], Optional[str]]:
+    """Extracts normalized season and episode numbers from parsed tokens or SxxExx regex."""
+    se_match = re.search(r'S(\d+)E(\d+)', name_without_ext, re.IGNORECASE)
+    season_val = None
+    episode_val = None
 
-                if is_movie or media == "movie": 
-                    clean_data_table.append({
-                        'Original': file_path.stem,
-                        'Corrected': corrected_name,
-                        'Path': str(file_path),
-                        'Media': 'movie',
-                        'Season': None,
-                        'Episode': None   
-                    })
+    if len(parse) > 2 and parse[2]:
+        season_val = str(parse[2])
+    elif se_match:
+        season_val = str(int(se_match.group(1)))
 
-                elif is_series or media == "tv": 
-                    se_match = re.search(r'S(\d+)E(\d+)', name_without_ext, re.IGNORECASE)
-                    season_val = parse[2] if len(parse) > 2 and parse[2] else (str(int(se_match.group(1))) if se_match else None)
-                    episode_val = parse[3] if len(parse) > 3 and parse[3] else (str(int(se_match.group(2))) if se_match else None)
+    if len(parse) > 3 and parse[3]:
+        episode_val = str(parse[3])
+    elif se_match:
+        episode_val = str(int(se_match.group(2)))
 
-                    clean_data_table.append({
-                        'Original': file_path.stem,
-                        'Corrected': corrected_name,
-                        'Path': str(file_path),
-                        'Media': 'tv',
-                        'Season': season_val,
-                        'Episode': episode_val
-                    })
+    return season_val, episode_val
 
+def build_clean_media_entry(
+    file_path: Path,
+    corrected_name: str,
+    parse: tuple,
+    media: str,
+    is_movie: bool,
+    is_series: bool
+) -> Optional[Dict[str, Any]]:
+    """Constructs a clean media metadata dictionary for valid movie or series files."""
+    if is_movie or media == "movie":
+        return {
+            'Original': file_path.stem,
+            'Corrected': corrected_name,
+            'Path': str(file_path),
+            'Media': 'movie',
+            'Season': None,
+            'Episode': None
+        }
+
+    if is_series or media == "tv":
+        season_val, episode_val = extract_season_episode(file_path.stem.strip(), parse)
+        return {
+            'Original': file_path.stem,
+            'Corrected': corrected_name,
+            'Path': str(file_path),
+            'Media': 'tv',
+            'Season': season_val,
+            'Episode': episode_val
+        }
+
+    return None
+
+def classify_video_file(file_path: Path, messy_data_table: list, clean_data_table: list):
+    """Categorizes a video file into messy or clean tables based on standardized naming regexes."""
+    name_without_ext = file_path.stem.strip()
+    is_movie = bool(re.fullmatch(MOVIE_REGEX, name_without_ext))
+    is_series = bool(re.fullmatch(SERIES_REGEX, name_without_ext))
+
+    parse, media = utils.parse_filename(file_path.name)
+
+    if not is_movie and not is_series:
+        messy_data_table.append({
+            'File': file_path.name,
+            'Folder': file_path.parent.name,
+            'Path': str(file_path),
+            'Clean': utils.clean_filename(file_path.name),
+            'Parse': parse,
+            'Media': media
+        })
+        return
+
+    corrected_name = append_resolution_quality_tags(file_path, name_without_ext, parse, media, is_movie)
+    clean_entry = build_clean_media_entry(file_path, corrected_name, parse, media, is_movie, is_series)
+    if clean_entry:
+        clean_data_table.append(clean_entry)
+
+def build_search_result_tables(messy_data_table: list, clean_data_table: list, exit_if_empty: bool = True) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Summarizes scan findings and converts result lists into sorted DataFrames."""
     if len(messy_data_table) == 0 and len(clean_data_table) == 0:
         if exit_if_empty:
             ui.print_log("❌ No media files found in that folder")
             sys.exit(1)
         return pd.DataFrame(), pd.DataFrame()
-    else:
-        files_to_rename_count = len(messy_data_table) + sum(1 for f in clean_data_table if f['Original'] != f['Corrected'])
-        clean_files_count = sum(1 for f in clean_data_table if f['Original'] == f['Corrected'])
-        ui.print_log(f"\n📂 Folder scan report:\n - {files_to_rename_count} files to rename\n - {clean_files_count} files with clean filename\n")
+
+    files_to_rename_count = len(messy_data_table) + sum(1 for f in clean_data_table if f['Original'] != f['Corrected'])
+    clean_files_count = sum(1 for f in clean_data_table if f['Original'] == f['Corrected'])
+    ui.print_log(f"\n📂 Folder scan report:\n - {files_to_rename_count} files to rename\n - {clean_files_count} files with clean filename\n")
 
     messy_data = pd.DataFrame(messy_data_table)
     clean_data = pd.DataFrame(
-        clean_data_table, 
+        clean_data_table,
         columns=['Original', 'Corrected', 'Path', 'Media', 'Season', 'Episode']
     )
-    
     sorted_clean_data = clean_data.sort_values(
-        by=['Corrected', 'Season', 'Episode'], 
-        ascending=[True, True, True], 
+        by=['Corrected', 'Season', 'Episode'],
+        ascending=[True, True, True],
         ignore_index=True
     )
-
     return messy_data, sorted_clean_data
+
+def search_media_files(path=None, exit_if_empty=True):
+    target_dir = resolve_search_directory(path)
+    if target_dir is None:
+        return None
+
+    messy_data_table = []
+    clean_data_table = []
+
+    candidate_files = collect_candidate_video_files(target_dir)
+    for file_path in candidate_files:
+        classify_video_file(file_path, messy_data_table, clean_data_table)
+
+    return build_search_result_tables(messy_data_table, clean_data_table, exit_if_empty=exit_if_empty)
 
 def make_safe_path(path: Path) -> str:
     if os.name != 'nt':
@@ -301,14 +364,8 @@ def remove_empty_folders(target_path):
         except OSError as e:
             ui.print_log(f"⚠️ Warning: Could not inspect folder '{dirpath}': {e}")
 
-def move_media_files(paths, clean_data_table=None, source_path=None):
-    success_count = 0
-    failed_moves = []
-
-    movies_dir = Path(MOVIES_FOLDER) if MOVIES_FOLDER else None
-    tv_dir = Path(TV_SHOWS_FOLDER) if TV_SHOWS_FOLDER else None
-
-    # Map destination stem back to original file name and media type if available
+def build_destination_lookup(clean_data_table=None) -> Dict[str, Tuple[str, str]]:
+    """Maps destination stem back to (original_name, media_type)."""
     lookup = {}
     if clean_data_table is not None and not clean_data_table.empty:
         for _, row in clean_data_table.iterrows():
@@ -316,47 +373,66 @@ def move_media_files(paths, clean_data_table=None, source_path=None):
             orig = str(row.get('File', row.get('Original', '')))
             media = str(row.get('Media', ''))
             lookup[corr] = (orig, media)
+    return lookup
+
+def infer_media_type_from_destination(p_new: Path, movies_dir: Optional[Path] = None, tv_dir: Optional[Path] = None) -> str:
+    """Infers media type based on destination directory relative location."""
+    try:
+        if movies_dir and p_new.resolve().is_relative_to(movies_dir.resolve()):
+            return "movie"
+        if tv_dir and p_new.resolve().is_relative_to(tv_dir.resolve()):
+            return "tv"
+    except Exception:
+        pass
+    return "unknown"
+
+def execute_single_file_move(old, new, lookup: dict, movies_dir: Optional[Path] = None, tv_dir: Optional[Path] = None) -> Tuple[bool, Optional[str]]:
+    """Moves an individual media file and dispatches success/error email notifications."""
+    p_old = Path(old)
+    p_new = Path(new)
+    try:
+        move_file(old, new)
+
+        orig_name, media_type = lookup.get(p_new.stem, (p_old.name, "unknown"))
+        if media_type == "unknown":
+            media_type = infer_media_type_from_destination(p_new, movies_dir, tv_dir)
+
+        mail.send_media_success_email(
+            media_name=p_new.name,
+            original_name=orig_name,
+            media_type=media_type,
+            destination_path=str(p_new)
+        )
+        return True, None
+    except (FileExistsError, RuntimeError) as e:
+        ui.print_log(f" ⚠️ Skipping {p_old.name}: {e} \n")
+        try:
+            mail.send_error_email(
+                error_message=str(e),
+                affected_file=p_old.name
+            )
+        except Exception as mail_err:
+            ui.print_log(f"⚠️ Warning: Failed to send error email: {mail_err}")
+        return False, p_old.name
+
+def move_media_files(paths, clean_data_table=None, source_path=None):
+    success_count = 0
+    failed_moves = []
+
+    movies_dir = Path(MOVIES_FOLDER) if MOVIES_FOLDER else None
+    tv_dir = Path(TV_SHOWS_FOLDER) if TV_SHOWS_FOLDER else None
+    lookup = build_destination_lookup(clean_data_table)
 
     for old, new in paths:
-        try:
-            move_file(old, new)
+        success, failed_file = execute_single_file_move(old, new, lookup, movies_dir, tv_dir)
+        if success:
             success_count += 1
+        else:
+            failed_moves.append(failed_file)
 
-            p_old = Path(old)
-            p_new = Path(new)
-
-            orig_name, media_type = lookup.get(p_new.stem, (p_old.name, "unknown"))
-            if media_type == "unknown":
-                try:
-                    if movies_dir and p_new.resolve().is_relative_to(movies_dir.resolve()):
-                        media_type = "movie"
-                    elif tv_dir and p_new.resolve().is_relative_to(tv_dir.resolve()):
-                        media_type = "tv"
-                except Exception:
-                    pass
-
-            mail.send_media_success_email(
-                media_name=p_new.name,
-                original_name=orig_name,
-                media_type=media_type,
-                destination_path=str(p_new)
-            )
-
-        except (FileExistsError, RuntimeError) as e:
-            p_old = Path(old)
-            ui.print_log(f" ⚠️ Skipping {p_old.name}: {e} \n")
-            failed_moves.append(p_old.name)
-            try:
-                mail.send_error_email(
-                    error_message=str(e),
-                    affected_file=p_old.name
-                )
-            except Exception as mail_err:
-                ui.print_log(f"⚠️ Warning: Failed to send error email: {mail_err}")
-            
     if success_count > 0:
         ui.print_log(f"\n✅ {success_count} files moved successfully!")
-    
+
     if failed_moves:
         ui.print_log(f"❌ {len(failed_moves)} files could not be moved")
 

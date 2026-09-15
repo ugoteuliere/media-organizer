@@ -215,7 +215,8 @@ def test_build_search_result_tables():
 
     # Empty with exit_if_empty=False
     m_df, c_df = files.build_search_result_tables([], [], exit_if_empty=False)
-    assert m_df.empty and c_df.empty
+    assert m_df.empty
+    assert c_df.empty
 
     # Populated tables
     messy_data = [{'File': 'bad.mkv', 'Folder': 'f', 'Path': '/bad.mkv', 'Clean': 'b', 'Parse': (), 'Media': 'movie'}]
@@ -275,3 +276,101 @@ def test_execute_single_file_move(tmp_path):
         assert success is False
         assert failed == old_file.name
         mock_err_mail.assert_called_once()
+
+
+def test_extract_parse_tokens():
+    # Movie with full parse
+    movie_parse = ("Inception", "2010", "1080p", "BluRay")
+    res, qual = files.extract_parse_tokens(movie_parse, media="movie", is_movie=True)
+    assert res == "1080p"
+    assert qual == "BluRay"
+
+    # Movie with short parse
+    short_parse = ("Inception", "2010")
+    res, qual = files.extract_parse_tokens(short_parse, media="movie", is_movie=True)
+    assert res is None
+    assert qual is None
+
+    # Series with full parse
+    tv_parse = ("Breaking Bad", "2008", "1", "1", "720p", "WEBRip")
+    res, qual = files.extract_parse_tokens(tv_parse, media="tv", is_movie=False)
+    assert res == "720p"
+    assert qual == "WEBRip"
+
+    # Series with short parse
+    short_tv_parse = ("Breaking Bad", "2008")
+    res, qual = files.extract_parse_tokens(short_tv_parse, media="tv", is_movie=False)
+    assert res is None
+    assert qual is None
+
+
+def test_format_stream_tags():
+    # Both enabled and present
+    tags = files.format_stream_tags("1080p", "BluRay", res_enabled=True, qual_enabled=True)
+    assert tags == ["BluRay", "1080p"]
+
+    # Only quality enabled
+    tags_qual = files.format_stream_tags("1080p", "BluRay", res_enabled=False, qual_enabled=True)
+    assert tags_qual == ["BluRay"]
+
+    # Only resolution enabled
+    tags_res = files.format_stream_tags("1080p", "BluRay", res_enabled=True, qual_enabled=False)
+    assert tags_res == ["1080p"]
+
+    # Empty / whitespace values
+    tags_empty = files.format_stream_tags("   ", "", res_enabled=True, qual_enabled=True)
+    assert tags_empty == []
+
+    # Disabled
+    tags_none = files.format_stream_tags(None, None, res_enabled=False, qual_enabled=False)
+    assert tags_none == []
+
+
+def test_extract_season_episode():
+    # Extracted from parse tuple
+    parse_with_se = ("Show", "2020", "2", "5")
+    s, e = files.extract_season_episode("Show - S01E03", parse_with_se)
+    assert s == "2"
+    assert e == "5"
+
+    # Fallback to regex when parse tuple is empty
+    s_fallback, e_fallback = files.extract_season_episode("Show - S03E14", ())
+    assert s_fallback == "3"
+    assert e_fallback == "14"
+
+    # No match at all
+    s_none, e_none = files.extract_season_episode("Movie (2020)", ())
+    assert s_none is None
+    assert e_none is None
+
+
+def test_build_clean_media_entry(tmp_path):
+    movie_file = tmp_path / "Inception (2010).mkv"
+    tv_file = tmp_path / "Show - S01E01.mkv"
+    other_file = tmp_path / "clip.mkv"
+
+    # Movie entry
+    entry_movie = files.build_clean_media_entry(
+        movie_file, "Inception (2010)", (), "movie", is_movie=True, is_series=False
+    )
+    assert entry_movie is not None
+    assert entry_movie["Media"] == "movie"
+    assert entry_movie["Season"] is None
+    assert entry_movie["Episode"] is None
+    assert entry_movie["Corrected"] == "Inception (2010)"
+
+    # TV entry
+    entry_tv = files.build_clean_media_entry(
+        tv_file, "Show - S01E01", (), "tv", is_movie=False, is_series=True
+    )
+    assert entry_tv is not None
+    assert entry_tv["Media"] == "tv"
+    assert entry_tv["Season"] == "1"
+    assert entry_tv["Episode"] == "1"
+
+    # Unknown / Neither entry
+    entry_none = files.build_clean_media_entry(
+        other_file, "clip", (), "unknown", is_movie=False, is_series=False
+    )
+    assert entry_none is None
+

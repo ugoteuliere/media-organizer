@@ -284,26 +284,26 @@ class ConfigManager:
 
         # 3. Default fallback
         if self.is_docker_environment():
-            if section_dot_key == "paths.movies_folder":
+            if section_dot_key == KEY_MOVIES_FOLDER:
                 return ("/data/Movies", "DEFAULT")
-            if section_dot_key == "paths.tv_shows_folder":
+            if section_dot_key == KEY_TV_SHOWS_FOLDER:
                 return ("/data/TV_Shows", "DEFAULT")
-            if section_dot_key == "paths.not_sorted_media_files_folder":
+            if section_dot_key == KEY_INPUT_FOLDER:
                 return ("/data/input", "DEFAULT")
-            if section_dot_key in ("options.daemon", "options.bypass", "options.verbose"):
+            if section_dot_key in (KEY_DAEMON, KEY_BYPASS, KEY_VERBOSE):
                 return (True, "DEFAULT")
-            if section_dot_key == "options.notify_on_error":
+            if section_dot_key == KEY_NOTIFY_ON_ERROR:
                 return (False, "DEFAULT")
 
-        if section_dot_key == "options.notify_on_error":
+        if section_dot_key == KEY_NOTIFY_ON_ERROR:
             return (True, "DEFAULT")
-        if section_dot_key == "options.polling_interval":
+        if section_dot_key == KEY_POLLING_INTERVAL:
             return (15, "DEFAULT")
-        if section_dot_key == "options.ai_provider":
+        if section_dot_key == KEY_AI_PROVIDER:
             return ("auto", "DEFAULT")
-        if section_dot_key == "options.tmdb_min_confidence":
+        if section_dot_key == KEY_TMDB_MIN_CONFIDENCE:
             return (0.75, "DEFAULT")
-        if section_dot_key == "options.ai_min_confidence":
+        if section_dot_key == KEY_AI_MIN_CONFIDENCE:
             return (0.70, "DEFAULT")
         if section_dot_key in self.BOOLEAN_KEYS:
             return (False, "DEFAULT")
@@ -330,7 +330,7 @@ class ConfigManager:
             self.parser.add_section(section)
 
         # Validate specific option types
-        if section_dot_key == "options.polling_interval":
+        if section_dot_key == KEY_POLLING_INTERVAL:
             try:
                 int_val = int(str(value).strip())
                 if int_val < 1:
@@ -338,12 +338,12 @@ class ConfigManager:
                 self.parser.set(section, key, str(int_val))
             except ValueError:
                 raise ValueError("Polling interval must be a positive integer (>= 1 minute).")
-        elif section_dot_key == "options.ai_provider":
+        elif section_dot_key == KEY_AI_PROVIDER:
             val_str = str(value).strip().lower()
             if val_str not in ("auto", "gemini", "groq", "openrouter", "cloudflare"):
                 raise ValueError("AI provider must be one of: auto, gemini, groq, openrouter, cloudflare.")
             self.parser.set(section, key, val_str)
-        elif section_dot_key in ("options.tmdb_min_confidence", "options.ai_min_confidence"):
+        elif section_dot_key in (KEY_TMDB_MIN_CONFIDENCE, KEY_AI_MIN_CONFIDENCE):
             try:
                 val_f = float(str(value).strip())
                 if not (0.0 <= val_f <= 1.0):

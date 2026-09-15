@@ -62,6 +62,29 @@ def collect_candidate_video_files(target_dir: Path) -> List[Path]:
             candidates.append(file_path)
     return candidates
 
+def extract_parse_tokens(parse: tuple, media: str, is_movie: bool) -> Tuple[Optional[str], Optional[str]]:
+    """Extracts raw resolution and quality pattern candidates from parse results."""
+    if is_movie or media == "movie":
+        res_ptn = parse[2] if len(parse) > 2 else None
+        qual_ptn = parse[3] if len(parse) > 3 else None
+    else:
+        res_ptn = parse[4] if len(parse) > 4 else None
+        qual_ptn = parse[5] if len(parse) > 5 else None
+    return res_ptn, qual_ptn
+
+def format_stream_tags(final_res: Optional[str], final_qual: Optional[str], res_enabled: bool, qual_enabled: bool) -> List[str]:
+    """Builds formatted resolution/quality tag tokens if present and enabled."""
+    metadata_parts: List[str] = []
+    if qual_enabled and final_qual:
+        cleaned_qual = str(final_qual).strip()
+        if cleaned_qual:
+            metadata_parts.append(cleaned_qual)
+    if res_enabled and final_res:
+        cleaned_res = str(final_res).strip()
+        if cleaned_res:
+            metadata_parts.append(cleaned_res)
+    return metadata_parts
+
 def append_resolution_quality_tags(file_path: Path, name_without_ext: str, parse: tuple, media: str, is_movie: bool) -> str:
     """Appends resolution and quality tags to an already normalized media title if enabled."""
     res_enabled = bool(getattr(utils, 'RESOLUTION', False) or getattr(ui, 'RESOLUTION_ENABLED', False) or getattr(config, 'RESOLUTION', False))
@@ -76,25 +99,65 @@ def append_resolution_quality_tags(file_path: Path, name_without_ext: str, parse
     if qual_enabled:
         utils.QUALITY = True
 
-    if is_movie or media == "movie":
-        res_ptn = parse[2] if len(parse) > 2 else None
-        qual_ptn = parse[3] if len(parse) > 3 else None
-    else:
-        res_ptn = parse[4] if len(parse) > 4 else None
-        qual_ptn = parse[5] if len(parse) > 5 else None
-
+    res_ptn, qual_ptn = extract_parse_tokens(parse, media, is_movie)
     final_res, final_qual = utils.parse_resolution_quality(
         res_ptn, qual_ptn, None, None, str(file_path)
     )
-    metadata_parts = []
-    if qual_enabled and final_qual and str(final_qual).strip():
-        metadata_parts.append(str(final_qual).strip())
-    if res_enabled and final_res and str(final_res).strip():
-        metadata_parts.append(str(final_res).strip())
+    metadata_parts = format_stream_tags(final_res, final_qual, res_enabled, qual_enabled)
 
     if metadata_parts:
         return f"{name_without_ext} [{' '.join(metadata_parts)}]"
     return name_without_ext
+
+def extract_season_episode(name_without_ext: str, parse: tuple) -> Tuple[Optional[str], Optional[str]]:
+    """Extracts normalized season and episode numbers from parsed tokens or SxxExx regex."""
+    se_match = re.search(r'S(\d+)E(\d+)', name_without_ext, re.IGNORECASE)
+    season_val = None
+    episode_val = None
+
+    if len(parse) > 2 and parse[2]:
+        season_val = str(parse[2])
+    elif se_match:
+        season_val = str(int(se_match.group(1)))
+
+    if len(parse) > 3 and parse[3]:
+        episode_val = str(parse[3])
+    elif se_match:
+        episode_val = str(int(se_match.group(2)))
+
+    return season_val, episode_val
+
+def build_clean_media_entry(
+    file_path: Path,
+    corrected_name: str,
+    parse: tuple,
+    media: str,
+    is_movie: bool,
+    is_series: bool
+) -> Optional[Dict[str, Any]]:
+    """Constructs a clean media metadata dictionary for valid movie or series files."""
+    if is_movie or media == "movie":
+        return {
+            'Original': file_path.stem,
+            'Corrected': corrected_name,
+            'Path': str(file_path),
+            'Media': 'movie',
+            'Season': None,
+            'Episode': None
+        }
+
+    if is_series or media == "tv":
+        season_val, episode_val = extract_season_episode(file_path.stem.strip(), parse)
+        return {
+            'Original': file_path.stem,
+            'Corrected': corrected_name,
+            'Path': str(file_path),
+            'Media': 'tv',
+            'Season': season_val,
+            'Episode': episode_val
+        }
+
+    return None
 
 def classify_video_file(file_path: Path, messy_data_table: list, clean_data_table: list):
     """Categorizes a video file into messy or clean tables based on standardized naming regexes."""
@@ -113,31 +176,12 @@ def classify_video_file(file_path: Path, messy_data_table: list, clean_data_tabl
             'Parse': parse,
             'Media': media
         })
-    else:
-        corrected_name = append_resolution_quality_tags(file_path, name_without_ext, parse, media, is_movie)
+        return
 
-        if is_movie or media == "movie":
-            clean_data_table.append({
-                'Original': file_path.stem,
-                'Corrected': corrected_name,
-                'Path': str(file_path),
-                'Media': 'movie',
-                'Season': None,
-                'Episode': None
-            })
-        elif is_series or media == "tv":
-            se_match = re.search(r'S(\d+)E(\d+)', name_without_ext, re.IGNORECASE)
-            season_val = parse[2] if len(parse) > 2 and parse[2] else (str(int(se_match.group(1))) if se_match else None)
-            episode_val = parse[3] if len(parse) > 3 and parse[3] else (str(int(se_match.group(2))) if se_match else None)
-
-            clean_data_table.append({
-                'Original': file_path.stem,
-                'Corrected': corrected_name,
-                'Path': str(file_path),
-                'Media': 'tv',
-                'Season': season_val,
-                'Episode': episode_val
-            })
+    corrected_name = append_resolution_quality_tags(file_path, name_without_ext, parse, media, is_movie)
+    clean_entry = build_clean_media_entry(file_path, corrected_name, parse, media, is_movie, is_series)
+    if clean_entry:
+        clean_data_table.append(clean_entry)
 
 def build_search_result_tables(messy_data_table: list, clean_data_table: list, exit_if_empty: bool = True) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Summarizes scan findings and converts result lists into sorted DataFrames."""

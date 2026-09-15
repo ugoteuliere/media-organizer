@@ -1,23 +1,10 @@
-import sys
 import re
-from pathlib import Path
 from unittest.mock import patch, MagicMock
 import pytest
 import pandas as pd
 
-from src import ui, files, utils, mail
+from src import ui
 import main
-
-
-@pytest.fixture(autouse=True)
-def reset_daemon_state():
-    orig_daemon = ui.DAEMON_ENABLED
-    orig_log_enabled = ui.LOG_ENABLED
-    orig_log_mode = ui.LOG_MODE
-    yield
-    ui.DAEMON_ENABLED = orig_daemon
-    ui.LOG_ENABLED = orig_log_enabled
-    ui.LOG_MODE = orig_log_mode
 
 
 def test_format_daemon_log():
@@ -32,10 +19,10 @@ def test_format_daemon_log():
     assert re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \[ERROR\] Line 1 Line 2 Line 3$", flattened)
 
 
-def test_log_info_stdout(capsys):
-    ui.DAEMON_ENABLED = True
-    ui.LOG_ENABLED = False
-    ui.LOG_MODE = "console"
+def test_log_info_stdout(capsys, monkeypatch):
+    monkeypatch.setattr(ui, "DAEMON_ENABLED", True)
+    monkeypatch.setattr(ui, "LOG_ENABLED", False)
+    monkeypatch.setattr(ui, "LOG_MODE", "console")
 
     ui.log_info("System status operational")
     captured = capsys.readouterr()
@@ -45,10 +32,10 @@ def test_log_info_stdout(capsys):
     assert re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \[INFO\] System status operational\n$", captured.out)
 
 
-def test_log_success_stdout(capsys):
-    ui.DAEMON_ENABLED = True
-    ui.LOG_ENABLED = False
-    ui.LOG_MODE = "console"
+def test_log_success_stdout(capsys, monkeypatch):
+    monkeypatch.setattr(ui, "DAEMON_ENABLED", True)
+    monkeypatch.setattr(ui, "LOG_ENABLED", False)
+    monkeypatch.setattr(ui, "LOG_MODE", "console")
 
     ui.log_success("old.mkv", "new.mkv", "/data/Movies/new.mkv")
     captured = capsys.readouterr()
@@ -60,10 +47,10 @@ def test_log_success_stdout(capsys):
     assert "\n" not in captured.out.strip()
 
 
-def test_log_error_stderr(capsys):
-    ui.DAEMON_ENABLED = True
-    ui.LOG_ENABLED = False
-    ui.LOG_MODE = "console"
+def test_log_error_stderr(capsys, monkeypatch):
+    monkeypatch.setattr(ui, "DAEMON_ENABLED", True)
+    monkeypatch.setattr(ui, "LOG_ENABLED", False)
+    monkeypatch.setattr(ui, "LOG_MODE", "console")
 
     ui.log_error("Target directory is not reachable")
     captured = capsys.readouterr()
@@ -73,10 +60,10 @@ def test_log_error_stderr(capsys):
     assert re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \[ERROR\] Target directory is not reachable\n$", captured.err)
 
 
-def test_print_log_daemon_auto_detection(capsys):
-    ui.DAEMON_ENABLED = True
-    ui.LOG_ENABLED = False
-    ui.LOG_MODE = "console"
+def test_print_log_daemon_auto_detection(capsys, monkeypatch):
+    monkeypatch.setattr(ui, "DAEMON_ENABLED", True)
+    monkeypatch.setattr(ui, "LOG_ENABLED", False)
+    monkeypatch.setattr(ui, "LOG_MODE", "console")
 
     # Routine message -> INFO on stdout
     ui.print_log("Check 1 : No media to process")
@@ -98,10 +85,10 @@ def test_print_log_daemon_auto_detection(capsys):
     assert captured.err == ""
 
 
-def test_rich_print_log_in_daemon_mode(capsys):
-    ui.DAEMON_ENABLED = True
-    ui.LOG_ENABLED = False
-    ui.LOG_MODE = "console"
+def test_rich_print_log_in_daemon_mode(capsys, monkeypatch):
+    monkeypatch.setattr(ui, "DAEMON_ENABLED", True)
+    monkeypatch.setattr(ui, "LOG_ENABLED", False)
+    monkeypatch.setattr(ui, "LOG_MODE", "console")
 
     from rich.table import Table
     table = Table(title="Test Table")
@@ -119,9 +106,9 @@ def test_rich_print_log_in_daemon_mode(capsys):
 
 
 def test_dual_logging_in_daemon_mode(tmp_path, capsys, monkeypatch):
-    ui.DAEMON_ENABLED = True
-    ui.LOG_ENABLED = True
-    ui.LOG_MODE = "both"
+    monkeypatch.setattr(ui, "DAEMON_ENABLED", True)
+    monkeypatch.setattr(ui, "LOG_ENABLED", True)
+    monkeypatch.setattr(ui, "LOG_MODE", "both")
     monkeypatch.setattr(ui, "get_log_dir", lambda: tmp_path)
 
     ui.log_info("Daemon heartbeat tick")
@@ -150,9 +137,9 @@ def test_dual_logging_in_daemon_mode(tmp_path, capsys, monkeypatch):
 
 
 def test_console_only_when_log_disabled(tmp_path, capsys, monkeypatch):
-    ui.DAEMON_ENABLED = True
-    ui.LOG_ENABLED = False
-    ui.LOG_MODE = "console"
+    monkeypatch.setattr(ui, "DAEMON_ENABLED", True)
+    monkeypatch.setattr(ui, "LOG_ENABLED", False)
+    monkeypatch.setattr(ui, "LOG_MODE", "console")
     monkeypatch.setattr(ui, "get_log_dir", lambda: tmp_path)
 
     ui.log_info("Console only message")
@@ -164,9 +151,9 @@ def test_console_only_when_log_disabled(tmp_path, capsys, monkeypatch):
 
 
 def test_non_daemon_mode_preserved(tmp_path, capsys, monkeypatch):
-    ui.DAEMON_ENABLED = False
-    ui.LOG_ENABLED = False
-    ui.LOG_MODE = "console"
+    monkeypatch.setattr(ui, "DAEMON_ENABLED", False)
+    monkeypatch.setattr(ui, "LOG_ENABLED", False)
+    monkeypatch.setattr(ui, "LOG_MODE", "console")
 
     # Non-daemon mode uses standard print(message) without daemon timestamp prefix
     ui.print_log("Classic console message")
@@ -175,8 +162,8 @@ def test_non_daemon_mode_preserved(tmp_path, capsys, monkeypatch):
     assert "[INFO]" not in captured.out
 
     # Non-daemon mode with file logging uses [HH:MM:SS] prefix
-    ui.LOG_ENABLED = True
-    ui.LOG_MODE = "file"
+    monkeypatch.setattr(ui, "LOG_ENABLED", True)
+    monkeypatch.setattr(ui, "LOG_MODE", "file")
     monkeypatch.setattr(ui, "get_log_dir", lambda: tmp_path)
 
     ui.print_log("File only classic message")
@@ -186,10 +173,10 @@ def test_non_daemon_mode_preserved(tmp_path, capsys, monkeypatch):
     assert re.match(r"^\[\d{2}:\d{2}:\d{2}\] Classic console message", content) or re.match(r"^\[\d{2}:\d{2}:\d{2}\] File only classic message", content)
 
 
-def test_display_skipped_filenames_in_daemon_mode(capsys):
-    ui.DAEMON_ENABLED = True
-    ui.LOG_ENABLED = False
-    ui.LOG_MODE = "console"
+def test_display_skipped_filenames_in_daemon_mode(capsys, monkeypatch):
+    monkeypatch.setattr(ui, "DAEMON_ENABLED", True)
+    monkeypatch.setattr(ui, "LOG_ENABLED", False)
+    monkeypatch.setattr(ui, "LOG_MODE", "console")
 
     failed = [
         {"Original": "Unknown.File.2024.mkv", "Reason": "TMDB lookup returned no results"},
@@ -207,9 +194,9 @@ def test_display_skipped_filenames_in_daemon_mode(capsys):
 
 
 def test_process_media_daemon_single_line_flow(tmp_path, capsys, monkeypatch):
-    ui.DAEMON_ENABLED = True
-    ui.LOG_ENABLED = False
-    ui.LOG_MODE = "console"
+    monkeypatch.setattr(ui, "DAEMON_ENABLED", True)
+    monkeypatch.setattr(ui, "LOG_ENABLED", False)
+    monkeypatch.setattr(ui, "LOG_MODE", "console")
 
     media_file = tmp_path / "Movie.2024.mkv"
     media_file.touch()
@@ -248,10 +235,10 @@ def test_process_media_daemon_single_line_flow(tmp_path, capsys, monkeypatch):
         assert re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \[(INFO|SUCCESS)\] ", line)
 
 
-def test_process_media_only_rename_daemon(tmp_path, capsys):
-    ui.DAEMON_ENABLED = True
-    ui.LOG_ENABLED = False
-    ui.LOG_MODE = "console"
+def test_process_media_only_rename_daemon(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(ui, "DAEMON_ENABLED", True)
+    monkeypatch.setattr(ui, "LOG_ENABLED", False)
+    monkeypatch.setattr(ui, "LOG_MODE", "console")
 
     media_file = tmp_path / "Show.S01E01.mkv"
     media_file.touch()

@@ -222,17 +222,17 @@ The cleaning engine uses a dictionary to strip filenames:
 2. **User Custom Keywords (`custom_tags.json`)**: User's personal keywords stored in the configuration folder alongside `config.ini`.
 3. **AI Learned Keywords (`gemini_tags.json`)**: When keyword learning is enabled (`-L` or `options.learn = true`), missing keywords discovered by AI are validated and appended to `gemini_tags.json`.
 
-## 7. Docker Deployment
+## 7. Docker
 
-A multi-architecture Docker image (`linux/amd64`, `linux/arm64`) with pre-bundled `ffmpeg`, `ffprobe`, and `gosu` is published on GitHub Container Registry: `ghcr.io/ugoteuliere/rename`.
+A Docker image with all necessary dependencies is published on GitHub Container Registry: `ghcr.io/ugoteuliere/rename`.
 
-The container is designed to run **out-of-the-box** with zero manual configuration required other than mounting your 3 media folders.
+The container is designed to run out-of-the-box with zero manual configuration required other than mounting your 3 media folders.
 
 ---
 
-### Quick Start (Zero-Config Minimal Compose)
+### Quick Start
 
-By default, the container starts in **daemon mode** with automatic prompt bypass (`bypass = true`), polling every 15 minutes and streaming logs directly to `stdout` (`docker logs`).
+By default, the container starts in **daemon mode**, checking for new files in input folder every 15 minutes.
 
 ```yaml
 services:
@@ -251,7 +251,7 @@ services:
 
 ---
 
-### Volume Mount Points
+### Volumes
 
 | Volume Mount | Type | Purpose | Description |
 | :--- | :--- | :--- | :--- |
@@ -263,12 +263,13 @@ services:
 
 ---
 
-### Configuration Hierarchy & Priority
+### Configuration
 
-Settings are resolved using a **3-tier priority hierarchy**:
-1. **Tier 1 (Highest): Environment Variables** (`TMDB_API_KEY`, `DAEMON`, `LOG`, etc.).
-2. **Tier 2 (Middle): Mounted Volume Config** (`/config/config.ini`).
-3. **Tier 3 (Baseline): Internal Docker Defaults** (generated inside container with `/data/input`, `/data/Movies`, `/data/TV_Shows`, `daemon=true`, `bypass=true`, `verbose=true`, `polling_interval=15`).
+You can configure the application in several ways depending on your setup:
+
+- **Environment Variables**: Define settings directly in your `docker-compose.yml` or container run command (e.g. `TMDB_API_KEY`, `DAEMON`, `LOG`, `POLLING_INTERVAL`). Environment variables take precedence over settings in `config.ini`.
+- **Configuration File (`config.ini`)**: Mount a directory to `/config` (e.g. `-v /path/to/config:/config`) to provide and persist a custom `config.ini` file, along with custom keyword tag files (`custom_tags.json`, `gemini_tags.json`).
+- **Default Out-of-the-Box Settings**: Without any extra configuration, the container runs automatically using default media paths (`/data/input`, `/data/Movies`, `/data/TV_Shows`) and polls in the background every 15 minutes.
 
 ---
 

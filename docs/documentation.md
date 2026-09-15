@@ -5,6 +5,7 @@ Technical guide and reference for the Media Organizer & Renamer.
 ## Table of Contents
 
 1. [Folder Structure & Plex Standards](#1-folder-structure--plex-standards)
+   - [Plex Standard Formatting](#plex-standard-formatting)
 2. [Configuration](#2-configuration)
    - [Configuration Tool](#configuration-tool)
    - [Configuration File](#configuration-file)
@@ -17,14 +18,18 @@ Technical guide and reference for the Media Organizer & Renamer.
    - [Simulation Mode](#simulation-mode)
    - [Daemon Background Watcher](#daemon-background-watcher)
 4. [Options & CLI Flags](#4-options--cli-flags)
+   - [FFmpeg Setup](#ffmpeg-setup)
 5. [Matching & Multi-Cloud AI Architecture](#5-matching--multi-cloud-ai-architecture)
    - [Metadata Extraction Pipeline](#metadata-extraction-pipeline)
    - [TMDB Match Probability Scorer](#tmdb-match-probability-scorer)
 6. [Keyword Management](#6-keyword-management)
-7. [Docker Deployment](#7-docker-deployment)
-   - [Volumes & Permissions](#volumes--permissions)
-   - [Docker Run (CLI)](#docker-run-cli)
-   - [Docker Compose](#docker-compose)
+7. [Docker](#7-docker)
+   - [Quick Start](#quick-start)
+   - [Volumes](#volumes)
+   - [Configuration](#configuration)
+   - [Environment Variables](#environment-variables)
+   - [Logging Behavior in Docker (Dual Logging)](#logging-behavior-in-docker-dual-logging)
+   - [Advanced Docker Compose Example](#advanced-docker-compose-example)
 
 
 
@@ -178,6 +183,40 @@ media-organizer --daemon --interval 15
 | `-t` | `--notify-tag` | `options.notify_on_tag` | `false` | Sends email notification when a new keyword tag is learned. |
 | — | `--path="<dir>"` | — | Incoming dir | Targets a specific folder. |
 
+### FFmpeg Setup
+
+The `--resolution` (`-R`) and `--quality` (`-q`) flags use `ffprobe` (included with FFmpeg) to extract media metadata (resolution and video quality/source) directly from video files.
+
+If `ffprobe` is not found in your system's `PATH`, resolution and quality tags are omitted automatically.
+
+#### Installation
+
+* **Windows**:
+  ```powershell
+  winget install Gyan.FFmpeg
+  # or with Chocolatey:
+  choco install ffmpeg
+  ```
+* **macOS**:
+  ```bash
+  brew install ffmpeg
+  ```
+* **Linux (Debian / Ubuntu)**:
+  ```bash
+  sudo apt update && sudo apt install -y ffmpeg
+  ```
+* **Linux (Arch Linux)**:
+  ```bash
+  sudo pacman -S ffmpeg
+  ```
+* **Docker**:
+  FFmpeg and `ffprobe` are already pre-installed in the official Docker image.
+
+After installation, verify that `ffprobe` is available from your terminal:
+```bash
+ffprobe -version
+```
+
 ## 5. Matching & Multi-Cloud AI Architecture
 
 ```
@@ -234,6 +273,8 @@ The container is designed to run out-of-the-box with zero manual configuration r
 
 By default, the container starts in **daemon mode**, checking for new files in input folder every 15 minutes.
 
+#### Docker Compose (Recommended)
+
 ```yaml
 services:
   media-organizer:
@@ -247,6 +288,19 @@ services:
       - /mnt/storage/downloads:/data/input
       - /mnt/storage/movies:/data/Movies
       - /mnt/storage/series:/data/TV_Shows
+```
+
+#### Docker Run (CLI)
+
+```bash
+docker run -d \
+  --name media-organizer \
+  -e PUID=1000 \
+  -e PGID=1000 \
+  -v /mnt/storage/downloads:/data/input \
+  -v /mnt/storage/movies:/data/Movies \
+  -v /mnt/storage/series:/data/TV_Shows \
+  ghcr.io/ugoteuliere/rename:latest
 ```
 
 ---

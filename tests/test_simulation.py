@@ -1,12 +1,10 @@
-import os
 import sys
-import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 import pandas as pd
 
 import main
 from src import ui, files, utils
+
 
 def test_simulation_mode_prevents_file_changes_and_emails(tmp_path, monkeypatch):
     # Setup folders
@@ -31,28 +29,37 @@ def test_simulation_mode_prevents_file_changes_and_emails(tmp_path, monkeypatch)
     monkeypatch.setattr(utils, "NOT_SORTED_MEDIA_FILES_FOLDER", str(downloads))
 
     # Mock search_media_files and get_corrected_media_filenames
-    messy_df = pd.DataFrame([{
-        "File": "Inception.2010.1080p.mkv",
-        "Folder": str(downloads),
-        "Path": str(dummy_file),
-        "Clean": "Inception",
-        "Parse": None,
-        "Media": "movie"
-    }])
-    clean_df = pd.DataFrame([{
-        "Original": "Inception.2010.1080p.mkv",
-        "Corrected": "Inception (2010)",
-        "Path": str(dummy_file),
-        "Media": "movie"
-    }])
+    messy_df = pd.DataFrame(
+        [
+            {
+                "File": "Inception.2010.1080p.mkv",
+                "Folder": str(downloads),
+                "Path": str(dummy_file),
+                "Clean": "Inception",
+                "Parse": None,
+                "Media": "movie",
+            }
+        ]
+    )
+    clean_df = pd.DataFrame(
+        [
+            {
+                "Original": "Inception.2010.1080p.mkv",
+                "Corrected": "Inception (2010)",
+                "Path": str(dummy_file),
+                "Media": "movie",
+            }
+        ]
+    )
 
-    with patch("src.files.search_media_files", return_value=(messy_df, pd.DataFrame())), \
-         patch("src.utils.get_corrected_media_filenames", return_value=clean_df), \
-         patch("src.files.rename_media_files") as mock_rename, \
-         patch("src.files.move_media_files") as mock_move, \
-         patch("src.mail.send_media_success_email") as mock_success_mail, \
-         patch("src.ui.rich_print_log") as mock_rich_log:
-
+    with (
+        patch("src.files.search_media_files", return_value=(messy_df, pd.DataFrame())),
+        patch("src.utils.get_corrected_media_filenames", return_value=clean_df),
+        patch("src.files.rename_media_files") as mock_rename,
+        patch("src.files.move_media_files") as mock_move,
+        patch("src.mail.send_media_success_email") as mock_success_mail,
+        patch("src.ui.rich_print_log") as mock_rich_log,
+    ):
         monkeypatch.setattr(sys, "argv", ["main.py", "-s"])
         exit_code = main.main()
 
@@ -75,15 +82,27 @@ def test_simulation_mode_with_only_rename(tmp_path, monkeypatch):
     dummy_file.write_text("dummy", encoding="utf-8")
 
     messy_df = pd.DataFrame([{"File": "Dark.S01E01.mkv", "Path": str(dummy_file), "Media": "tv"}])
-    clean_df = pd.DataFrame([{"Original": "Dark.S01E01.mkv", "Corrected": "Dark - S01E01", "Path": str(dummy_file), "Media": "tv", "Season": "01", "Episode": "01"}])
+    clean_df = pd.DataFrame(
+        [
+            {
+                "Original": "Dark.S01E01.mkv",
+                "Corrected": "Dark - S01E01",
+                "Path": str(dummy_file),
+                "Media": "tv",
+                "Season": "01",
+                "Episode": "01",
+            }
+        ]
+    )
 
-    with patch("src.utils.verify_folders"), \
-         patch("src.files.search_media_files", return_value=(messy_df, pd.DataFrame())), \
-         patch("src.utils.get_corrected_media_filenames", return_value=clean_df), \
-         patch("src.files.sort_media_files") as mock_sort, \
-         patch("src.files.rename_media_files") as mock_rename, \
-         patch("src.ui.rich_print_log") as mock_rich_log:
-
+    with (
+        patch("src.utils.verify_folders"),
+        patch("src.files.search_media_files", return_value=(messy_df, pd.DataFrame())),
+        patch("src.utils.get_corrected_media_filenames", return_value=clean_df),
+        patch("src.files.sort_media_files") as mock_sort,
+        patch("src.files.rename_media_files") as mock_rename,
+        patch("src.ui.rich_print_log") as mock_rich_log,
+    ):
         monkeypatch.setattr(sys, "argv", ["main.py", "--simulate", "--only-rename"])
         exit_code = main.main()
 

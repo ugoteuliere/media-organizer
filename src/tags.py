@@ -1,4 +1,3 @@
-import os
 import re
 import json
 import tempfile
@@ -10,24 +9,183 @@ from src.config import config
 # Comprehensive Stopwords Blacklist (EN & FR) to protect legitimate title words
 STOPWORDS_BLACKLIST = {
     # English common words & pronouns
-    "the", "a", "an", "and", "or", "of", "to", "in", "on", "at", "by", "for", "with",
-    "about", "against", "between", "into", "through", "during", "before", "after",
-    "above", "below", "from", "up", "down", "over", "under", "again", "further",
-    "then", "once", "here", "there", "when", "where", "why", "how", "all", "any",
-    "both", "each", "few", "more", "most", "other", "some", "such", "no", "nor",
-    "not", "only", "own", "same", "so", "than", "too", "very", "can", "will", "just",
-    "should", "now", "war", "air", "man", "men", "boy", "girl", "her", "his", "its",
-    "it", "my", "our", "your", "their", "we", "you", "us", "them", "film", "movie",
-    "show", "series", "episode", "season", "video", "part", "audio", "music", "soundtrack",
-    "love", "life", "night", "day", "world", "house", "time", "city", "star", "home",
+    "the",
+    "a",
+    "an",
+    "and",
+    "or",
+    "of",
+    "to",
+    "in",
+    "on",
+    "at",
+    "by",
+    "for",
+    "with",
+    "about",
+    "against",
+    "between",
+    "into",
+    "through",
+    "during",
+    "before",
+    "after",
+    "above",
+    "below",
+    "from",
+    "up",
+    "down",
+    "over",
+    "under",
+    "again",
+    "further",
+    "then",
+    "once",
+    "here",
+    "there",
+    "when",
+    "where",
+    "why",
+    "how",
+    "all",
+    "any",
+    "both",
+    "each",
+    "few",
+    "more",
+    "most",
+    "other",
+    "some",
+    "such",
+    "no",
+    "nor",
+    "not",
+    "only",
+    "own",
+    "same",
+    "so",
+    "than",
+    "too",
+    "very",
+    "can",
+    "will",
+    "just",
+    "should",
+    "now",
+    "war",
+    "air",
+    "man",
+    "men",
+    "boy",
+    "girl",
+    "her",
+    "his",
+    "its",
+    "it",
+    "my",
+    "our",
+    "your",
+    "their",
+    "we",
+    "you",
+    "us",
+    "them",
+    "film",
+    "movie",
+    "show",
+    "series",
+    "episode",
+    "season",
+    "video",
+    "part",
+    "audio",
+    "music",
+    "soundtrack",
+    "love",
+    "life",
+    "night",
+    "day",
+    "world",
+    "house",
+    "time",
+    "city",
+    "star",
+    "home",
     # French common words & pronouns
-    "le", "la", "les", "un", "une", "des", "du", "de", "au", "aux", "en", "dans",
-    "par", "pour", "sur", "avec", "sans", "sous", "et", "ou", "mais", "donc", "or",
-    "ni", "car", "ce", "cet", "cette", "ces", "mon", "ton", "son", "ma", "ta", "sa",
-    "mes", "tes", "ses", "notre", "votre", "leur", "nos", "vos", "leurs", "je", "tu",
-    "il", "elle", "on", "nous", "vous", "ils", "elles", "qui", "que", "quoi", "dont",
-    "quel", "quelle", "quels", "quelles", "vie", "mort", "nuit", "jour", "monde",
-    "homme", "femme", "fille", "garcon", "roi", "reine", "guerre", "amour"
+    "le",
+    "la",
+    "les",
+    "un",
+    "une",
+    "des",
+    "du",
+    "de",
+    "au",
+    "aux",
+    "en",
+    "dans",
+    "par",
+    "pour",
+    "sur",
+    "avec",
+    "sans",
+    "sous",
+    "et",
+    "ou",
+    "mais",
+    "donc",
+    "or",
+    "ni",
+    "car",
+    "ce",
+    "cet",
+    "cette",
+    "ces",
+    "mon",
+    "ton",
+    "son",
+    "ma",
+    "ta",
+    "sa",
+    "mes",
+    "tes",
+    "ses",
+    "notre",
+    "votre",
+    "leur",
+    "nos",
+    "vos",
+    "leurs",
+    "je",
+    "tu",
+    "il",
+    "elle",
+    "on",
+    "nous",
+    "vous",
+    "ils",
+    "elles",
+    "qui",
+    "que",
+    "quoi",
+    "dont",
+    "quel",
+    "quelle",
+    "quels",
+    "quelles",
+    "vie",
+    "mort",
+    "nuit",
+    "jour",
+    "monde",
+    "homme",
+    "femme",
+    "fille",
+    "garcon",
+    "roi",
+    "reine",
+    "guerre",
+    "amour",
 }
 
 MIN_TAG_LENGTH = 3
@@ -52,7 +210,7 @@ class TagManager:
             return self._config_dir
         if hasattr(config, "config_path") and config.config_path:
             return config.config_path.parent
-        return Path.home() / ".config" / "rename"
+        return Path.home() / ".config" / "media-organizer"
 
     @property
     def user_tags_path(self) -> Path:
@@ -72,7 +230,7 @@ class TagManager:
         if not self.core_path.is_file():
             return []
         try:
-            with open(self.core_path, "r", encoding="utf-8") as f:
+            with open(self.core_path, encoding="utf-8") as f:
                 data = json.load(f)
                 categories = data.get("categories", {})
                 tags = []
@@ -89,7 +247,7 @@ class TagManager:
         if not file_path.is_file():
             return []
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 data = json.load(f)
             if isinstance(data, list):
                 tags = []
@@ -159,14 +317,14 @@ class TagManager:
                 tags.append(clean)
 
         if not tags:
-            self._master_regex = re.compile(r'(?!)')  # Matches nothing
+            self._master_regex = re.compile(r"(?!)")  # Matches nothing
             return self._master_regex
 
         # Sort tags by length in descending order so longest patterns match first
         sorted_tags = sorted(tags, key=len, reverse=True)
 
         # Build master regex using alphanumeric boundary assertions
-        pattern_str = r'(?i)(?<![a-zA-Z0-9])(?:' + '|'.join(sorted_tags) + r')(?![a-zA-Z0-9])'
+        pattern_str = r"(?i)(?<![a-zA-Z0-9])(?:" + "|".join(sorted_tags) + r")(?![a-zA-Z0-9])"
         self._master_regex = re.compile(pattern_str)
         return self._master_regex
 
@@ -174,7 +332,7 @@ class TagManager:
         """Strips all known release tags from the text in a single regex pass."""
         if not text:
             return text
-        return self.get_master_regex().sub('', text)
+        return self.get_master_regex().sub("", text)
 
     def validate_tag(self, tag: str) -> tuple[bool, str]:
         """Validates a candidate tag against length, format, and stopword rules."""
@@ -194,7 +352,7 @@ class TagManager:
             return False, f"Tag '{clean}' is purely numeric."
 
         # Verify allowed characters (alphanumeric, dot, underscore, hyphen, plus)
-        if not re.match(r'^[a-zA-Z0-9][a-zA-Z0-9._+-]*$', clean):
+        if not re.match(r"^[a-zA-Z0-9][a-zA-Z0-9._+-]*$", clean):
             return False, f"Tag '{clean}' contains invalid characters."
 
         return True, clean

@@ -1,11 +1,7 @@
-import os
 import json
-import re
-import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
-from src.tags import TagManager, STOPWORDS_BLACKLIST, MIN_TAG_LENGTH, tag_manager
+from src.tags import TagManager
 import data.data as legacy_data
 
 
@@ -38,13 +34,12 @@ def test_load_core_tags(tmp_path):
 
     # Valid core file with non-list categories
     valid_file = tmp_path / "valid.json"
-    valid_file.write_text(json.dumps({
-        "categories": {
-            "resolutions": ["1080p", "4k"],
-            "empty": "not_a_list",
-            "whitespace": ["  ", "bluray"]
-        }
-    }), encoding="utf-8")
+    valid_file.write_text(
+        json.dumps(
+            {"categories": {"resolutions": ["1080p", "4k"], "empty": "not_a_list", "whitespace": ["  ", "bluray"]}}
+        ),
+        encoding="utf-8",
+    )
     tm = TagManager(core_path=str(valid_file))
     tags = tm.load_core_tags()
     assert "1080p" in tags
@@ -65,13 +60,18 @@ def test_extract_tags_from_json_formats(tmp_path):
 
     # 3. Simple list of strings & dicts
     list_file = tmp_path / "list.json"
-    list_file.write_text(json.dumps([
-        "tag1",
-        {"tag": "tag2"},
-        {"other": "ignored"},
-        123,  # non-string
-        ""
-    ]), encoding="utf-8")
+    list_file.write_text(
+        json.dumps(
+            [
+                "tag1",
+                {"tag": "tag2"},
+                {"other": "ignored"},
+                123,  # non-string
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
     assert tm._extract_tags_from_json(list_file) == ["tag1", "tag2"]
 
     # 4. Dict with "tags" list
@@ -81,11 +81,9 @@ def test_extract_tags_from_json_formats(tmp_path):
 
     # 5. Dict with arbitrary categories
     nested_file = tmp_path / "nested.json"
-    nested_file.write_text(json.dumps({
-        "cat1": ["tagX"],
-        "cat2": ["tagY"],
-        "cat3": "ignored_non_list"
-    }), encoding="utf-8")
+    nested_file.write_text(
+        json.dumps({"cat1": ["tagX"], "cat2": ["tagY"], "cat3": "ignored_non_list"}), encoding="utf-8"
+    )
     assert tm._extract_tags_from_json(nested_file) == ["tagX", "tagY"]
 
     # 6. JSON boolean / number (neither list nor dict)
@@ -129,11 +127,9 @@ def test_master_regex_empty():
 
 def test_master_regex_and_clean_text(tmp_path):
     core_file = tmp_path / "core.json"
-    core_file.write_text(json.dumps({
-        "categories": {
-            "tags": ["1080p", "hdr10+", "hdr10", "bluray", "dts-hd", "x264"]
-        }
-    }), encoding="utf-8")
+    core_file.write_text(
+        json.dumps({"categories": {"tags": ["1080p", "hdr10+", "hdr10", "bluray", "dts-hd", "x264"]}}), encoding="utf-8"
+    )
 
     tm = TagManager(core_path=str(core_file), config_dir=str(tmp_path))
     rx = tm.get_master_regex()
@@ -199,9 +195,7 @@ def test_validate_tag():
 
 def test_add_gemini_and_user_tags(tmp_path):
     core_file = tmp_path / "core.json"
-    core_file.write_text(json.dumps({
-        "categories": {"base": ["existing_core"]}
-    }), encoding="utf-8")
+    core_file.write_text(json.dumps({"categories": {"base": ["existing_core"]}}), encoding="utf-8")
 
     tm = TagManager(core_path=str(core_file), config_dir=str(tmp_path))
 

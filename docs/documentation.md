@@ -1,6 +1,6 @@
 # Documentation
 
-Technical guide and reference for the Media Organizer & Renamer.
+Technical guide and reference for media-organizer.
 
 ## Table of Contents
 
@@ -15,16 +15,19 @@ Technical guide and reference for the Media Organizer & Renamer.
    - [Default: Rename & Move](#default-rename--move)
    - [Rename Only](#rename-only)
    - [Simulation Mode](#simulation-mode)
-   - [Autonomous Background Watcher](#autonomous-background-watcher)
+   - [Daemon Background Watcher](#daemon-background-watcher)
 4. [Options & CLI Flags](#4-options--cli-flags)
 5. [Matching & Multi-Cloud AI Architecture](#5-matching--multi-cloud-ai-architecture)
    - [Metadata Extraction Pipeline](#metadata-extraction-pipeline)
    - [TMDB Match Probability Scorer](#tmdb-match-probability-scorer)
 6. [Keyword Management](#6-keyword-management)
-7. [Docker Deployment](#7-docker-deployment)
-   - [Volumes & Permissions](#volumes--permissions)
-   - [Docker Run (CLI)](#docker-run-cli)
-   - [Docker Compose](#docker-compose)
+7. [Docker](#7-docker)
+   - [Quick Start](#quick-start)
+   - [Volumes](#volumes)
+   - [Configuration](#configuration)
+   - [Environment Variables](#environment-variables)
+   - [Logging Behavior in Docker (Dual Logging)](#logging-behavior-in-docker-dual-logging)
+   - [Advanced Docker Compose Example](#advanced-docker-compose-example)
 
 
 
@@ -37,10 +40,9 @@ The application operates on three directories:
 
 These folders are independent and can be located anywhere on local storage, external drives, or SMB/NFS network shares.
 
-### Plex Standard Formatting
 Processed files follow official Plex naming conventions:
-* **Movies**: `Title (Year).ext` or `Title (Year) [Resolution Quality].ext`
-* **TV Shows**: `Show Name/Season XX/Show Name - SXXEXX.ext`
+* **Movies**: `Title (Year).ext` (or `Title (Year) [Resolution Quality].ext` with `-R` / `-q` enabled)
+* **TV Shows**: `Show Name/Season XX/Show Name - SXXEXX.ext` (or with `[Resolution Quality]` when `-R` / `-q` enabled)
 
 ## 2. Configuration
 
@@ -56,10 +58,6 @@ media-organizer configure
 ```
 
 ### Configuration File
-
-Default file location:
-* **Windows**: `%APPDATA%\rename\config.ini`
-* **Linux / macOS**: `~/.config/rename/config.ini`
 
 ```ini
 [paths]
@@ -82,7 +80,7 @@ ai_min_confidence = 0.70
 resolution = false
 quality = false
 bypass = false
-autonomous = false
+daemon = false
 polling_interval = 15
 ai = false
 learn = false
@@ -96,6 +94,10 @@ notify_on_tag = false
 mail = your_email@gmail.com
 mail_pswd = your_16_char_app_password
 ```
+
+Default file location:
+* **Windows**: `%APPDATA%\media-organizer\config.ini`
+* **Linux / macOS**: `~/.config/media-organizer/config.ini`
 
 ### Obtaining API Keys
 
@@ -150,12 +152,11 @@ Previews proposed renames and destination paths without writing to disk or sendi
 media-organizer --simulate
 ```
 
-### Autonomous Background Watcher
-Runs as a persistent daemon polling the download folder periodically.
+### Daemon Background Watcher
+The daemon polls the download folder periodically.
 ```bash
-media-organizer --autonomous --interval 5
+media-organizer --daemon --interval 15
 ```
-Autonomous mode automatically enables `-b` (`bypass`) and `-l` (`log`).
 
 ## 4. Options & CLI Flags
 
@@ -163,18 +164,18 @@ Autonomous mode automatically enables `-b` (`bypass`) and `-l` (`log`).
 | :--- | :--- | :--- | :--- | :--- |
 | `-s` | `--simulate` | — | `false` | Dry-run simulation preview. |
 | `-r` | `--only-rename` | — | `false` | Renames files in-place without moving them. |
-| `-a` | `--autonomous` | `options.autonomous` | `false` | Runs background watcher daemon. |
-| — | `--interval <min>` | `options.polling_interval` | `15` | Polling interval for autonomous mode (minutes). |
+| `-d` | `--daemon` | `options.daemon` | `false` | Runs background watcher daemon. |
+| — | `--interval <min>` | `options.polling_interval` | `15` | Polling interval in minutes (automatically enables daemon mode). |
 | `-b` | `--bypass` | `options.bypass` | `false` | Bypasses interactive confirmation prompts. |
-| `-i` | `--ai` | `options.ai` | `false` | Enables Cloud AI fallback for unrecognizable filenames. |
+| `-a` | `--ai` | `options.ai` | `false` | Enables Cloud AI fallback for unrecognizable filenames. |
 | `-L` | `--learn` | `options.learn` | `false` | Enables keyword learning to save newly discovered tags. |
 | — | `--provider <p>` | `options.ai_provider` | `auto` | Selects AI provider (`auto`, `gemini`, `groq`, `openrouter`, `cloudflare`). |
 | `-R` | `--resolution` | `options.resolution` | `false` | Appends video resolution tags (`[1080p]`, `[4K]`). Requires `ffprobe`. |
 | `-q` | `--quality` | `options.quality` | `false` | Appends video quality tags (`[BluRay]`, `[WEB-DL]`). Requires `ffprobe`. |
-| `-l` | `--log` | `options.log` | `false` | Writes console output to `log/YYYY-MM-DD.txt`. |
+| `-l` | `--log` | `options.log` | `false` | Writes console output to `log/YYYY-MM-DD.txt` (auto-pruned after 14 days). |
 | `-v` | `--verbose` | `options.verbose` | `false` | Displays full error stack traces on failure. |
 | — | `--notify-success` | `options.notify_on_success` | `false` | Sends email notification on successful processing. |
-| — | `--notify-error` | `options.notify_on_error` | `true` | Sends email notification when an error occurs. |
+| — | `--notify-error` | `options.notify_on_error` | `true` (`false` in Docker) | Sends email notification when an error occurs. |
 | `-t` | `--notify-tag` | `options.notify_on_tag` | `false` | Sends email notification when a new keyword tag is learned. |
 | — | `--path="<dir>"` | — | Incoming dir | Targets a specific folder. |
 
@@ -213,7 +214,7 @@ Raw Filename
 Computes a match probability $P \in [0.0, 1.0]$:
 $$P = 0.50 \cdot \text{SequenceSimilarity} + 0.35 \cdot \text{TokenOverlap} + 0.15 \cdot \text{YearProximity}$$
 * If $P \ge 0.75$, the match is accepted directly.
-* If $P < 0.75$ and AI fallback is enabled (`-i`), the item is queued for cloud AI verification.
+* If $P < 0.75$ and AI fallback is enabled (`-a`), the item is queued for cloud AI verification.
 
 ## 6. Keyword Management
 
@@ -222,54 +223,135 @@ The cleaning engine uses a dictionary to strip filenames:
 2. **User Custom Keywords (`custom_tags.json`)**: User's personal keywords stored in the configuration folder alongside `config.ini`.
 3. **AI Learned Keywords (`gemini_tags.json`)**: When keyword learning is enabled (`-L` or `options.learn = true`), missing keywords discovered by AI are validated and appended to `gemini_tags.json`.
 
-## 7. Docker Deployment
+## 7. Docker
 
-A multi-architecture Docker image (`linux/amd64`, `linux/arm64`) with pre-bundled `ffmpeg` and `ffprobe` is published on GitHub Container Registry: `ghcr.io/ugoteuliere/rename`.
+A Docker image with all necessary dependencies is published on GitHub Container Registry: `ghcr.io/ugoteuliere/media-organizer`.
 
-### Volumes & Permissions
-* `/config`: Directory containing `config.ini`, `custom_tags.json`, and `gemini_tags.json`.
-* `/data`: Root media storage containing incoming downloads and destination libraries.
-* `PUID` / `PGID`: Set to your host user and group IDs (e.g. `1000:1000` or NAS `99:100`) so processed files are owned by your host user.
+The container is designed to run out-of-the-box with zero manual configuration required other than mounting your 3 media folders and setting up your TMDB API key.
 
-### Docker Run (CLI)
+---
 
-```bash
-# Autonomous background watcher
-docker run -d \
-  --name media-organizer \
-  --restart unless-stopped \
-  -e PUID=1000 \
-  -e PGID=1000 \
-  -e TMDB_API_KEY="your_tmdb_key" \
-  -v /path/to/config:/config \
-  -v /path/to/media:/data \
-  ghcr.io/ugoteuliere/rename:latest --autonomous --interval 15
+### Quick Start
 
-# One-off dry-run simulation
-docker run --rm \
-  -v /path/to/config:/config \
-  -v /path/to/media:/data \
-  ghcr.io/ugoteuliere/rename:latest --simulate
+By default, the container starts in **daemon mode**, checking for new files in input folder every 15 minutes.
+
+#### Docker Compose
+
+Create a `docker-compose.yml`:
+
+```yaml
+services:
+  media-organizer:
+    image: ghcr.io/ugoteuliere/media-organizer:latest
+    container_name: media-organizer
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TMDB_API_KEY=your_tmdb_api_key_here
+    volumes:
+      - /mnt/storage/downloads:/data/input
+      - /mnt/storage/movies:/data/Movies
+      - /mnt/storage/series:/data/TV_Shows
 ```
 
-### Docker Compose
+Start the container in the background:
+
+```bash
+docker compose up -d
+```
+
+---
+
+### Volumes
+
+| Volume Mount | Type | Purpose | Description |
+| :--- | :--- | :--- | :--- |
+| `/data/input` | **Required** | Source | Incoming / unsorted media directory to scan and organize. |
+| `/data/Movies` | **Required** | Destination | Destination folder for recognized and sorted movies. |
+| `/data/TV_Shows` | **Required** | Destination | Destination folder for recognized and sorted TV series. |
+| `/config` | *Optional* | Configuration | Persistent storage for custom `config.ini`, `custom_tags.json`, `gemini_tags.json`. |
+| `/app/log` | *Optional* | Logs | Persistent storage for daily rotated log files (`YYYY-MM-DD.txt`). |
+
+---
+
+### Configuration
+
+| Method | Description |
+| :--- | :--- |
+| **Environment Variables** | Set options directly in `docker-compose.yml`. See [Environment Variables](#environment-variables). |
+| **Configuration File (`config.ini`)** | Mount a folder to `/config` to supply a custom `config.ini`. |
+
+---
+
+### Environment Variables
+
+Each configuration setting is mapped to an environment variable:
+
+| Environment Variable | Config Key | Default in Docker | Description |
+| :--- | :--- | :--- | :--- |
+| `INPUT_FOLDER` | `paths.not_sorted_media_files_folder` | `/data/input` | Path to incoming media folder. |
+| `MOVIES_FOLDER` | `paths.movies_folder` | `/data/Movies` | Path to destination movies folder. |
+| `TV_SHOWS_FOLDER` | `paths.tv_shows_folder` | `/data/TV_Shows` | Path to destination TV shows folder. |
+| `DAEMON` | `options.daemon` | `true` | Enables continuous polling background daemon. |
+| `POLLING_INTERVAL` | `options.polling_interval` | `15` | Polling interval in minutes. |
+| `BYPASS` | `options.bypass` | `true` | Automatically bypasses confirmation prompts. |
+| `VERBOSE` | `options.verbose` | `true` | Displays detailed error tracebacks on failure. |
+| `LOG` | `options.log` | `false` | Enables file logging to `/app/log/` in addition to console. |
+| `TMDB_API_KEY` | `api.tmdb_api_key` | — | TheMovieDatabase v3 API key for online matching. |
+| `AI` | `options.ai` | `false` | Enables cloud AI fallback for unrecognizable titles. |
+| `AI_PROVIDER` | `options.ai_provider` | `auto` | AI provider (`auto`, `gemini`, `groq`, `openrouter`, `cloudflare`). |
+| `GEMINI_API_KEY` | `api.gemini_api_key` | — | Google Gemini API key. |
+| `GROQ_API_KEY` | `api.groq_api_key` | — | Groq API key. |
+| `OPENROUTER_API_KEY` | `api.openrouter_api_key` | — | OpenRouter API key. |
+| `CLOUDFLARE_API_TOKEN` | `api.cloudflare_api_token` | — | Cloudflare AI API token. |
+| `CLOUDFLARE_ACCOUNT_ID` | `api.cloudflare_account_id` | — | Cloudflare Account ID. |
+| `MAIL` | `mail.mail` | — | Gmail address for email alerts. |
+| `MAIL_PSWD` | `mail.mail_pswd` | — | 16-character Gmail App Password. |
+| `NOTIFY_ON_SUCCESS` | `options.notify_on_success` | `false` | Send email notification on successful processing. |
+| `NOTIFY_ON_ERROR` | `options.notify_on_error` | `false` | Send email notification on processing errors. |
+| `NOTIFY_ON_TAG` | `options.notify_on_tag` | `false` | Send email notification when a new tag is discovered. |
+
+---
+
+### Logging Behavior in Docker (Dual Logging)
+
+1. **Console Logging (Default)**:
+   All events stream live to `stdout`/`stderr` viewable with `docker logs -f media-organizer`.
+2. **Dual Logging (Console + File)**:
+   When `LOG=true` (or `options.log = true`), the container writes daily log files to `/app/log/YYYY-MM-DD.txt` (auto-pruned after 14 days) **WITHOUT silencing console output**.
+3. **Permission Safeguards**:
+   If `/app/log` does not exist or lacks write permissions for `PUID`/`PGID`, the container outputs a clear warning to `stderr` and automatically falls back to console-only logging without crashing.
+
+---
+
+### Advanced Docker Compose Example
+
+Full setup with TMDB, cloud AI, custom config mount, persistent logs, and dual logging:
 
 ```yaml
 version: "3.8"
 
 services:
   media-organizer:
-    image: ghcr.io/ugoteuliere/rename:latest
+    image: ghcr.io/ugoteuliere/media-organizer:latest
     container_name: media-organizer
     restart: unless-stopped
     environment:
       - PUID=1000
       - PGID=1000
+      - POLLING_INTERVAL=10
       - TMDB_API_KEY=your_tmdb_api_key
-      # Optional AI keys
-      - GEMINI_API_KEY=your_gemini_key
+      # AI Fallback
+      - AI=true
+      - AI_PROVIDER=groq
+      - GROQ_API_KEY=gsk_your_groq_key
+      # Enable Dual Logging (stdout + /app/log)
+      - LOG=true
     volumes:
-      - /path/to/config:/config
-      - /path/to/media:/data
-    command: ["--autonomous", "--interval", "15"]
+      - /mnt/storage/downloads:/data/input
+      - /mnt/storage/movies:/data/Movies
+      - /mnt/storage/series:/data/TV_Shows
+      - /mnt/storage/appdata/media-organizer/config:/config
+      - /mnt/storage/appdata/media-organizer/logs:/app/log
 ```

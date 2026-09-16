@@ -7,7 +7,7 @@ on:
   push:
     branches: [ "main", "dev" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "dev" ]
   workflow_dispatch:
 
 permissions:
@@ -47,7 +47,7 @@ jobs:
         cloudflare_api_token = ${{ secrets.CLOUDFLARE_API_TOKEN }}
         cloudflare_account_id = ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-        [email]
+        [mail]
         mail = ${{ secrets.MAIL }}
         mail_pswd = ${{ secrets.MAIL_PSWD }}
 
@@ -60,6 +60,11 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+
+    - name: Lint and Code Quality (Ruff)
+      run: |
+        ruff check src/ tests/
+        ruff format --check src/ tests/
 
     - name: Run Tests and Generate Coverage
       shell: bash
@@ -128,14 +133,15 @@ jobs:
           docker run --rm media-organizer:test --help
           docker run --rm media-organizer:test config --list
 
-      - name: Verify Docker Volume Mounts & Simulation Run
+      - name: Verify Docker Custom Config & 3-Volume Mount Simulation
         run: |
-          mkdir -p /tmp/docker_test/config /tmp/docker_test/data/downloads /tmp/docker_test/data/movies /tmp/docker_test/data/tv
+          mkdir -p /tmp/docker_test/config /tmp/docker_test/downloads /tmp/docker_test/movies /tmp/docker_test/tv
+          chmod -R 777 /tmp/docker_test
           cat << 'EOF' > /tmp/docker_test/config/config.ini
           [paths]
-          movies_folder = /data/movies
-          tv_shows_folder = /data/tv
-          not_sorted_media_files_folder = /data/downloads
+          movies_folder = /data/Movies
+          tv_shows_folder = /data/TV_Shows
+          not_sorted_media_files_folder = /data/input
 
           [options]
           bypass = true
@@ -143,14 +149,35 @@ jobs:
           quality = false
           EOF
 
-          touch "/tmp/docker_test/data/downloads/Arrival (2016).mkv"
+          touch "/tmp/docker_test/downloads/Arrival (2016).mkv"
 
           docker run --rm \
             -e PUID=1000 \
             -e PGID=1000 \
             -v /tmp/docker_test/config:/config \
-            -v /tmp/docker_test/data:/data \
-            media-organizer:test --simulate --only-rename --bypass --path /data/downloads
+            -v /tmp/docker_test/downloads:/data/input \
+            -v /tmp/docker_test/movies:/data/Movies \
+            -v /tmp/docker_test/tv:/data/TV_Shows \
+            media-organizer:test --simulate --only-rename --bypass
+
+      - name: Verify Out-of-the-Box 3-Volume Mount & Dual Logging
+        run: |
+          mkdir -p /tmp/docker_3vol/input /tmp/docker_3vol/movies /tmp/docker_3vol/tv /tmp/docker_3vol/logs
+          chmod -R 777 /tmp/docker_3vol
+          touch "/tmp/docker_3vol/input/Arrival (2016).mkv"
+
+          docker run --rm \
+            -e PUID=1000 \
+            -e PGID=1000 \
+            -e LOG=true \
+            -v /tmp/docker_3vol/input:/data/input \
+            -v /tmp/docker_3vol/movies:/data/Movies \
+            -v /tmp/docker_3vol/tv:/data/TV_Shows \
+            -v /tmp/docker_3vol/logs:/app/log \
+            media-organizer:test --simulate --only-rename --bypass
+
+          # Verify log file was created in /app/log mount
+          test -n "$(ls -A /tmp/docker_3vol/logs)"
 
   sonarqube:
     name: SonarQube Scan

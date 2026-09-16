@@ -1,4 +1,3 @@
-import os
 import sys
 import importlib
 import pytest
@@ -9,12 +8,14 @@ import pandas as pd
 from src import ui
 from src.config import ConfigManager
 
+
 def test_ui_stdout_reconfigure_exception():
     with patch.object(sys.stdout, "reconfigure", side_effect=ValueError("mock reconfigure fail")):
         importlib.reload(ui)
     with patch.object(sys, "stdout", object()):
         importlib.reload(ui)
     importlib.reload(ui)
+
 
 def test_parse_arguments_default(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["main.py"])
@@ -27,6 +28,7 @@ def test_parse_arguments_default(monkeypatch):
     assert args.verbose is False
     assert ui.SIMULATE_ENABLED is False
 
+
 def test_parse_arguments_gui(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["main.py", "-g"])
     args = ui.parse_arguments()
@@ -35,6 +37,7 @@ def test_parse_arguments_gui(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["main.py", "--gui"])
     args = ui.parse_arguments()
     assert args.gui is True
+
 
 def test_parse_arguments_simulate(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["main.py", "-s"])
@@ -46,6 +49,7 @@ def test_parse_arguments_simulate(monkeypatch):
     args = ui.parse_arguments()
     assert args.simulate is True
     assert ui.SIMULATE_ENABLED is True
+
 
 def test_parse_arguments_bypass(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["main.py", "-b"])
@@ -59,24 +63,50 @@ def test_parse_arguments_bypass(monkeypatch):
     assert ui.BYPASS_ENABLED is True
 
 
-def test_parse_arguments_autonomous(monkeypatch):
-    monkeypatch.setattr(sys, "argv", ["main.py", "-a"])
+def test_parse_arguments_daemon(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["main.py", "-d"])
     args = ui.parse_arguments()
-    assert args.autonomous is True
-    assert ui.AUTONOMOUS_ENABLED is True
+    assert args.daemon is True
+    assert ui.DAEMON_ENABLED is True
+    assert ui.BYPASS_ENABLED is True
+    assert ui.LOG_ENABLED is False
+
+    monkeypatch.setattr(sys, "argv", ["main.py", "-d", "-l"])
+    args = ui.parse_arguments()
+    assert args.daemon is True
+    assert ui.DAEMON_ENABLED is True
     assert ui.BYPASS_ENABLED is True
     assert ui.LOG_ENABLED is True
 
-    monkeypatch.setattr(sys, "argv", ["main.py", "--autonomous"])
+    monkeypatch.setattr(sys, "argv", ["main.py", "--daemon"])
     args = ui.parse_arguments()
-    assert args.autonomous is True
-    assert ui.AUTONOMOUS_ENABLED is True
+    assert args.daemon is True
+    assert ui.DAEMON_ENABLED is True
+    assert ui.LOG_ENABLED is False
 
-    # --interval implies autonomous mode
+    # --interval implies daemon mode
     monkeypatch.setattr(sys, "argv", ["main.py", "--interval", "10"])
     args = ui.parse_arguments()
-    assert ui.AUTONOMOUS_ENABLED is True
+    assert ui.DAEMON_ENABLED is True
     assert ui.POLLING_INTERVAL == 10
+
+    # Verify no backward compatibility for --autonomous
+    monkeypatch.setattr(sys, "argv", ["main.py", "--autonomous"])
+    with pytest.raises(SystemExit):
+        ui.parse_arguments()
+
+    # Verify -a is now the short flag for --ai
+    monkeypatch.setattr(sys, "argv", ["main.py", "-a"])
+    with patch("src.ui.GEMINI_API_KEY", "fake_key"):
+        args = ui.parse_arguments()
+        assert args.ai is True
+        assert ui.AI_FALLBACK_ENABLED is True
+
+    # -i is no longer a valid flag
+    monkeypatch.setattr(sys, "argv", ["main.py", "-i"])
+    with pytest.raises(SystemExit):
+        ui.parse_arguments()
+
 
 def test_parse_arguments_only_rename_aliases(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["main.py", "--only-rename"])
@@ -90,6 +120,7 @@ def test_parse_arguments_only_rename_aliases(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["main.py", "-r"])
     args = ui.parse_arguments()
     assert args.only_rename is True
+
 
 def test_parse_arguments_path(monkeypatch, tmp_path):
     folder = tmp_path / "custom"
@@ -106,19 +137,23 @@ def test_parse_arguments_path(monkeypatch, tmp_path):
     assert args.path == str(folder)
     assert args.only_rename is True
 
+
 def test_parse_arguments_path_nonexistent(monkeypatch, tmp_path):
     ghost = tmp_path / "ghost"
     monkeypatch.setattr(sys, "argv", ["main.py", "-r", f"--path={ghost}"])
     with pytest.raises(SystemExit):
         ui.parse_arguments()
 
+
 def test_parse_arguments_ai_missing_key(monkeypatch):
     monkeypatch.setattr(ui, "GEMINI_API_KEY", None)
-    with patch.object(ConfigManager, "GEMINI_API_KEY", new_callable=PropertyMock, return_value=None), \
-         patch.object(ConfigManager, "GROQ_API_KEY", new_callable=PropertyMock, return_value=None), \
-         patch.object(ConfigManager, "OPENROUTER_API_KEY", new_callable=PropertyMock, return_value=None), \
-         patch.object(ConfigManager, "CLOUDFLARE_API_TOKEN", new_callable=PropertyMock, return_value=None):
-        monkeypatch.setattr(sys, "argv", ["main.py", "-i"])
+    with (
+        patch.object(ConfigManager, "GEMINI_API_KEY", new_callable=PropertyMock, return_value=None),
+        patch.object(ConfigManager, "GROQ_API_KEY", new_callable=PropertyMock, return_value=None),
+        patch.object(ConfigManager, "OPENROUTER_API_KEY", new_callable=PropertyMock, return_value=None),
+        patch.object(ConfigManager, "CLOUDFLARE_API_TOKEN", new_callable=PropertyMock, return_value=None),
+    ):
+        monkeypatch.setattr(sys, "argv", ["main.py", "-a"])
         with pytest.raises(SystemExit):
             ui.parse_arguments()
 
@@ -140,10 +175,12 @@ def test_parse_arguments_learn_flags(monkeypatch):
 
 def test_parse_arguments_learn_missing_key(monkeypatch):
     monkeypatch.setattr(ui, "GEMINI_API_KEY", None)
-    with patch.object(ConfigManager, "GEMINI_API_KEY", new_callable=PropertyMock, return_value=None), \
-         patch.object(ConfigManager, "GROQ_API_KEY", new_callable=PropertyMock, return_value=None), \
-         patch.object(ConfigManager, "OPENROUTER_API_KEY", new_callable=PropertyMock, return_value=None), \
-         patch.object(ConfigManager, "CLOUDFLARE_API_TOKEN", new_callable=PropertyMock, return_value=None):
+    with (
+        patch.object(ConfigManager, "GEMINI_API_KEY", new_callable=PropertyMock, return_value=None),
+        patch.object(ConfigManager, "GROQ_API_KEY", new_callable=PropertyMock, return_value=None),
+        patch.object(ConfigManager, "OPENROUTER_API_KEY", new_callable=PropertyMock, return_value=None),
+        patch.object(ConfigManager, "CLOUDFLARE_API_TOKEN", new_callable=PropertyMock, return_value=None),
+    ):
         monkeypatch.setattr(sys, "argv", ["main.py", "-L"])
         with pytest.raises(SystemExit):
             ui.parse_arguments()
@@ -154,6 +191,7 @@ def test_parse_arguments_config_subcommand(monkeypatch):
     args = ui.parse_arguments()
     assert args.subcommand == "configure"
 
+
 def test_parse_arguments_config_precedence(monkeypatch, tmp_path):
     test_ini = tmp_path / "prec.ini"
     test_ini.write_text("[options]\nbypass = y\nai = y\nlearn = y\nlog = y\nverbose = y\n", encoding="utf-8")
@@ -161,12 +199,13 @@ def test_parse_arguments_config_precedence(monkeypatch, tmp_path):
 
     with patch("src.ui.config", cm), patch("src.ui.GEMINI_API_KEY", "fake_gemini"):
         monkeypatch.setattr(sys, "argv", ["main.py"])
-        args = ui.parse_arguments()
+        ui.parse_arguments()
         assert ui.BYPASS_ENABLED is True
         assert ui.AI_FALLBACK_ENABLED is True
         assert ui.LEARN_ENABLED is True
         assert ui.LOG_ENABLED is True
         assert ui.VERBOSE_ENABLED is True
+
 
 def test_handle_config_command_configure():
     args = MagicMock()
@@ -174,6 +213,7 @@ def test_handle_config_command_configure():
     with patch("src.config.config.run_wizard") as mock_wiz:
         ui.handle_config_command(args)
         mock_wiz.assert_called_once()
+
 
 def test_handle_config_command_path(capsys):
     args = MagicMock()
@@ -186,6 +226,7 @@ def test_handle_config_command_path(capsys):
         ui.handle_config_command(args)
         assert mock_log.call_count == 1
         assert "Active configuration file" in mock_log.call_args[0][0]
+
 
 def test_handle_config_command_get(capsys):
     args = MagicMock()
@@ -208,6 +249,7 @@ def test_handle_config_command_get(capsys):
         with patch("src.ui.rich_print_log") as mock_log:
             ui.handle_config_command(args)
             assert "'api.gemini_api_key' is not set." in mock_log.call_args[0][0]
+
 
 def test_handle_config_command_set(tmp_path):
     args = MagicMock()
@@ -243,8 +285,10 @@ def test_handle_config_command_set(tmp_path):
 
     # Set notify without mail
     args.set = ("options.notify_on_success", "true")
-    with patch.object(ConfigManager, "MAIL", new_callable=PropertyMock, return_value=None), \
-         patch.object(ConfigManager, "MAIL_PSWD", new_callable=PropertyMock, return_value=None):
+    with (
+        patch.object(ConfigManager, "MAIL", new_callable=PropertyMock, return_value=None),
+        patch.object(ConfigManager, "MAIL_PSWD", new_callable=PropertyMock, return_value=None),
+    ):
         with patch("src.config.config.set"):
             with patch("src.ui.rich_print_log") as mock_log:
                 ui.handle_config_command(args)
@@ -257,6 +301,7 @@ def test_handle_config_command_set(tmp_path):
         with pytest.raises(SystemExit):
             ui.handle_config_command(args)
 
+
 def test_parse_arguments_resolution_and_quality(monkeypatch):
     with patch("shutil.which", return_value="/usr/bin/ffprobe"):
         monkeypatch.setattr(sys, "argv", ["main.py", "-R", "-q"])
@@ -266,11 +311,13 @@ def test_parse_arguments_resolution_and_quality(monkeypatch):
         assert ui.RESOLUTION_ENABLED is True
         assert ui.QUALITY_ENABLED is True
 
+
 def test_parse_arguments_resolution_quality_missing_ffprobe(monkeypatch):
     with patch("shutil.which", return_value=None):
         monkeypatch.setattr(sys, "argv", ["main.py", "-R"])
         with pytest.raises(SystemExit):
             ui.parse_arguments()
+
 
 def test_parse_arguments_notify_flags_success(monkeypatch):
     with patch("src.ui.MAIL", "user@gmail.com"), patch("src.ui.MAIL_PSWD", "secret"):
@@ -288,10 +335,14 @@ def test_parse_arguments_notify_flags_success(monkeypatch):
         assert args.notify_tag is True
         assert ui.NOTIFY_TAG_ENABLED is True
 
+
 def test_parse_arguments_notify_flags_missing_credentials(monkeypatch):
-    with patch("src.ui.MAIL", None), patch("src.ui.MAIL_PSWD", None), \
-         patch.object(ConfigManager, "MAIL", new_callable=PropertyMock, return_value=None), \
-         patch.object(ConfigManager, "MAIL_PSWD", new_callable=PropertyMock, return_value=None):
+    with (
+        patch("src.ui.MAIL", None),
+        patch("src.ui.MAIL_PSWD", None),
+        patch.object(ConfigManager, "MAIL", new_callable=PropertyMock, return_value=None),
+        patch.object(ConfigManager, "MAIL_PSWD", new_callable=PropertyMock, return_value=None),
+    ):
         monkeypatch.setattr(sys, "argv", ["main.py", "--notify-success"])
         with pytest.raises(SystemExit):
             ui.parse_arguments()
@@ -299,6 +350,7 @@ def test_parse_arguments_notify_flags_missing_credentials(monkeypatch):
         monkeypatch.setattr(sys, "argv", ["main.py", "-t"])
         with pytest.raises(SystemExit):
             ui.parse_arguments()
+
 
 def test_handle_config_command_unset():
     args = MagicMock()
@@ -325,6 +377,7 @@ def test_handle_config_command_unset():
         with pytest.raises(SystemExit):
             ui.handle_config_command(args)
 
+
 def test_display_config_table():
     with patch("src.ui.rich_print_log") as mock_log:
         ui.display_config_table(show_secrets=False)
@@ -333,6 +386,7 @@ def test_display_config_table():
     with patch("src.ui.rich_print_log") as mock_log:
         ui.display_config_table(show_secrets=True)
         assert mock_log.call_count >= 3
+
 
 def test_logging_functions(tmp_path, monkeypatch):
     # print_log without LOG_ENABLED
@@ -347,7 +401,7 @@ def test_logging_functions(tmp_path, monkeypatch):
         ui.print_log("file log message")
         mock_f.assert_called()
         mock_print.assert_not_called()
-    
+
     # rich_print_log without LOG_ENABLED
     monkeypatch.setattr(ui, "LOG_ENABLED", False)
     with patch("rich.console.Console.print") as mock_console_print:
@@ -359,6 +413,7 @@ def test_logging_functions(tmp_path, monkeypatch):
     with patch("src.ui.print_log") as mock_pl:
         ui.rich_print_log("rich log enabled message")
         mock_pl.assert_called()
+
 
 def test_get_log_dir(tmp_path, monkeypatch):
     # Non-frozen
@@ -374,15 +429,17 @@ def test_get_log_dir(tmp_path, monkeypatch):
 
     # Frozen permission error fallback
     orig_mkdir = Path.mkdir
+
     def mock_mkdir(self, *args, **kwargs):
         if self == tmp_path / "log":
             raise PermissionError("Access denied")
         return orig_mkdir(self, *args, **kwargs)
-    
+
     monkeypatch.setattr(Path, "mkdir", mock_mkdir)
     monkeypatch.setattr(sys, "executable", str(tmp_path / "bin" / "app.exe"))
     log_dir_fallback = ui.get_log_dir()
     assert log_dir_fallback == tmp_path / "bin" / "log"
+
 
 def test_print_error():
     # Verbose False
@@ -396,6 +453,7 @@ def test_print_error():
     msg = ui.print_error("Error msg", "Traceback details")
     assert "Error logs:" in msg
     assert "Traceback details" in msg
+
 
 def test_display_corrected_filenames():
     # Empty DataFrame
@@ -414,14 +472,23 @@ def test_display_corrected_filenames():
         mock_log.assert_called_once_with("[yellow]No media files detected.[/yellow]")
 
     # Movies and TV Shows
-    df = pd.DataFrame([
-        {"Media": "movie", "Original": "Inception.mkv", "Corrected": "Inception (2010)"},
-        {"Media": "tv", "Original": "Dark.S01E01.mkv", "Season": "01", "Episode": "01", "Corrected": "Dark - S01E01"},
-        {"Media": "movie", "Original": "Same.mkv", "Corrected": "Same.mkv"},
-    ])
+    df = pd.DataFrame(
+        [
+            {"Media": "movie", "Original": "Inception.mkv", "Corrected": "Inception (2010)"},
+            {
+                "Media": "tv",
+                "Original": "Dark.S01E01.mkv",
+                "Season": "01",
+                "Episode": "01",
+                "Corrected": "Dark - S01E01",
+            },
+            {"Media": "movie", "Original": "Same.mkv", "Corrected": "Same.mkv"},
+        ]
+    )
     with patch("src.ui.rich_print_log") as mock_log:
         ui.display_corrected_filenames(df)
         assert mock_log.call_count >= 2
+
 
 def test_display_sorted_files(tmp_path):
     # Empty paths
@@ -444,6 +511,7 @@ def test_display_sorted_files(tmp_path):
             ui.display_sorted_files(paths)
             assert mock_log.call_count >= 2
 
+
 def test_display_skipped_filenames():
     # Empty list
     with patch("src.ui.rich_print_log") as mock_log:
@@ -451,13 +519,11 @@ def test_display_skipped_filenames():
         mock_log.assert_not_called()
 
     # With failed items
-    failed = [
-        {"Original": "bad.mkv", "Reason": "File corrupted"},
-        {"Reason": "No name"}
-    ]
+    failed = [{"Original": "bad.mkv", "Reason": "File corrupted"}, {"Reason": "No name"}]
     with patch("src.ui.rich_print_log") as mock_log:
         ui.display_skipped_filenames(failed)
         assert mock_log.call_count >= 2
+
 
 def test_user_confirmation():
     # BYPASS_ENABLED = True (bypasses input)
@@ -535,4 +601,3 @@ def test_hide_console_window(monkeypatch):
     fake_kernel32.GetConsoleWindow.side_effect = RuntimeError("Failed")
     with patch.dict("sys.modules", {"ctypes": fake_ctypes}):
         ui.hide_console_window()  # Should not raise
-

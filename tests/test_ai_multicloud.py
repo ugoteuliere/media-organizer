@@ -12,6 +12,7 @@ from src.api import ParsedMediaItem, BatchMediaResponse
 # 1. Probability Scorer Tests
 # ==============================================================================
 
+
 def test_compute_tmdb_match_probability():
     # Exact match with matching year
     prob = utils.compute_tmdb_match_probability("Inception", "2010", "Inception", "2010")
@@ -65,6 +66,7 @@ def test_compute_tmdb_match_probability():
 # 2. Schema and Provider Caller Tests
 # ==============================================================================
 
+
 def test_is_quota_or_rate_limit_error():
     assert api.is_quota_or_rate_limit_error(Exception("429 Too Many Requests")) is True
     assert api.is_quota_or_rate_limit_error(Exception("Rate limit reached for model")) is True
@@ -77,7 +79,9 @@ def test_is_quota_or_rate_limit_error():
 
 
 def test_call_gemini_batch_success_and_errors(monkeypatch):
-    dummy_items = [{'File': 'Test.mkv', 'Folder': 'dl', 'Path': '/dl/Test.mkv', 'Clean': 'Test', 'Parse': 'Test', 'Media': 'movie'}]
+    dummy_items = [
+        {"File": "Test.mkv", "Folder": "dl", "Path": "/dl/Test.mkv", "Clean": "Test", "Parse": "Test", "Media": "movie"}
+    ]
 
     # 1. Missing API key
     monkeypatch.setattr(api, "GEMINI_API_KEY", None)
@@ -89,16 +93,20 @@ def test_call_gemini_batch_success_and_errors(monkeypatch):
     monkeypatch.setattr(api, "GEMINI_API_KEY", "dummy_gemini")
     mock_client = MagicMock()
     mock_resp = MagicMock()
-    mock_resp.text = json.dumps({
-        "items": [{
-            "file_id": 0,
-            "title": "Gemini Movie",
-            "year": "2023",
-            "original_language": "en",
-            "missing_tags": ["remux"],
-            "confidence_score": 0.95
-        }]
-    })
+    mock_resp.text = json.dumps(
+        {
+            "items": [
+                {
+                    "file_id": 0,
+                    "title": "Gemini Movie",
+                    "year": "2023",
+                    "original_language": "en",
+                    "missing_tags": ["remux"],
+                    "confidence_score": 0.95,
+                }
+            ]
+        }
+    )
     mock_client.models.generate_content.return_value = mock_resp
 
     with patch("google.genai.Client", return_value=mock_client):
@@ -108,27 +116,27 @@ def test_call_gemini_batch_success_and_errors(monkeypatch):
         assert res.items[0].confidence_score == 0.95
 
     # 3. Success with raw list JSON format
-    mock_resp.text = json.dumps([{
-        "file_id": 0,
-        "title": "Gemini List Movie",
-        "year": "2023",
-        "original_language": "en",
-        "missing_tags": [],
-        "confidence_score": 0.90
-    }])
+    mock_resp.text = json.dumps(
+        [
+            {
+                "file_id": 0,
+                "title": "Gemini List Movie",
+                "year": "2023",
+                "original_language": "en",
+                "missing_tags": [],
+                "confidence_score": 0.90,
+            }
+        ]
+    )
     with patch("google.genai.Client", return_value=mock_client):
         res = api.call_gemini_batch(dummy_items)
         assert len(res.items) == 1
         assert res.items[0].title == "Gemini List Movie"
 
     # 4. Backward compatibility with single-item dict format
-    mock_resp.text = json.dumps({
-        "success": 1,
-        "name": "Legacy Movie",
-        "year": "2021",
-        "original_language": "fr",
-        "missing_tags": ["1080p"]
-    })
+    mock_resp.text = json.dumps(
+        {"success": 1, "name": "Legacy Movie", "year": "2021", "original_language": "fr", "missing_tags": ["1080p"]}
+    )
     with patch("google.genai.Client", return_value=mock_client):
         res = api.call_gemini_batch(dummy_items)
         assert len(res.items) == 1
@@ -157,10 +165,7 @@ def test_call_gemini_batch_success_and_errors(monkeypatch):
     # 6. Model fallback on non-quota error and quota exception propagation
     valid_resp = MagicMock()
     valid_resp.text = json.dumps({"items": [{"file_id": 0, "title": "Fallback Movie", "confidence_score": 0.9}]})
-    mock_client.models.generate_content.side_effect = [
-        RuntimeError("Model not found"),
-        valid_resp
-    ]
+    mock_client.models.generate_content.side_effect = [RuntimeError("Model not found"), valid_resp]
     with patch("google.genai.Client", return_value=mock_client):
         res = api.call_gemini_batch(dummy_items)
         assert len(res.items) == 1
@@ -180,7 +185,9 @@ def test_call_gemini_batch_success_and_errors(monkeypatch):
 
 
 def test_call_groq_batch(monkeypatch):
-    dummy_items = [{'File': 'Groq.mkv', 'Folder': 'dl', 'Path': '/dl/Groq.mkv', 'Clean': 'Groq', 'Parse': 'Groq', 'Media': 'movie'}]
+    dummy_items = [
+        {"File": "Groq.mkv", "Folder": "dl", "Path": "/dl/Groq.mkv", "Clean": "Groq", "Parse": "Groq", "Media": "movie"}
+    ]
 
     # 1. Missing Groq API key
     monkeypatch.setattr(api, "GROQ_API_KEY", None)
@@ -193,20 +200,26 @@ def test_call_groq_batch(monkeypatch):
     mock_resp = MagicMock()
     mock_resp.status_code = 200
     mock_resp.json.return_value = {
-        "choices": [{
-            "message": {
-                "content": json.dumps({
-                    "items": [{
-                        "file_id": 0,
-                        "title": "Groq Movie",
-                        "year": "2024",
-                        "original_language": "en",
-                        "missing_tags": ["hdr"],
-                        "confidence_score": 0.98
-                    }]
-                })
+        "choices": [
+            {
+                "message": {
+                    "content": json.dumps(
+                        {
+                            "items": [
+                                {
+                                    "file_id": 0,
+                                    "title": "Groq Movie",
+                                    "year": "2024",
+                                    "original_language": "en",
+                                    "missing_tags": ["hdr"],
+                                    "confidence_score": 0.98,
+                                }
+                            ]
+                        }
+                    )
+                }
             }
-        }]
+        ]
     }
 
     with patch("requests.post", return_value=mock_resp) as mock_post:
@@ -225,7 +238,9 @@ def test_call_groq_batch(monkeypatch):
 
 
 def test_call_openrouter_batch(monkeypatch):
-    dummy_items = [{'File': 'OR.mkv', 'Folder': 'dl', 'Path': '/dl/OR.mkv', 'Clean': 'OR', 'Parse': 'OR', 'Media': 'movie'}]
+    dummy_items = [
+        {"File": "OR.mkv", "Folder": "dl", "Path": "/dl/OR.mkv", "Clean": "OR", "Parse": "OR", "Media": "movie"}
+    ]
 
     # 1. Missing OpenRouter API key
     monkeypatch.setattr(api, "OPENROUTER_API_KEY", None)
@@ -238,20 +253,26 @@ def test_call_openrouter_batch(monkeypatch):
     mock_resp = MagicMock()
     mock_resp.status_code = 200
     mock_resp.json.return_value = {
-        "choices": [{
-            "message": {
-                "content": json.dumps({
-                    "items": [{
-                        "file_id": 0,
-                        "title": "OpenRouter Movie",
-                        "year": "2023",
-                        "original_language": "en",
-                        "missing_tags": [],
-                        "confidence_score": 0.88
-                    }]
-                })
+        "choices": [
+            {
+                "message": {
+                    "content": json.dumps(
+                        {
+                            "items": [
+                                {
+                                    "file_id": 0,
+                                    "title": "OpenRouter Movie",
+                                    "year": "2023",
+                                    "original_language": "en",
+                                    "missing_tags": [],
+                                    "confidence_score": 0.88,
+                                }
+                            ]
+                        }
+                    )
+                }
             }
-        }]
+        ]
     }
 
     with patch("requests.post", return_value=mock_resp) as mock_post:
@@ -270,7 +291,9 @@ def test_call_openrouter_batch(monkeypatch):
 
 
 def test_call_cloudflare_batch(monkeypatch):
-    dummy_items = [{'File': 'CF.mkv', 'Folder': 'dl', 'Path': '/dl/CF.mkv', 'Clean': 'CF', 'Parse': 'CF', 'Media': 'movie'}]
+    dummy_items = [
+        {"File": "CF.mkv", "Folder": "dl", "Path": "/dl/CF.mkv", "Clean": "CF", "Parse": "CF", "Media": "movie"}
+    ]
 
     # 1. Missing Token or Account ID
     monkeypatch.setattr(api, "CLOUDFLARE_API_TOKEN", None)
@@ -287,18 +310,22 @@ def test_call_cloudflare_batch(monkeypatch):
     mock_resp.status_code = 200
     mock_resp.json.return_value = {
         "result": {
-            "response": json.dumps({
-                "items": [{
-                    "file_id": 0,
-                    "title": "Cloudflare Movie",
-                    "year": "2024",
-                    "original_language": "en",
-                    "missing_tags": [],
-                    "confidence_score": 0.92
-                }]
-            })
+            "response": json.dumps(
+                {
+                    "items": [
+                        {
+                            "file_id": 0,
+                            "title": "Cloudflare Movie",
+                            "year": "2024",
+                            "original_language": "en",
+                            "missing_tags": [],
+                            "confidence_score": 0.92,
+                        }
+                    ]
+                }
+            )
         },
-        "success": True
+        "success": True,
     }
 
     with patch("requests.post", return_value=mock_resp) as mock_post:
@@ -310,18 +337,24 @@ def test_call_cloudflare_batch(monkeypatch):
     # 3. Successful response wrapped in markdown ```json
     mock_resp.json.return_value = {
         "result": {
-            "response": "```json\n" + json.dumps({
-                "items": [{
-                    "file_id": 0,
-                    "title": "Markdown CF Movie",
-                    "year": "2024",
-                    "original_language": "en",
-                    "missing_tags": [],
-                    "confidence_score": 0.90
-                }]
-            }) + "\n```"
+            "response": "```json\n"
+            + json.dumps(
+                {
+                    "items": [
+                        {
+                            "file_id": 0,
+                            "title": "Markdown CF Movie",
+                            "year": "2024",
+                            "original_language": "en",
+                            "missing_tags": [],
+                            "confidence_score": 0.90,
+                        }
+                    ]
+                }
+            )
+            + "\n```"
         },
-        "success": True
+        "success": True,
     }
     with patch("requests.post", return_value=mock_resp):
         res = api.call_cloudflare_batch(dummy_items)
@@ -330,20 +363,52 @@ def test_call_cloudflare_batch(monkeypatch):
     # 4. Result dict directly containing json
     mock_resp.json.return_value = {
         "result": {
-            "items": [{
-                "file_id": 0,
-                "title": "Dict CF Movie",
-                "year": "2024",
-                "original_language": "en",
-                "missing_tags": [],
-                "confidence_score": 0.90
-            }]
+            "items": [
+                {
+                    "file_id": 0,
+                    "title": "Dict CF Movie",
+                    "year": "2024",
+                    "original_language": "en",
+                    "missing_tags": [],
+                    "confidence_score": 0.90,
+                }
+            ]
         },
-        "success": True
+        "success": True,
     }
     with patch("requests.post", return_value=mock_resp):
         res = api.call_cloudflare_batch(dummy_items)
         assert res.items[0].title == "Dict CF Movie"
+
+    # 4b. Result dict containing choices array (OpenAI-compatible format)
+    mock_resp.json.return_value = {
+        "result": {
+            "choices": [
+                {
+                    "message": {
+                        "content": json.dumps(
+                            {
+                                "items": [
+                                    {
+                                        "file_id": 0,
+                                        "title": "Choices CF Movie",
+                                        "year": "2024",
+                                        "original_language": "en",
+                                        "missing_tags": [],
+                                        "confidence_score": 0.95,
+                                    }
+                                ]
+                            }
+                        )
+                    }
+                }
+            ]
+        },
+        "success": True,
+    }
+    with patch("requests.post", return_value=mock_resp):
+        res = api.call_cloudflare_batch(dummy_items)
+        assert res.items[0].title == "Choices CF Movie"
 
     # 5. HTTP error
     mock_resp.status_code = 400
@@ -356,6 +421,7 @@ def test_call_cloudflare_batch(monkeypatch):
 # ==============================================================================
 # 3. Failover and Batch Orchestrator Tests
 # ==============================================================================
+
 
 def test_get_available_and_prioritized_providers(monkeypatch):
     monkeypatch.setattr(api, "GEMINI_API_KEY", "g_key")
@@ -382,8 +448,22 @@ def test_get_available_and_prioritized_providers(monkeypatch):
 
 def test_execute_ai_batch_with_failover_scenarios(monkeypatch):
     dummy_items = [
-        {'File': 'Movie1.mkv', 'Folder': 'dl', 'Path': '/dl/Movie1.mkv', 'Clean': 'Movie1', 'Parse': 'Movie1', 'Media': 'movie'},
-        {'File': 'Movie2.mkv', 'Folder': 'dl', 'Path': '/dl/Movie2.mkv', 'Clean': 'Movie2', 'Parse': 'Movie2', 'Media': 'movie'}
+        {
+            "File": "Movie1.mkv",
+            "Folder": "dl",
+            "Path": "/dl/Movie1.mkv",
+            "Clean": "Movie1",
+            "Parse": "Movie1",
+            "Media": "movie",
+        },
+        {
+            "File": "Movie2.mkv",
+            "Folder": "dl",
+            "Path": "/dl/Movie2.mkv",
+            "Clean": "Movie2",
+            "Parse": "Movie2",
+            "Media": "movie",
+        },
     ]
 
     # 1. Empty list
@@ -396,17 +476,34 @@ def test_execute_ai_batch_with_failover_scenarios(monkeypatch):
         assert res[0][0] is False
 
     # 3. Single provider succeeds with confidence and missing tags learning
-    mock_batch_resp = BatchMediaResponse(items=[
-        ParsedMediaItem(file_id=0, title="Movie One", year="2021", original_language="en", missing_tags=["tagA"], confidence_score=0.95),
-        ParsedMediaItem(file_id=1, title="Movie Two", year="2022", original_language="fr", missing_tags=["tagB"], confidence_score=0.85),
-    ])
+    mock_batch_resp = BatchMediaResponse(
+        items=[
+            ParsedMediaItem(
+                file_id=0,
+                title="Movie One",
+                year="2021",
+                original_language="en",
+                missing_tags=["tagA"],
+                confidence_score=0.95,
+            ),
+            ParsedMediaItem(
+                file_id=1,
+                title="Movie Two",
+                year="2022",
+                original_language="fr",
+                missing_tags=["tagB"],
+                confidence_score=0.85,
+            ),
+        ]
+    )
 
-    with patch("src.api.get_prioritized_providers", return_value=["groq"]), \
-         patch("src.api.call_groq_batch", return_value=mock_batch_resp) as mock_groq, \
-         patch("src.ui.LEARN_ENABLED", True), \
-         patch("src.api.tag_manager.add_gemini_tags", return_value=["tagA"]) as mock_tags, \
-         patch("src.mail.send_tag_learned_email") as mock_mail:
-
+    with (
+        patch("src.api.get_prioritized_providers", return_value=["groq"]),
+        patch("src.api.call_groq_batch", return_value=mock_batch_resp) as mock_groq,
+        patch("src.ui.LEARN_ENABLED", True),
+        patch("src.api.tag_manager.add_gemini_tags", return_value=["tagA"]) as mock_tags,
+        patch("src.mail.send_tag_learned_email") as mock_mail,
+    ):
         results = api.execute_ai_batch_with_failover(dummy_items)
         assert len(results) == 2
         assert results[0] == [True, "Movie One", "2021", "en", ["tagA"]]
@@ -416,11 +513,12 @@ def test_execute_ai_batch_with_failover_scenarios(monkeypatch):
         assert mock_mail.call_count == 2
 
     # 4. Failover scenario: Provider 1 (Gemini) hits 429 quota error -> Provider 2 (Groq) takes over!
-    with patch("src.api.get_prioritized_providers", return_value=["gemini", "groq"]), \
-         patch("src.api.call_gemini_batch", side_effect=RuntimeError("429 Resource exhausted")) as mock_gem, \
-         patch("src.api.call_groq_batch", return_value=mock_batch_resp) as mock_gr, \
-         patch("src.ui.LEARN_ENABLED", False):
-
+    with (
+        patch("src.api.get_prioritized_providers", return_value=["gemini", "groq"]),
+        patch("src.api.call_gemini_batch", side_effect=RuntimeError("429 Resource exhausted")) as mock_gem,
+        patch("src.api.call_groq_batch", return_value=mock_batch_resp) as mock_gr,
+        patch("src.ui.LEARN_ENABLED", False),
+    ):
         results = api.execute_ai_batch_with_failover(dummy_items)
         assert len(results) == 2
         assert results[0][0] is True
@@ -428,37 +526,55 @@ def test_execute_ai_batch_with_failover_scenarios(monkeypatch):
         mock_gr.assert_called_once()
 
     # 5. All providers fail
-    with patch("src.api.get_prioritized_providers", return_value=["gemini", "groq"]), \
-         patch("src.api.call_gemini_batch", side_effect=RuntimeError("Gemini down")), \
-         patch("src.api.call_groq_batch", side_effect=RuntimeError("Groq down")):
-
+    with (
+        patch("src.api.get_prioritized_providers", return_value=["gemini", "groq"]),
+        patch("src.api.call_gemini_batch", side_effect=RuntimeError("Gemini down")),
+        patch("src.api.call_groq_batch", side_effect=RuntimeError("Groq down")),
+    ):
         results = api.execute_ai_batch_with_failover(dummy_items)
         assert len(results) == 2
         assert results[0][0] is False
         assert results[1][0] is False
 
     # 6. Low confidence item is rejected
-    low_conf_resp = BatchMediaResponse(items=[
-        ParsedMediaItem(file_id=0, title="Uncertain Movie", year="2020", original_language="en", missing_tags=[], confidence_score=0.40),
-    ])
-    with patch("src.api.get_prioritized_providers", return_value=["groq"]), \
-         patch("src.api.call_groq_batch", return_value=low_conf_resp):
-
+    low_conf_resp = BatchMediaResponse(
+        items=[
+            ParsedMediaItem(
+                file_id=0,
+                title="Uncertain Movie",
+                year="2020",
+                original_language="en",
+                missing_tags=[],
+                confidence_score=0.40,
+            ),
+        ]
+    )
+    with (
+        patch("src.api.get_prioritized_providers", return_value=["groq"]),
+        patch("src.api.call_groq_batch", return_value=low_conf_resp),
+    ):
         results = api.execute_ai_batch_with_failover([dummy_items[0]])
         assert results[0][0] is False
 
 
 def test_unit_groq_limit_bypassed_to_openrouter():
     """Unit test: When Groq returns a rate limit / 429 quota error, orchestrator bypasses Groq and uses OpenRouter."""
-    dummy_items = [{'File': 'Film.mkv', 'Folder': 'dl', 'Path': '/dl/Film.mkv', 'Clean': 'Film', 'Parse': 'Film', 'Media': 'movie'}]
-    expected_resp = BatchMediaResponse(items=[
-        ParsedMediaItem(file_id=0, title="Film OpenRouter", year="2022", original_language="en", confidence_score=0.95)
-    ])
+    dummy_items = [
+        {"File": "Film.mkv", "Folder": "dl", "Path": "/dl/Film.mkv", "Clean": "Film", "Parse": "Film", "Media": "movie"}
+    ]
+    expected_resp = BatchMediaResponse(
+        items=[
+            ParsedMediaItem(
+                file_id=0, title="Film OpenRouter", year="2022", original_language="en", confidence_score=0.95
+            )
+        ]
+    )
 
-    with patch("src.api.get_prioritized_providers", return_value=["groq", "openrouter"]), \
-         patch("src.api.call_groq_batch", side_effect=RuntimeError("Groq 429: Too many requests. Rate limit exceeded.")), \
-         patch("src.api.call_openrouter_batch", return_value=expected_resp) as mock_or:
-
+    with (
+        patch("src.api.get_prioritized_providers", return_value=["groq", "openrouter"]),
+        patch("src.api.call_groq_batch", side_effect=RuntimeError("Groq 429: Too many requests. Rate limit exceeded.")),
+        patch("src.api.call_openrouter_batch", return_value=expected_resp) as mock_or,
+    ):
         results = api.execute_ai_batch_with_failover(dummy_items)
         assert len(results) == 1
         assert results[0] == [True, "Film OpenRouter", "2022", "en", []]
@@ -467,15 +583,25 @@ def test_unit_groq_limit_bypassed_to_openrouter():
 
 def test_unit_openrouter_limit_bypassed_to_cloudflare():
     """Unit test: When OpenRouter returns quota exhausted error, orchestrator bypasses OpenRouter and uses Cloudflare."""
-    dummy_items = [{'File': 'Film.mkv', 'Folder': 'dl', 'Path': '/dl/Film.mkv', 'Clean': 'Film', 'Parse': 'Film', 'Media': 'movie'}]
-    expected_resp = BatchMediaResponse(items=[
-        ParsedMediaItem(file_id=0, title="Film Cloudflare", year="2023", original_language="fr", confidence_score=0.91)
-    ])
+    dummy_items = [
+        {"File": "Film.mkv", "Folder": "dl", "Path": "/dl/Film.mkv", "Clean": "Film", "Parse": "Film", "Media": "movie"}
+    ]
+    expected_resp = BatchMediaResponse(
+        items=[
+            ParsedMediaItem(
+                file_id=0, title="Film Cloudflare", year="2023", original_language="fr", confidence_score=0.91
+            )
+        ]
+    )
 
-    with patch("src.api.get_prioritized_providers", return_value=["openrouter", "cloudflare"]), \
-         patch("src.api.call_openrouter_batch", side_effect=RuntimeError("OpenRouter error (status 429): Insufficient credits / rate limit")), \
-         patch("src.api.call_cloudflare_batch", return_value=expected_resp) as mock_cf:
-
+    with (
+        patch("src.api.get_prioritized_providers", return_value=["openrouter", "cloudflare"]),
+        patch(
+            "src.api.call_openrouter_batch",
+            side_effect=RuntimeError("OpenRouter error (status 429): Insufficient credits / rate limit"),
+        ),
+        patch("src.api.call_cloudflare_batch", return_value=expected_resp) as mock_cf,
+    ):
         results = api.execute_ai_batch_with_failover(dummy_items)
         assert len(results) == 1
         assert results[0] == [True, "Film Cloudflare", "2023", "fr", []]
@@ -484,15 +610,23 @@ def test_unit_openrouter_limit_bypassed_to_cloudflare():
 
 def test_unit_cloudflare_limit_bypassed_to_gemini():
     """Unit test: When Cloudflare returns daily neuron limit error, orchestrator bypasses Cloudflare and uses Gemini."""
-    dummy_items = [{'File': 'Film.mkv', 'Folder': 'dl', 'Path': '/dl/Film.mkv', 'Clean': 'Film', 'Parse': 'Film', 'Media': 'movie'}]
-    expected_resp = BatchMediaResponse(items=[
-        ParsedMediaItem(file_id=0, title="Film Gemini", year="2024", original_language="en", confidence_score=0.93)
-    ])
+    dummy_items = [
+        {"File": "Film.mkv", "Folder": "dl", "Path": "/dl/Film.mkv", "Clean": "Film", "Parse": "Film", "Media": "movie"}
+    ]
+    expected_resp = BatchMediaResponse(
+        items=[
+            ParsedMediaItem(file_id=0, title="Film Gemini", year="2024", original_language="en", confidence_score=0.93)
+        ]
+    )
 
-    with patch("src.api.get_prioritized_providers", return_value=["cloudflare", "gemini"]), \
-         patch("src.api.call_cloudflare_batch", side_effect=RuntimeError("Cloudflare Workers AI error (status 429): daily neuron quota exhausted")), \
-         patch("src.api.call_gemini_batch", return_value=expected_resp) as mock_gem:
-
+    with (
+        patch("src.api.get_prioritized_providers", return_value=["cloudflare", "gemini"]),
+        patch(
+            "src.api.call_cloudflare_batch",
+            side_effect=RuntimeError("Cloudflare Workers AI error (status 429): daily neuron quota exhausted"),
+        ),
+        patch("src.api.call_gemini_batch", return_value=expected_resp) as mock_gem,
+    ):
         results = api.execute_ai_batch_with_failover(dummy_items)
         assert len(results) == 1
         assert results[0] == [True, "Film Gemini", "2024", "en", []]
@@ -501,15 +635,20 @@ def test_unit_cloudflare_limit_bypassed_to_gemini():
 
 def test_unit_gemini_limit_bypassed_to_groq():
     """Unit test: When Gemini returns ResourceExhausted 429 error, orchestrator bypasses Gemini and uses Groq."""
-    dummy_items = [{'File': 'Film.mkv', 'Folder': 'dl', 'Path': '/dl/Film.mkv', 'Clean': 'Film', 'Parse': 'Film', 'Media': 'movie'}]
-    expected_resp = BatchMediaResponse(items=[
-        ParsedMediaItem(file_id=0, title="Film Groq", year="2021", original_language="en", confidence_score=0.96)
-    ])
+    dummy_items = [
+        {"File": "Film.mkv", "Folder": "dl", "Path": "/dl/Film.mkv", "Clean": "Film", "Parse": "Film", "Media": "movie"}
+    ]
+    expected_resp = BatchMediaResponse(
+        items=[
+            ParsedMediaItem(file_id=0, title="Film Groq", year="2021", original_language="en", confidence_score=0.96)
+        ]
+    )
 
-    with patch("src.api.get_prioritized_providers", return_value=["gemini", "groq"]), \
-         patch("src.api.call_gemini_batch", side_effect=RuntimeError("429 RESOURCE_EXHAUSTED: quota exceeded")), \
-         patch("src.api.call_groq_batch", return_value=expected_resp) as mock_gr:
-
+    with (
+        patch("src.api.get_prioritized_providers", return_value=["gemini", "groq"]),
+        patch("src.api.call_gemini_batch", side_effect=RuntimeError("429 RESOURCE_EXHAUSTED: quota exceeded")),
+        patch("src.api.call_groq_batch", return_value=expected_resp) as mock_gr,
+    ):
         results = api.execute_ai_batch_with_failover(dummy_items)
         assert len(results) == 1
         assert results[0] == [True, "Film Groq", "2021", "en", []]
@@ -517,21 +656,34 @@ def test_unit_gemini_limit_bypassed_to_groq():
 
 
 def test_gemini_api_call_with_alternative_provider(monkeypatch):
-    dummy_info = {'File': 'Test.mkv', 'Folder': 'dl', 'Path': '/dl/Test.mkv', 'Clean': 'Test', 'Parse': 'Test', 'Media': 'movie'}
+    dummy_info = {
+        "File": "Test.mkv",
+        "Folder": "dl",
+        "Path": "/dl/Test.mkv",
+        "Clean": "Test",
+        "Parse": "Test",
+        "Media": "movie",
+    }
 
     # Configure Groq as provider, Gemini key None
     monkeypatch.setattr(api, "GEMINI_API_KEY", None)
     monkeypatch.setattr(config, "AI_PROVIDER", "groq")
 
-    with patch("src.api.get_available_providers", return_value=["groq"]), \
-         patch("src.api.execute_ai_batch_with_failover", return_value=[[True, "Groq Single", "2024", "en", []]]) as mock_exec:
+    with (
+        patch("src.api.get_available_providers", return_value=["groq"]),
+        patch(
+            "src.api.execute_ai_batch_with_failover", return_value=[[True, "Groq Single", "2024", "en", []]]
+        ) as mock_exec,
+    ):
         res = api.gemini_api_call(dummy_info)
         assert res == [True, "Groq Single", "2024", "en", []]
         mock_exec.assert_called_once_with([dummy_info])
 
     # Empty result from fallback
-    with patch("src.api.get_available_providers", return_value=["groq"]), \
-         patch("src.api.execute_ai_batch_with_failover", return_value=[]):
+    with (
+        patch("src.api.get_available_providers", return_value=["groq"]),
+        patch("src.api.execute_ai_batch_with_failover", return_value=[]),
+    ):
         res = api.gemini_api_call(dummy_info)
         assert res == [False, None, None, None, None]
 
@@ -539,6 +691,7 @@ def test_gemini_api_call_with_alternative_provider(monkeypatch):
 # ==============================================================================
 # 4. ConfigManager Validation and Property Tests
 # ==============================================================================
+
 
 def test_config_cloud_ai_properties(tmp_path):
     ini_file = tmp_path / "cloud_config.ini"
@@ -610,11 +763,12 @@ def test_config_cloud_ai_properties(tmp_path):
 # 5. UI and CLI Integration Tests
 # ==============================================================================
 
+
 def test_ui_provider_flag_and_validation(monkeypatch):
     import sys
 
     # 1. Flag --provider sets config.AI_PROVIDER
-    monkeypatch.setattr(sys, "argv", ["main.py", "--provider", "groq", "-i"])
+    monkeypatch.setattr(sys, "argv", ["main.py", "--provider", "groq", "-a"])
     monkeypatch.setattr(ui, "GEMINI_API_KEY", None)
     with patch.object(ConfigManager, "GROQ_API_KEY", new_callable=PropertyMock, return_value="gsk_valid"):
         args = ui.parse_arguments()
@@ -622,9 +776,11 @@ def test_ui_provider_flag_and_validation(monkeypatch):
         assert config.AI_PROVIDER == "groq"
 
     # 2. Flag --provider requested but credentials not configured
-    monkeypatch.setattr(sys, "argv", ["main.py", "--provider", "cloudflare", "-i"])
-    with patch.object(ConfigManager, "CLOUDFLARE_API_TOKEN", new_callable=PropertyMock, return_value=None), \
-         patch.object(ConfigManager, "GROQ_API_KEY", new_callable=PropertyMock, return_value="gsk_valid"):
+    monkeypatch.setattr(sys, "argv", ["main.py", "--provider", "cloudflare", "-a"])
+    with (
+        patch.object(ConfigManager, "CLOUDFLARE_API_TOKEN", new_callable=PropertyMock, return_value=None),
+        patch.object(ConfigManager, "GROQ_API_KEY", new_callable=PropertyMock, return_value="gsk_valid"),
+    ):
         with pytest.raises(SystemExit):
             ui.parse_arguments()
 
@@ -632,6 +788,7 @@ def test_ui_provider_flag_and_validation(monkeypatch):
 # ==============================================================================
 # 6. End-to-End Batching and Probability Scorer in utils.py
 # ==============================================================================
+
 
 def test_get_corrected_media_filenames_ai_batching(monkeypatch):
     monkeypatch.setattr(ui, "AI_FALLBACK_ENABLED", True)
@@ -641,30 +798,32 @@ def test_get_corrected_media_filenames_ai_batching(monkeypatch):
     # File 1: High confidence TMDB match -> No AI needed
     # File 2: Movie, low TMDB confidence -> AI fallback needed
     # File 3: TV show, low TMDB confidence -> AI fallback needed
-    messy_df = pd.DataFrame([
-        {
-            'File': 'HighConf.2020.mkv',
-            'Path': '/dl/HighConf.2020.mkv',
-            'Media': 'movie',
-            'Parse': ['High Conf', '2020', None, None],
-            'Clean': ['High Conf', '2020', None, None]
-        },
-        {
-            'File': 'Obfuscated.Movie.mkv',
-            'Path': '/dl/Obfuscated.Movie.mkv',
-            'Media': 'movie',
-            'Parse': ['Obfuscated', None, None, None],
-            'Clean': ['Obfuscated', None, None, None]
-        },
-        {
-            'File': 'Obfuscated.Series.S01E01.mkv',
-            'Path': '/dl/Obfuscated.Series.S01E01.mkv',
-            'Media': 'tv',
-            'Parse': ['Obfuscated Series', None, 1, 1, None, None],
-            'Clean': ['Obfuscated Series', None, None, None]
-        }
-    ])
-    clean_df = pd.DataFrame(columns=['Original', 'Corrected', 'Path', 'Media', 'Season', 'Episode'])
+    messy_df = pd.DataFrame(
+        [
+            {
+                "File": "HighConf.2020.mkv",
+                "Path": "/dl/HighConf.2020.mkv",
+                "Media": "movie",
+                "Parse": ["High Conf", "2020", None, None],
+                "Clean": ["High Conf", "2020", None, None],
+            },
+            {
+                "File": "Obfuscated.Movie.mkv",
+                "Path": "/dl/Obfuscated.Movie.mkv",
+                "Media": "movie",
+                "Parse": ["Obfuscated", None, None, None],
+                "Clean": ["Obfuscated", None, None, None],
+            },
+            {
+                "File": "Obfuscated.Series.S01E01.mkv",
+                "Path": "/dl/Obfuscated.Series.S01E01.mkv",
+                "Media": "tv",
+                "Parse": ["Obfuscated Series", None, 1, 1, None, None],
+                "Clean": ["Obfuscated Series", None, None, None],
+            },
+        ]
+    )
+    clean_df = pd.DataFrame(columns=["Original", "Corrected", "Path", "Media", "Season", "Episode"])
 
     def fake_api_call(name, year, lang, media_type):
         if name == "High Conf":
@@ -674,42 +833,48 @@ def test_get_corrected_media_filenames_ai_batching(monkeypatch):
             return [True, "Unrelated Name", "2000", "en"]
         return [False, None, None, None]
 
-    ai_batch_returns = [
-        [True, "Cleaned AI Movie", "2022", "en", []],
-        [True, "Cleaned AI Show", None, "en", []]
-    ]
+    ai_batch_returns = [[True, "Cleaned AI Movie", "2022", "en", []], [True, "Cleaned AI Show", None, "en", []]]
 
-    with patch("src.api.api_call", side_effect=fake_api_call), \
-         patch("src.api.execute_ai_batch_with_failover", return_value=ai_batch_returns) as mock_batch_ai:
-
+    with (
+        patch("src.api.api_call", side_effect=fake_api_call),
+        patch("src.api.execute_ai_batch_with_failover", return_value=ai_batch_returns) as mock_batch_ai,
+    ):
         result_df = utils.get_corrected_media_filenames(messy_df, clean_df)
         assert len(result_df) == 3
         # Ensure batch AI was called exactly ONCE for the two obfuscated files
         mock_batch_ai.assert_called_once()
         assert len(mock_batch_ai.call_args[0][0]) == 2
 
-        corrected_names = result_df['Corrected'].tolist()
+        corrected_names = result_df["Corrected"].tolist()
         assert "High Conf (2020)" in corrected_names
         assert "Cleaned AI Movie (2022)" in corrected_names
         assert "Cleaned AI Show - S01E01" in corrected_names
 
 
 def test_failover_through_openrouter_and_cloudflare():
-    dummy_items = [{'File': 'Test.mkv', 'Folder': 'dl', 'Path': '/dl/Test.mkv', 'Clean': 'Test', 'Parse': 'Test', 'Media': 'movie'}]
-    mock_resp = BatchMediaResponse(items=[
-        ParsedMediaItem(file_id=999, title="CF Title", year="2024", original_language="en", confidence_score=0.99)
-    ])
+    dummy_items = [
+        {"File": "Test.mkv", "Folder": "dl", "Path": "/dl/Test.mkv", "Clean": "Test", "Parse": "Test", "Media": "movie"}
+    ]
+    mock_resp = BatchMediaResponse(
+        items=[
+            ParsedMediaItem(file_id=999, title="CF Title", year="2024", original_language="en", confidence_score=0.99)
+        ]
+    )
 
     # 1. OpenRouter provider in execute_ai_batch_with_failover
-    with patch("src.api.get_prioritized_providers", return_value=["openrouter"]), \
-         patch("src.api.call_openrouter_batch", return_value=mock_resp) as mock_or:
+    with (
+        patch("src.api.get_prioritized_providers", return_value=["openrouter"]),
+        patch("src.api.call_openrouter_batch", return_value=mock_resp) as mock_or,
+    ):
         res = api.execute_ai_batch_with_failover(dummy_items)
         assert res[0][1] == "CF Title"
         mock_or.assert_called_once()
 
     # 2. Cloudflare provider in execute_ai_batch_with_failover, also testing sequential indexing fallback (file_id 999 != 0)
-    with patch("src.api.get_prioritized_providers", return_value=["cloudflare"]), \
-         patch("src.api.call_cloudflare_batch", return_value=mock_resp) as mock_cf:
+    with (
+        patch("src.api.get_prioritized_providers", return_value=["cloudflare"]),
+        patch("src.api.call_cloudflare_batch", return_value=mock_resp) as mock_cf,
+    ):
         res = api.execute_ai_batch_with_failover(dummy_items)
         assert res[0][1] == "CF Title"
         mock_cf.assert_called_once()
@@ -717,23 +882,28 @@ def test_failover_through_openrouter_and_cloudflare():
 
 def test_ui_openrouter_and_cloudflare_keys(monkeypatch):
     import sys
+
     monkeypatch.setattr(ui, "GEMINI_API_KEY", None)
 
-    # 1. OpenRouter key allows -i without Gemini
-    monkeypatch.setattr(sys, "argv", ["main.py", "-i"])
-    with patch.object(ConfigManager, "GEMINI_API_KEY", new_callable=PropertyMock, return_value=None), \
-         patch.object(ConfigManager, "GROQ_API_KEY", new_callable=PropertyMock, return_value=None), \
-         patch.object(ConfigManager, "OPENROUTER_API_KEY", new_callable=PropertyMock, return_value="sk-or-valid"):
-        args = ui.parse_arguments()
+    # 1. OpenRouter key allows -a without Gemini
+    monkeypatch.setattr(sys, "argv", ["main.py", "-a"])
+    with (
+        patch.object(ConfigManager, "GEMINI_API_KEY", new_callable=PropertyMock, return_value=None),
+        patch.object(ConfigManager, "GROQ_API_KEY", new_callable=PropertyMock, return_value=None),
+        patch.object(ConfigManager, "OPENROUTER_API_KEY", new_callable=PropertyMock, return_value="sk-or-valid"),
+    ):
+        ui.parse_arguments()
         assert ui.AI_FALLBACK_ENABLED is True
 
     # 2. Cloudflare credentials allow -i without Gemini
-    with patch.object(ConfigManager, "GEMINI_API_KEY", new_callable=PropertyMock, return_value=None), \
-         patch.object(ConfigManager, "GROQ_API_KEY", new_callable=PropertyMock, return_value=None), \
-         patch.object(ConfigManager, "OPENROUTER_API_KEY", new_callable=PropertyMock, return_value=None), \
-         patch.object(ConfigManager, "CLOUDFLARE_API_TOKEN", new_callable=PropertyMock, return_value="token"), \
-         patch.object(ConfigManager, "CLOUDFLARE_ACCOUNT_ID", new_callable=PropertyMock, return_value="acc_id"):
-        args = ui.parse_arguments()
+    with (
+        patch.object(ConfigManager, "GEMINI_API_KEY", new_callable=PropertyMock, return_value=None),
+        patch.object(ConfigManager, "GROQ_API_KEY", new_callable=PropertyMock, return_value=None),
+        patch.object(ConfigManager, "OPENROUTER_API_KEY", new_callable=PropertyMock, return_value=None),
+        patch.object(ConfigManager, "CLOUDFLARE_API_TOKEN", new_callable=PropertyMock, return_value="token"),
+        patch.object(ConfigManager, "CLOUDFLARE_ACCOUNT_ID", new_callable=PropertyMock, return_value="acc_id"),
+    ):
+        ui.parse_arguments()
         assert ui.AI_FALLBACK_ENABLED is True
 
 
@@ -743,69 +913,68 @@ def test_utils_low_confidence_fallbacks(monkeypatch):
     monkeypatch.setattr(utils, "QUALITY", False)
 
     fake_movie = {
-        'File': 'Uncertain.Movie.2020.mkv',
-        'Path': '/dl/Uncertain.Movie.2020.mkv',
-        'Media': 'movie',
-        'Parse': ['Uncertain Movie', '2020', None, None],
-        'Clean': ['Uncertain Clean', '2020', None, None]
+        "File": "Uncertain.Movie.2020.mkv",
+        "Path": "/dl/Uncertain.Movie.2020.mkv",
+        "Media": "movie",
+        "Parse": ["Uncertain Movie", "2020", None, None],
+        "Clean": ["Uncertain Clean", "2020", None, None],
     }
 
     # Movie: Parse is low confidence, Clean is high confidence
     with patch("src.api.api_call") as mock_api:
         mock_api.side_effect = [
-            [True, "Totally Unrelated", "2000", "en"], # Parse TMDB -> low confidence
-            [True, "Uncertain Clean", "2020", "en"]    # Clean TMDB -> high confidence
+            [True, "Totally Unrelated", "2000", "en"],  # Parse TMDB -> low confidence
+            [True, "Uncertain Clean", "2020", "en"],  # Clean TMDB -> high confidence
         ]
         res = utils.correct_movie_filename(fake_movie)
         assert res == "Uncertain Clean (2020)"
 
     # Movie: Parse and Clean both low confidence, AI fails -> fallback to best initial match
-    with patch("src.api.api_call") as mock_api, \
-         patch("src.api.gemini_api_call", return_value=[False, None, None, None, []]):
+    with (
+        patch("src.api.api_call") as mock_api,
+        patch("src.api.gemini_api_call", return_value=[False, None, None, None, []]),
+    ):
         mock_api.side_effect = [
-            [True, "Initial Best Match", "2020", "en"], # Parse
-            [True, "Clean Mismatch", "1990", "en"]      # Clean -> low confidence
+            [True, "Initial Best Match", "2020", "en"],  # Parse
+            [True, "Clean Mismatch", "1990", "en"],  # Clean -> low confidence
         ]
         res = utils.correct_movie_filename(fake_movie)
         assert res == "Initial Best Match (2020)"
 
     fake_tv = {
-        'File': 'Uncertain.Show.S01E01.mkv',
-        'Path': '/dl/Uncertain.Show.S01E01.mkv',
-        'Media': 'tv',
-        'Parse': ['Uncertain Show', None, 1, 1, None, None],
-        'Clean': ['Uncertain Clean Show', None, None, None]
+        "File": "Uncertain.Show.S01E01.mkv",
+        "Path": "/dl/Uncertain.Show.S01E01.mkv",
+        "Media": "tv",
+        "Parse": ["Uncertain Show", None, 1, 1, None, None],
+        "Clean": ["Uncertain Clean Show", None, None, None],
     }
 
     # TV: Parse is low confidence, Clean is high confidence
     with patch("src.api.api_call") as mock_api:
         mock_api.side_effect = [
-            [True, "Random Show", None, "en"],      # Parse TMDB -> low confidence
-            [True, "Uncertain Clean Show", None, "en"] # Clean TMDB -> high confidence
+            [True, "Random Show", None, "en"],  # Parse TMDB -> low confidence
+            [True, "Uncertain Clean Show", None, "en"],  # Clean TMDB -> high confidence
         ]
         res, s, e = utils.correct_tv_show_filename(fake_tv)
         assert res == "Uncertain Clean Show - S01E01"
 
     # TV: Parse and Clean both low confidence, AI fails -> fallback to best initial match
-    with patch("src.api.api_call") as mock_api, \
-         patch("src.api.gemini_api_call", return_value=[False, None, None, None, []]):
+    with (
+        patch("src.api.api_call") as mock_api,
+        patch("src.api.gemini_api_call", return_value=[False, None, None, None, []]),
+    ):
         mock_api.side_effect = [
-            [True, "Initial TV Match", None, "en"], # Parse
-            [True, "Clean TV Mismatch", None, "en"] # Clean -> low confidence
+            [True, "Initial TV Match", None, "en"],  # Parse
+            [True, "Clean TV Mismatch", None, "en"],  # Clean -> low confidence
         ]
         res, s, e = utils.correct_tv_show_filename(fake_tv)
         assert res == "Initial TV Match - S01E01"
 
     # get_corrected_media_filenames with unknown media type
-    unknown_df = pd.DataFrame([{
-        'File': 'ignored.txt',
-        'Path': '/dl/ignored.txt',
-        'Media': 'unknown',
-        'Parse': None,
-        'Clean': None
-    }])
-    clean_df = pd.DataFrame(columns=['Original', 'Corrected', 'Path', 'Media', 'Season', 'Episode'])
-    with patch("src.ui.print_log") as mock_log:
+    unknown_df = pd.DataFrame(
+        [{"File": "ignored.txt", "Path": "/dl/ignored.txt", "Media": "unknown", "Parse": None, "Clean": None}]
+    )
+    clean_df = pd.DataFrame(columns=["Original", "Corrected", "Path", "Media", "Season", "Episode"])
+    with patch("src.ui.print_log"):
         res_df = utils.get_corrected_media_filenames(unknown_df, clean_df)
         assert res_df.empty
-

@@ -1,13 +1,11 @@
-import os
 import sys
 import json
 import shutil
 import pytest
-from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 import main
-from src import ui, files, utils, mail, api
+from src import ui, files, utils
 from src.config import ConfigManager
 from src.tags import TagManager
 
@@ -86,7 +84,7 @@ def test_integration_full_rename_and_move_pipeline(media_env, monkeypatch):
     monkeypatch.setattr("src.api.api_call", mock_tmdb)
     monkeypatch.setattr(sys, "argv", ["main.py", "-b"])
 
-    with patch("src.mail.send_media_success_email") as mock_mail:
+    with patch("src.mail.send_media_success_email"):
         exit_code = main.main()
         assert exit_code == 0
 
@@ -157,8 +155,8 @@ def test_integration_simulation_mode_dry_run(media_env, monkeypatch):
     assert len(list(movies.iterdir())) == 0
 
 
-def test_integration_autonomous_multi_cycle_daemon(media_env, monkeypatch):
-    """End-to-end integration test: Autonomous daemon processes files, ignores locked files, and stays alive."""
+def test_integration_daemon_multi_cycle(media_env, monkeypatch):
+    """End-to-end integration test: Background daemon processes files, ignores locked files, and stays alive."""
     downloads = media_env["downloads"]
     movies = media_env["movies"]
 
@@ -186,14 +184,17 @@ def test_integration_autonomous_multi_cycle_daemon(media_env, monkeypatch):
     ui.POLLING_INTERVAL = 1
     ui.BYPASS_ENABLED = True
     current_time = 0.0
+
     def mock_time():
         nonlocal current_time
         current_time += 100.0
         return current_time
-    monkeypatch.setattr("time.time", mock_time)
 
-    exit_code = main.run_autonomous_loop(args, max_cycles=2)
-    assert exit_code == 0
+    import threading
+
+    with patch.object(threading.Event, "wait", return_value=False):
+        exit_code = main.run_daemon_loop(args, max_cycles=2)
+        assert exit_code == 0
 
     # Inception should be processed and moved
     assert (movies / "Inception (2010).mkv").is_file()
@@ -228,13 +229,15 @@ def test_integration_3_tier_tags_and_gemini_learning(media_env, monkeypatch):
 
     mock_client = MagicMock()
     mock_response = MagicMock()
-    mock_response.text = json.dumps({
-        "success": 1,
-        "name": "Arrival",
-        "year": "2016",
-        "original_language": "en",
-        "missing_tags": ["CrypticGroup", "the"]  # "the" is a stopword to test guardrail
-    })
+    mock_response.text = json.dumps(
+        {
+            "success": 1,
+            "name": "Arrival",
+            "year": "2016",
+            "original_language": "en",
+            "missing_tags": ["CrypticGroup", "the"],  # "the" is a stopword to test guardrail
+        }
+    )
     mock_client.models.generate_content.return_value = mock_response
 
     monkeypatch.setattr("src.api.api_call", mock_tmdb)
@@ -282,20 +285,16 @@ def test_integration_gemini_learning_disabled(media_env, monkeypatch):
 
     mock_client = MagicMock()
     mock_response = MagicMock()
-    mock_response.text = json.dumps({
-        "success": 1,
-        "name": "Arrival",
-        "year": "2016",
-        "original_language": "en",
-        "missing_tags": ["UnknownGroup"]
-    })
+    mock_response.text = json.dumps(
+        {"success": 1, "name": "Arrival", "year": "2016", "original_language": "en", "missing_tags": ["UnknownGroup"]}
+    )
     mock_client.models.generate_content.return_value = mock_response
 
     monkeypatch.setattr("src.api.api_call", mock_tmdb)
     monkeypatch.setattr("google.genai.Client", lambda api_key: mock_client)
     monkeypatch.setattr("src.api.GEMINI_API_KEY", "dummy_key")
     monkeypatch.setattr("src.ui.GEMINI_API_KEY", "dummy_key")
-    monkeypatch.setattr(sys, "argv", ["main.py", "-i", "-b"])
+    monkeypatch.setattr(sys, "argv", ["main.py", "-a", "-b"])
 
     with patch("src.mail.send_email") as mock_email:
         exit_code = main.main()
@@ -329,13 +328,15 @@ def test_integration_simulation_with_learning(media_env, monkeypatch):
 
     mock_client = MagicMock()
     mock_response = MagicMock()
-    mock_response.text = json.dumps({
-        "success": 1,
-        "name": "Arrival",
-        "year": "2016",
-        "original_language": "en",
-        "missing_tags": ["SimLearnedGroup"]
-    })
+    mock_response.text = json.dumps(
+        {
+            "success": 1,
+            "name": "Arrival",
+            "year": "2016",
+            "original_language": "en",
+            "missing_tags": ["SimLearnedGroup"],
+        }
+    )
     mock_client.models.generate_content.return_value = mock_response
 
     monkeypatch.setattr("src.api.api_call", mock_tmdb)
@@ -378,13 +379,15 @@ def test_integration_rename_only_with_learning(media_env, monkeypatch):
 
     mock_client = MagicMock()
     mock_response = MagicMock()
-    mock_response.text = json.dumps({
-        "success": 1,
-        "name": "Arrival",
-        "year": "2016",
-        "original_language": "en",
-        "missing_tags": ["RenameOnlyGroup"]
-    })
+    mock_response.text = json.dumps(
+        {
+            "success": 1,
+            "name": "Arrival",
+            "year": "2016",
+            "original_language": "en",
+            "missing_tags": ["RenameOnlyGroup"],
+        }
+    )
     mock_client.models.generate_content.return_value = mock_response
 
     monkeypatch.setattr("src.api.api_call", mock_tmdb)
@@ -410,8 +413,8 @@ def test_integration_rename_only_with_learning(media_env, monkeypatch):
     assert "RenameOnlyGroup" in gemini_content["tags"]
 
 
-def test_integration_autonomous_with_learning(media_env, monkeypatch):
-    """Integration test: In autonomous mode with config.LEARN=True, tags are learned across cycles."""
+def test_integration_daemon_with_learning(media_env, monkeypatch):
+    """Integration test: In daemon mode with config.LEARN=True, tags are learned across cycles."""
     config_dir = media_env["config_dir"]
     downloads = media_env["downloads"]
     movies = media_env["movies"]
@@ -431,13 +434,9 @@ def test_integration_autonomous_with_learning(media_env, monkeypatch):
 
     mock_client = MagicMock()
     mock_response = MagicMock()
-    mock_response.text = json.dumps({
-        "success": 1,
-        "name": "Arrival",
-        "year": "2016",
-        "original_language": "en",
-        "missing_tags": ["AutoLearnGroup"]
-    })
+    mock_response.text = json.dumps(
+        {"success": 1, "name": "Arrival", "year": "2016", "original_language": "en", "missing_tags": ["AutoLearnGroup"]}
+    )
     mock_client.models.generate_content.return_value = mock_response
 
     monkeypatch.setattr("src.api.api_call", mock_tmdb)
@@ -457,14 +456,16 @@ def test_integration_autonomous_with_learning(media_env, monkeypatch):
     ui.AI_FALLBACK_ENABLED = True
 
     current_time = 0.0
+
     def mock_time():
         nonlocal current_time
         current_time += 100.0
         return current_time
+
     monkeypatch.setattr("time.time", mock_time)
 
     with patch("src.mail.send_tag_learned_email"):
-        exit_code = main.run_autonomous_loop(args, max_cycles=1)
+        exit_code = main.run_daemon_loop(args, max_cycles=1)
         assert exit_code == 0
 
     assert (movies / "Arrival (2016).mkv").is_file()
@@ -517,10 +518,7 @@ def test_integration_resolution_and_quality_tags(media_env, monkeypatch):
         return [True, "Dune Part Two", "2024", "movie"]
 
     real_which = shutil.which
-    monkeypatch.setattr(
-        "shutil.which",
-        lambda cmd: "/usr/bin/ffprobe" if "ffprobe" in cmd else real_which(cmd)
-    )
+    monkeypatch.setattr("shutil.which", lambda cmd: "/usr/bin/ffprobe" if "ffprobe" in cmd else real_which(cmd))
     monkeypatch.setattr("src.api.api_call", mock_tmdb)
     monkeypatch.setattr(sys, "argv", ["main.py", "-R", "-q", "-b"])
 
@@ -586,7 +584,7 @@ def test_integration_interactive_confirmation_rejected(media_env, monkeypatch):
 def test_integration_notify_success_flag(media_env, monkeypatch):
     """End-to-end integration test: --notify-success sends email upon successful file processing."""
     downloads = media_env["downloads"]
-    movies = media_env["movies"]
+    media_env["movies"]
 
     sample_movie = downloads / "Gladiator.2000.mkv"
     sample_movie.write_text("gladiator content", encoding="utf-8")
@@ -667,7 +665,7 @@ def test_integration_configure_subcommands_dispatch(monkeypatch):
         mock_wizard.assert_called_once_with(section="options", interactive_menu=False)
 
 
-def test_integration_autonomous_clean_file_with_tags_no_infinite_loop(media_env, monkeypatch):
+def test_integration_daemon_clean_file_with_tags_no_infinite_loop(media_env, monkeypatch):
     """End-to-end integration test: An already clean title missing tags is enriched, moved, and next cycle reports idle."""
     downloads = media_env["downloads"]
     movies = media_env["movies"]
@@ -687,15 +685,17 @@ def test_integration_autonomous_clean_file_with_tags_no_infinite_loop(media_env,
     args = MagicMock(path=str(downloads), only_rename=False, simulate=False)
 
     logs = []
+
     def mock_log(msg):
         logs.append(str(msg))
 
-    with patch("src.files.get_file_quality_resolution", return_value=("1080p", "BluRay")), \
-         patch("src.mail.send_media_success_email"), \
-         patch("src.ui.print_log", side_effect=mock_log):
-
+    with (
+        patch("src.files.get_file_quality_resolution", return_value=("1080p", "BluRay")),
+        patch("src.mail.send_media_success_email"),
+        patch("src.ui.print_log", side_effect=mock_log),
+    ):
         # Cycle 1: Discovers clean file missing tags, renames with tags, and moves to movies library
-        ret1 = main.process_media(args, autonomous=True, cycle=1)
+        ret1 = main.process_media(args, daemon=True, cycle=1)
         assert ret1 == 0
 
         dest_file = movies / "Inception (2010) [BluRay FullHD].mkv"
@@ -704,8 +704,6 @@ def test_integration_autonomous_clean_file_with_tags_no_infinite_loop(media_env,
         assert any("Successfully processed 1 file(s)" in l for l in logs)
 
         # Cycle 2: Downloads folder is now empty, next cycle reports 'No media to process' without looping
-        ret2 = main.process_media(args, autonomous=True, cycle=2)
+        ret2 = main.process_media(args, daemon=True, cycle=2)
         assert ret2 == 0
         assert any("Check 2 : No media to process" in l for l in logs)
-
-

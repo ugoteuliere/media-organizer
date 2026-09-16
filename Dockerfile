@@ -4,7 +4,7 @@ FROM python:3.11-slim-bookworm
 # Set container environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    RENAME_CONFIG_FILE=/config/config.ini \
+    DOCKER_CONTAINER=1 \
     PUID=1000 \
     PGID=1000
 
@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Set up working directory and default non-root user
 WORKDIR /app
-RUN groupadd -r -g 1000 renamer && useradd -r -u 1000 -g renamer -m -d /home/renamer renamer
+RUN groupadd -r -g 1000 organizer && useradd -r -u 1000 -g organizer -m -d /home/organizer organizer
 
 # Install Python dependencies
 COPY requirements.txt .
@@ -35,10 +35,13 @@ COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 # Set entrypoint permissions and create volume mount points
 RUN sed -i -e 's/\r$//' /usr/local/bin/docker-entrypoint.sh \
     && chmod +x /usr/local/bin/docker-entrypoint.sh \
-    && mkdir -p /config /data \
-    && chown -R renamer:renamer /config /data /app
+    && mkdir -p /config /app/log /data/Movies /data/TV_Shows /data/input \
+    && chown -R organizer:organizer /config /data /app /app/log
 
-VOLUME ["/config", "/data"]
+COPY docker_sample_config /config/config.ini
+COPY docker_sample_config /app/docker_sample_config
+
+RUN printf '#!/bin/sh\nexec python /app/main.py "$@"\n' > /usr/local/bin/media-organizer \
+    && chmod +x /usr/local/bin/media-organizer
 
 ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["--help"]

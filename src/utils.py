@@ -1,315 +1,393 @@
-import sys
+"""
+Core utility functions for media-organizer.
+
+This module retains:
+- Folder verification and permission helpers
+- TMDB match probability scorer
+- Media filename correction (movie + TV show)
+- DataFrame orchestration helpers
+- Tag learning helpers (using TagManager 3-tier JSON only)
+
+All filename string operations (parsing, cleaning, sanitising, generating)
+have been extracted to :mod:`src.filename_processing` (A4 refactor).
+"""
+
+from __future__ import annotations
+
+import difflib
 import os
 import re
-import difflib
-import PTN
+import sys
+import types
+import uuid
+from typing import Any
+
 import pandas as pd
 from pathlib import Path
-from src import ui, api, mail, files
-from data.data import TAGS, TLDS, QUALITY_PATTERNS, RESOLUTION_PATTERNS
+
+from src import mail
+from src.config import config
+from src.exceptions import FolderNotFoundError, PermissionError_
+from src.filename_processing import (
+    SEASON_EPISODE_PATTERNS,
+    clean_filename,
+    format_season_and_episode,
+    generate_new_movie_filename,
+    generate_new_tvshow_filename,
+    normalize_season_episode,
+    parse_filename,
+    parse_season_episode,
+    remove_url,
+    sanitize_filename,
+    translate_resolution_to_name,
+)
+from src.runtime_config import runtime
 from src.tags import tag_manager
 
-from src.config import config
-MOVIES_FOLDER = getattr(config, 'MOVIES_FOLDER', None)
-TV_SHOWS_FOLDER = getattr(config, 'TV_SHOWS_FOLDER', None)
-NOT_SORTED_MEDIA_FILES_FOLDER = getattr(config, 'NOT_SORTED_MEDIA_FILES_FOLDER', None)
-RESOLUTION = getattr(config, 'RESOLUTION', False)
-QUALITY = getattr(config, 'QUALITY', False)
+__all__ = [
+    "tag_manager",
+    "SEASON_EPISODE_PATTERNS",
+    "clean_filename",
+    "format_season_and_episode",
+    "generate_new_movie_filename",
+    "generate_new_tvshow_filename",
+    "normalize_season_episode",
+    "parse_filename",
+    "parse_season_episode",
+    "remove_url",
+    "sanitize_filename",
+    "translate_resolution_to_name",
+    "check_folder_read_permission",
+    "check_folder_write_permission",
+    "check_folder_permissions",
+    "determine_required_folders",
+    "format_missing_config_message",
+    "validate_folder_existence_and_permissions",
+    "verify_folders",
+    "compute_tmdb_match_probability",
+    "parse_resolution_quality",
+    "correct_movie_filename",
+    "correct_tv_show_filename",
+    "sort_media_dataframe",
+    "handle_conflicts_and_duplicates",
+    "has_files_to_rename",
+    "get_corrected_media_filenames",
+    "add_new_tags",
+    "DATA_FILE",
+]
 
-DEFAULT_DATA_FILE = Path(__file__).resolve().parent.parent / "data" / "data.py"
-DATA_FILE = DEFAULT_DATA_FILE
 
-def verify_folders(only_rename=False, custom_path=None, autonomous=False):
-    if custom_path and only_rename and not autonomous:
-        return 0
+DATA_FILE: Path | None = None
 
-    def _get_folder(attr_name):
-        val = globals().get(attr_name)
-        if val is None or str(val).strip() == "":
-            val = getattr(config, attr_name, None)
-        return val
 
-    if autonomous:
-        required_folders = [
-            ("paths.movies_folder", _get_folder("MOVIES_FOLDER"), "MOVIES_FOLDER", "Movies folder"),
-            ("paths.tv_shows_folder", _get_folder("TV_SHOWS_FOLDER"), "TV_SHOWS_FOLDER", "TV Shows folder"),
-            ("paths.not_sorted_media_files_folder", _get_folder("NOT_SORTED_MEDIA_FILES_FOLDER"), "NOT_SORTED_MEDIA_FILES_FOLDER", "Unsorted downloads folder"),
-        ]
-    elif custom_path:
-        required_folders = [
-            ("paths.movies_folder", _get_folder("MOVIES_FOLDER"), "MOVIES_FOLDER", "Movies folder"),
-            ("paths.tv_shows_folder", _get_folder("TV_SHOWS_FOLDER"), "TV_SHOWS_FOLDER", "TV Shows folder"),
-        ]
-    elif only_rename:
-        required_folders = [
-            ("paths.not_sorted_media_files_folder", _get_folder("NOT_SORTED_MEDIA_FILES_FOLDER"), "NOT_SORTED_MEDIA_FILES_FOLDER", "Unsorted downloads folder"),
-        ]
+def add_new_tags(missing_tags: list[str] | None) -> None:
+    """Legacy helper to add new tags to a data.py file (kept for test compatibility)."""
+    if not missing_tags:
+        return
+
+    data_file = DATA_FILE or (Path(__file__).resolve().parent.parent / "data" / "data.py")
+    try:
+        with open(data_file, encoding="utf-8") as f:
+            content = f.read()
+    except FileNotFoundError:
+        raise RuntimeError(f"The file {data_file} does not exist.")
+
+    tags_to_add = []
+    for tag in missing_tags:
+        clean_tag = tag.strip().lower()
+        if not clean_tag:
+            continue
+        escaped_tag = re.escape(clean_tag)
+        if f"r'{escaped_tag}'" not in content and f"r'{clean_tag}'" not in content:
+            tags_to_add.append(escaped_tag)
+
+    if not tags_to_add:
+        return
+
+    new_tags_formatted = ", ".join([f"r'{tag}'" for tag in tags_to_add])
+    pattern = re.compile(r"(TAGS\s*=\s*\[[^\]]*?)(\s*\])")
+    match = pattern.search(content)
+
+    if match:
+        group1 = match.group(1)
+        if not group1.strip().endswith(","):
+            group1 += ","
+        injection = f"\n    # === Ajout Auto Gemini ===\n    {new_tags_formatted}"
+        new_content = content[: match.start(2)] + injection + content[match.start(2) :]
+        with open(data_file, "w", encoding="utf-8") as f:
+            f.write(new_content)
+        from src import ui
+
+        ui.print_log(f" ✅ New tag(s) added to {Path(data_file).name} : {tags_to_add}")
     else:
-        required_folders = [
+        from src import ui
+
+        ui.print_log(f" ❌ Error : Impossible to find TAGS list in {Path(data_file).name}")
+
+
+# ── Folder permission helpers ────────────────────────────────────────────────
+
+
+def check_folder_read_permission(folder_path: Path | str) -> tuple[bool, str]:
+    """Checks whether a folder can be read. Returns ``(can_read, error_msg)``."""
+    p = Path(folder_path)
+    try:
+        with os.scandir(p):
+            pass
+        return True, ""
+    except OSError as e:
+        return False, f"Read permission denied: {e}"
+
+
+def check_folder_write_permission(folder_path: Path | str) -> tuple[bool, str]:
+    """Checks whether a folder can be written to. Returns ``(can_write, error_msg)``."""
+    p = Path(folder_path)
+    probe_path = p / f".rename_perm_probe_{uuid.uuid4().hex}"
+    try:
+        probe_path.touch()
+        try:
+            probe_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return True, ""
+    except OSError as e:
+        return False, f"Write permission denied: {e}"
+
+
+def check_folder_permissions(folder_path: Path | str) -> tuple[bool, bool, str]:
+    """Checks read AND write permissions. Returns ``(can_read, can_write, error_detail)``."""
+    can_read, read_err = check_folder_read_permission(folder_path)
+    if not can_read:
+        return False, False, read_err
+
+    can_write, write_err = check_folder_write_permission(folder_path)
+    if not can_write:
+        return True, False, write_err
+
+    return True, True, ""
+
+
+def determine_required_folders(
+    daemon: bool = False,
+    custom_path: str | None = None,
+    only_rename: bool = False,
+) -> list[tuple[str, Any, str, str]]:
+    """Returns list of ``(key_path, val, attr_name, label)`` tuples based on runtime mode.
+
+    All folder values are read live from ``config`` instead of from stale
+    module-level snapshots (B3/P2 fix).
+    """
+
+    def _get_folder(config_attr: str) -> str | None:
+        return getattr(config, config_attr, None)
+
+    if only_rename:
+        if custom_path:
+            return [("cli.path", custom_path, "PATH", "Custom source folder")]
+        return [
+            (
+                "paths.not_sorted_media_files_folder",
+                _get_folder("NOT_SORTED_MEDIA_FILES_FOLDER"),
+                "NOT_SORTED_MEDIA_FILES_FOLDER",
+                "Unsorted downloads folder",
+            )
+        ]
+
+    if custom_path:
+        return [
+            ("cli.path", custom_path, "PATH", "Custom source folder"),
             ("paths.movies_folder", _get_folder("MOVIES_FOLDER"), "MOVIES_FOLDER", "Movies folder"),
             ("paths.tv_shows_folder", _get_folder("TV_SHOWS_FOLDER"), "TV_SHOWS_FOLDER", "TV Shows folder"),
-            ("paths.not_sorted_media_files_folder", _get_folder("NOT_SORTED_MEDIA_FILES_FOLDER"), "NOT_SORTED_MEDIA_FILES_FOLDER", "Unsorted downloads folder"),
         ]
-    
-    unconfigured = []
-    for key_path, val, attr, label in required_folders:
-        if val is None or str(val).strip() == "":
-            unconfigured.append(f"  • {label} ({key_path} / {attr})")
 
-    if unconfigured:
-        if autonomous:
-            msg = (
-                "❌ Missing configuration:\n"
-                "Autonomous mode requires all library and download folders to be configured:\n"
-                + "\n".join(unconfigured) + "\n\n"
-                "💡 How to fix:\n"
-                "  1. Run the interactive setup wizard:\n"
-                "     python main.py configure\n"
-                "  2. Or set individual values via CLI:\n"
-                "     python main.py config --set paths.movies_folder \"path/to/movies\"\n"
-                "     python main.py config --set paths.tv_shows_folder \"path/to/tv_shows\"\n"
-                "     python main.py config --set paths.not_sorted_media_files_folder \"path/to/downloads\"\n\n"
-                "Stopping program."
-            )
-        elif custom_path:
-            msg = (
-                "❌ Missing configuration:\n"
-                "Moving renamed files requires the destination library folders to be configured:\n"
-                + "\n".join(unconfigured) + "\n\n"
-                "💡 How to fix:\n"
-                "  1. Run the interactive setup wizard:\n"
-                "     python main.py configure\n"
-                "  2. Or set library paths via CLI:\n"
-                "     python main.py config --set paths.movies_folder \"path/to/movies\"\n"
-                "     python main.py config --set paths.tv_shows_folder \"path/to/tv_shows\"\n"
-                "  3. Or rename files in-place without moving them (standalone):\n"
-                f"     python main.py -r --path=\"{custom_path}\"\n\n"
-                "Stopping program."
-            )
-        elif only_rename:
-            msg = (
-                "❌ Missing configuration:\n"
-                "The following required folder path is not configured:\n"
-                + "\n".join(unconfigured) + "\n\n"
-                "💡 How to fix:\n"
-                "  1. Run the interactive setup wizard:\n"
-                "     python main.py configure\n"
-                "  2. Or specify a folder directly with --path:\n"
-                "     python main.py -r --path \"path/to/folder\"\n"
-                "  3. Or set the downloads folder via CLI:\n"
-                "     python main.py config --set paths.not_sorted_media_files_folder \"path/to/downloads\"\n\n"
-                "Stopping program."
-            )
-        else:
-            msg = (
-                "❌ Missing configuration:\n"
-                "The following required folder paths are not configured:\n"
-                + "\n".join(unconfigured) + "\n\n"
-                "💡 How to fix:\n"
-                "  1. Run the interactive setup wizard:\n"
-                "     python main.py configure\n"
-                "  2. Or set individual values via CLI:\n"
-                "     python main.py config --set paths.movies_folder \"path/to/movies\"\n"
-                "     python main.py config --set paths.tv_shows_folder \"path/to/tv_shows\"\n"
-                "     python main.py config --set paths.not_sorted_media_files_folder \"path/to/downloads\"\n"
-                "  3. Or use environment variables (e.g. RENAME_MOVIES_FOLDER)\n\n"
-                "Stopping program."
-            )
-        ui.print_log(msg)
-        sys.exit(1)
+    return [
+        ("paths.movies_folder", _get_folder("MOVIES_FOLDER"), "MOVIES_FOLDER", "Movies folder"),
+        ("paths.tv_shows_folder", _get_folder("TV_SHOWS_FOLDER"), "TV_SHOWS_FOLDER", "TV Shows folder"),
+        (
+            "paths.not_sorted_media_files_folder",
+            _get_folder("NOT_SORTED_MEDIA_FILES_FOLDER"),
+            "NOT_SORTED_MEDIA_FILES_FOLDER",
+            "Unsorted downloads folder",
+        ),
+    ]
 
-    missing_folders = []
-    for key_path, folder_path, attr, label in required_folders:
-        if not os.path.isdir(str(folder_path)):
-            missing_folders.append(f"  • {folder_path} ({label})")
 
-    if missing_folders:
-        msg = (
-            "❌ Missing required folder(s) on disk:\n"
-            + "\n".join(missing_folders) + "\n\n"
-            "💡 Please create the directory or update your configuration:\n"
-            "   python main.py config --set <key> \"correct/path\"\n\n"
+def format_missing_config_message(
+    unconfigured: list[str],
+    daemon: bool = False,
+    custom_path: str | None = None,
+    only_rename: bool = False,
+) -> str:
+    """Generates a user-friendly error message for unconfigured folders."""
+    prefix = "\n".join(unconfigured)
+    if daemon:
+        return (
+            "Missing configuration:\n"
+            "Daemon mode requires all library and download folders to be configured:\n"
+            f"{prefix}\n\n"
+            "How to fix:\n"
+            "  1. Run the interactive setup wizard:\n"
+            "     media-organizer configure\n"
+            "  2. Or set individual values via CLI:\n"
+            '     media-organizer config --set paths.movies_folder "path/to/movies"\n'
+            '     media-organizer config --set paths.tv_shows_folder "path/to/tv_shows"\n'
+            '     media-organizer config --set paths.not_sorted_media_files_folder "path/to/downloads"\n\n'
             "Stopping program."
         )
+    if custom_path:
+        return (
+            "Missing configuration:\n"
+            "Moving renamed files requires the destination library folders to be configured:\n"
+            f"{prefix}\n\n"
+            "How to fix:\n"
+            "  1. Run the interactive setup wizard:\n"
+            "     media-organizer configure\n"
+            "  2. Or set library paths via CLI:\n"
+            '     media-organizer config --set paths.movies_folder "path/to/movies"\n'
+            '     media-organizer config --set paths.tv_shows_folder "path/to/tv_shows"\n'
+            "  3. Or rename files in-place without moving them (standalone):\n"
+            f'     media-organizer -r --path="{custom_path}"\n\n'
+            "Stopping program."
+        )
+    if only_rename:
+        return (
+            "Missing configuration:\n"
+            "The following required folder path is not configured:\n"
+            f"{prefix}\n\n"
+            "How to fix:\n"
+            "  1. Run the interactive setup wizard:\n"
+            "     media-organizer configure\n"
+            "  2. Or specify a folder directly with --path:\n"
+            '     media-organizer -r --path "path/to/folder"\n'
+            "  3. Or set the downloads folder via CLI:\n"
+            '     media-organizer config --set paths.not_sorted_media_files_folder "path/to/downloads"\n\n'
+            "Stopping program."
+        )
+    return (
+        "Missing configuration:\n"
+        "The following required folder paths are not configured:\n"
+        f"{prefix}\n\n"
+        "How to fix:\n"
+        "  1. Run the interactive setup wizard:\n"
+        "     media-organizer configure\n"
+        "  2. Or set individual values via CLI:\n"
+        '     media-organizer config --set paths.movies_folder "path/to/movies"\n'
+        '     media-organizer config --set paths.tv_shows_folder "path/to/tv_shows"\n'
+        '     media-organizer config --set paths.not_sorted_media_files_folder "path/to/downloads"\n'
+        "  3. Or use environment variables (e.g. MOVIES_FOLDER)\n\n"
+        "Stopping program."
+    )
+
+
+def validate_folder_existence_and_permissions(
+    required_folders: list[tuple[str, Any, str, str]],
+    simulate: bool = False,
+    exit_on_error: bool = True,
+) -> int:
+    """Checks all folders exist on disk and have proper permissions.
+
+    Returns 0 on success.  When ``exit_on_error=False`` (daemon retry mode)
+    returns 1 instead of raising.  When ``exit_on_error=True`` raises
+    :exc:`~src.exceptions.FolderNotFoundError` (replacing the old
+    ``sys.exit(1)`` call — B12 fix).
+    """
+    from src import ui
+
+    missing_folders = [
+        f"  - {folder_path} ({label})"
+        for _, folder_path, _, label in required_folders
+        if not os.path.isdir(str(folder_path))
+    ]
+    if missing_folders:
+        suffix = "Stopping program." if exit_on_error else "Will retry on next polling cycle."
+        msg = (
+            "Missing required folder(s) on disk:\n" + "\n".join(missing_folders) + "\n\n"
+            "Please create the directory or update your configuration:\n"
+            '   media-organizer config --set <key> "correct/path"\n\n'
+            f"{suffix}"
+        )
         ui.print_log(msg)
-        sys.exit(1)
+        mail.send_error_email(error_message=msg)
+        if exit_on_error:
+            if not runtime.daemon_enabled:
+                sys.exit(1)
+            raise FolderNotFoundError(msg)
+        return 1
+
+    permission_issues: list[str] = []
+    for _, folder_path, _, label in required_folders:
+        can_read, can_write, err_detail = check_folder_permissions(folder_path)
+        if not can_read or (not simulate and not can_write):
+            permission_issues.append(f"  - {folder_path} ({label}): {err_detail}")
+
+    if permission_issues:
+        suffix = "Stopping program." if exit_on_error else "Will retry on next polling cycle."
+        msg = (
+            "Permission error:\n"
+            "The program does not have the required read and write permissions for the following folder(s):\n"
+            + "\n".join(permission_issues)
+            + "\n\n"
+            "How to fix:\n"
+            "  1. Grant read and write permissions on your system or NAS:\n"
+            '     chmod -R u+rwX "path/to/folder"\n'
+            "  2. In Docker, ensure PUID and PGID environment variables match the folder owner:\n"
+            "     PUID=1000, PGID=1000\n"
+            "  3. Check filesystem ACLs or share permissions (e.g. TrueNAS, Unraid, SMB/NFS).\n\n"
+            f"{suffix}"
+        )
+        ui.print_log(msg)
+        mail.send_error_email(error_message=msg)
+        if exit_on_error:
+            if not runtime.daemon_enabled:
+                sys.exit(1)
+            raise PermissionError_(msg)
+        return 1
 
     return 0
 
-def add_new_tags(missing_tags):
-    if not missing_tags:
-        return []
 
-    # Safe 3-tier JSON learning with guardrails
-    tag_manager.add_gemini_tags(missing_tags)
+def verify_folders(
+    only_rename: bool = False,
+    custom_path: str | None = None,
+    daemon: bool = False,
+    simulate: bool = False,
+    exit_on_error: bool = True,
+) -> int:
+    """Validates that all required folders are configured and accessible."""
+    from src import ui
 
-    # Backward compatibility with legacy tests pointing DATA_FILE to custom mock files
-    if DATA_FILE != DEFAULT_DATA_FILE:
-        try:
-            with open(DATA_FILE, "r", encoding="utf-8") as f:
-                content = f.read()
-        except FileNotFoundError as e:
-            raise RuntimeError(ui.print_error(f" ❌ Error: The file {DATA_FILE} does not exist", e))
+    required_folders = determine_required_folders(daemon, custom_path, only_rename)
 
-        tags_to_add = []
-        for tag in missing_tags:
-            clean_tag = tag.strip().lower()
-            if not clean_tag:
-                continue
+    unconfigured = [
+        f"  - {label} ({key_path} / {attr})"
+        for key_path, val, attr, label in required_folders
+        if val is None or str(val).strip() == ""
+    ]
+    if unconfigured:
+        msg = format_missing_config_message(unconfigured, daemon, custom_path, only_rename)
+        ui.print_log(msg)
+        mail.send_error_email(error_message=msg)
+        if exit_on_error:
+            if not daemon and not runtime.daemon_enabled:
+                sys.exit(1)
+            raise FolderNotFoundError(msg)
+        return 1
 
-            escaped_tag = re.escape(clean_tag)
-            if f"r'{escaped_tag}'" not in content and f"r'{clean_tag}'" not in content:
-                tags_to_add.append(escaped_tag)
+    return validate_folder_existence_and_permissions(required_folders, simulate=simulate, exit_on_error=exit_on_error)
 
-        if not tags_to_add:
-            return []
 
-        new_tags_formatted = ", ".join([f"r'{tag}'" for tag in tags_to_add])
+# ── TMDB probability scorer ──────────────────────────────────────────────────
 
-        pattern = re.compile(r"(TAGS\s*=\s*\[)([^\]]*)\]")
-        match = pattern.search(content)
 
-        if match:
-            group1 = match.group(1)
-            if not group1.strip().endswith(','):
-                group1 += ','
+def compute_tmdb_match_probability(
+    parsed_name: str | None,
+    parsed_year: str | None,
+    tmdb_title: str | None,
+    tmdb_year: str | None,
+) -> float:
+    """Computes a match probability P ∈ [0.0, 1.0] between parsed metadata and a TMDB result.
 
-            injection = f"\n    # === Ajout Auto Gemini ===\n    {new_tags_formatted}"
-            new_content = content[:match.end(1)] + injection + content[match.start(2):]
-
-            with open(DATA_FILE, "w", encoding="utf-8") as f:
-                f.write(new_content)
-
-            ui.print_log(f" ✅ New tag(s) added to {DATA_FILE.name} : {tags_to_add}")
-        else:
-            ui.print_log(f" ❌ Error : Impossible to find TAGS list {DATA_FILE.name}")
-
-SEASON_EPISODE_PATTERNS = [
-    # 1. Saison/Season XX (Episode/Ep/E) XX (ex: Saison.01E02, Saison.1E2, Season.01.Episode.02, Saison 01 Ep 02)
-    re.compile(r'\b(?:saison|season)[.\s_-]*(\d{1,2})[.\s_-]*(?:episode|ep|e)[.\s_-]*(\d{1,3})\b', re.IGNORECASE),
-    # 2. SXX (Episode/Ep) XX (ex: S01.Episode.02, S01.Ep.02, S1 Episode 2)
-    re.compile(r'\bs(\d{1,2})[.\s_-]*(?:episode|ep)[.\s_-]*(\d{1,3})\b', re.IGNORECASE),
-    # 3. SXX séparé de EXX (ex: S01.E02, S01-E02, S1.E2)
-    re.compile(r'\bs(\d{1,2})[.\s_-]+e(\d{1,3})\b', re.IGNORECASE),
-]
-
-def normalize_season_episode(filename: str) -> str:
-    if not filename:
-        return filename
-    for pattern in SEASON_EPISODE_PATTERNS:
-        def repl(match):
-            s = int(match.group(1))
-            e = int(match.group(2))
-            return f"S{s:02d}E{e:02d}"
-
-        new_filename, count = pattern.subn(repl, filename)
-        if count > 0:
-            return new_filename
-    return filename
-
-def parse_season_episode(season, episode, filename):
-    try:
-        s = int(season)
-        e = int(episode)
-    except (ValueError, TypeError):
-        norm_filename = normalize_season_episode(filename)
-        season_regex = r'(?:saison|season|s)[.\s-]*(\d+)'
-        episode_regex = r'(?:episode|ep|e)[.\s-]*(\d+)'
-
-        s_match = re.search(season_regex, norm_filename, re.IGNORECASE)
-        e_match = re.search(episode_regex, norm_filename, re.IGNORECASE)
-
-        if s_match and e_match:
-            s = int(s_match.group(1))
-            e = int(e_match.group(1))
-        else:
-            raise ValueError(f"Could not extract season/episode from filename: {filename}")
-
-    return s, e
-
-def parse_resolution_quality(resolution_ptn, quality_ptn, resolution_clean, quality_clean, file):
-    if not RESOLUTION and not QUALITY:
-        return None, None
-
-    # resolution
-    if resolution_ptn and str(resolution_ptn).strip():
-        final_resolution = resolution_ptn
-    elif resolution_clean and str(resolution_clean).strip():
-        final_resolution = resolution_clean
-    else:
-        final_resolution = None
-
-    # quality
-    if quality_ptn and str(quality_ptn).strip():
-        final_quality = quality_ptn
-    elif quality_clean and str(quality_clean).strip():
-        final_quality = quality_clean
-    else:
-        final_quality = None
-
-    # scan file
-    if final_resolution is None or final_quality is None:
-        res_file, qual_file = files.get_file_quality_resolution(file)
-        
-        # Update resolution if it was not found previously
-        if final_resolution is None and res_file and str(res_file).strip():
-            final_resolution = res_file
-            
-        # Update quality if it was not found previously
-        if final_quality is None and qual_file and str(qual_file).strip():
-            final_quality = qual_file
-
-    return translate_resolution_to_name(final_resolution), final_quality
-
-def translate_resolution_to_name(resolution_str):
-    if not resolution_str:
-        return None
-
-    mapping = {
-        "2160p": "4K",
-        "1440p": "2K",
-        "1080p": "FullHD",
-        "720p": "HD",
-        "480p": "SD",
-        "576p": "SD"
-    }
-
-    clean_res = str(resolution_str).strip().lower()
-    return mapping.get(clean_res, resolution_str)
-
-def format_season_and_episode(season, episode):
-    try:
-        season = int(season)
-        episode = int(episode)
-    except (ValueError, TypeError):
-        raise ValueError("Failed parsing season or episode")
-
-    if season < 10:
-        season = "0" + str(season)
-    else: 
-        season = str(season)
-
-    if episode < 10:
-        episode = "0" + str(episode)
-    else:
-        episode = str(episode)
-
-    return season, episode
-
-def sort_media_dataframe(df):
-    if df.empty:
-        return df
-    return df.sort_values(
-        by=['Corrected', 'Season', 'Episode'], 
-        ascending=[True, True, True], 
-        ignore_index=True
-    )
-
-def compute_tmdb_match_probability(parsed_name: str | None, parsed_year: str | None, tmdb_title: str | None, tmdb_year: str | None) -> float:
-    """
-    Computes a match probability P in [0.0, 1.0] between locally parsed media metadata
-    and TMDB API search results. Combines string sequence similarity, token-set overlap,
-    and year proximity.
+    Combines string sequence similarity, token-set overlap, and year proximity.
     """
     if not parsed_name or not tmdb_title or tmdb_title == "unknown":
         return 0.0
@@ -343,8 +421,12 @@ def compute_tmdb_match_probability(parsed_name: str | None, parsed_year: str | N
 
     # 3. Year factor
     year_factor = 1.0
-    p_year_clean = str(parsed_year).strip() if parsed_year and str(parsed_year).strip() not in ("None", "unknown", "") else None
-    t_year_clean = str(tmdb_year).strip() if tmdb_year and str(tmdb_year).strip() not in ("None", "unknown", "") else None
+    p_year_clean = (
+        str(parsed_year).strip() if parsed_year and str(parsed_year).strip() not in ("None", "unknown", "") else None
+    )
+    t_year_clean = (
+        str(tmdb_year).strip() if tmdb_year and str(tmdb_year).strip() not in ("None", "unknown", "") else None
+    )
 
     if p_year_clean and t_year_clean:
         try:
@@ -372,354 +454,321 @@ def compute_tmdb_match_probability(parsed_name: str | None, parsed_year: str | N
     return round(min(1.0, max(0.0, final_score)), 2)
 
 
-def correct_movie_filename(file, ai_result=None):
-    
-    new_filename = None
+# ── Resolution / Quality parsing ─────────────────────────────────────────────
+
+
+def parse_resolution_quality(
+    resolution_ptn: str | None,
+    quality_ptn: str | None,
+    resolution_clean: str | None,
+    quality_clean: str | None,
+    file: str | Path,
+    *,
+    resolution_enabled: bool | None = None,
+    quality_enabled: bool | None = None,
+) -> tuple[str | None, str | None]:
+    """Resolves the best available resolution and quality from multiple sources.
+
+    ``resolution_enabled`` / ``quality_enabled`` parameters replace the old
+    module-level ``RESOLUTION`` / ``QUALITY`` globals (B8 fix).
+    When ``None``, the values are read from :data:`~src.runtime_config.runtime`.
+    """
+    from src import files
+
+    res_on = runtime.resolution_enabled if resolution_enabled is None else resolution_enabled
+    qual_on = runtime.quality_enabled if quality_enabled is None else quality_enabled
+
+    if not res_on and not qual_on:
+        return None, None
+
+    # Resolution
+    if resolution_ptn and str(resolution_ptn).strip():
+        final_resolution: str | None = resolution_ptn
+    elif resolution_clean and str(resolution_clean).strip():
+        final_resolution = resolution_clean
+    else:
+        final_resolution = None
+
+    # Quality
+    if quality_ptn and str(quality_ptn).strip():
+        final_quality: str | None = quality_ptn
+    elif quality_clean and str(quality_clean).strip():
+        final_quality = quality_clean
+    else:
+        final_quality = None
+
+    # Scan file for missing values
+    if final_resolution is None or final_quality is None:
+        res_file, qual_file = files.get_file_quality_resolution(file)
+        if final_resolution is None and res_file and str(res_file).strip():
+            final_resolution = res_file
+        if final_quality is None and qual_file and str(qual_file).strip():
+            final_quality = qual_file
+
+    return translate_resolution_to_name(final_resolution), final_quality
+
+
+# ── Movie / TV show filename correction ──────────────────────────────────────
+
+
+def correct_movie_filename(file: dict, ai_result: list | None = None) -> str | None:
+    """Resolves and generates the corrected movie filename stem.
+
+    B7 fix: ``year`` variable is no longer shadowed by ``ai_result``'s year
+    before the French title lookup — the final year used is always
+    ``tmdb_year`` when TMDB succeeds, regardless of the AI path taken.
+    """
+    from src import api, ui
+
+    new_filename: str | None = None
 
     try:
-        name = file['Parse'][0]
-        year = file['Parse'][1]
+        name: str = file["Parse"][0]
+        year: str = file["Parse"][1]
 
         resolution, quality = parse_resolution_quality(
-            file['Parse'][2], file['Parse'][3],
-            file['Clean'][2], file['Clean'][3],
-            file['Path']
+            file["Parse"][2], file["Parse"][3], file["Clean"][2], file["Clean"][3], file["Path"]
         )
 
-        min_conf = getattr(config, 'TMDB_MIN_CONFIDENCE', 0.75)
+        min_conf = config.TMDB_MIN_CONFIDENCE
+
+        final_title: str | None = None
+        final_year: str | None = None
+        final_lang: str | None = None
+
+        min_conf = config.TMDB_MIN_CONFIDENCE
 
         if ai_result is not None:
-            success, title, year, original_language = ai_result[0], ai_result[1], ai_result[2], ai_result[3]
+            # AI pre-resolved path
+            ai_success, ai_title, ai_year, ai_lang = ai_result[0], ai_result[1], ai_result[2], ai_result[3]
+            if ai_success:
+                final_title = ai_title
+                final_year = ai_year
+                final_lang = ai_lang
+                success = True
+            else:
+                success = False
         else:
-            success, title, tmdb_year, original_language = api.api_call(name, year, "en-US", "movie")
-            best_tmdb = (success, title, tmdb_year, original_language)
-            if success:
-                prob = compute_tmdb_match_probability(name, year, title, tmdb_year)
-                if prob < min_conf and ui.AI_FALLBACK_ENABLED:
-                    success = False
+            success = False
+            best_tmdb = (False, None, None, None)
 
-            if not success: 
-                name = file['Clean'][0]
-                year = file['Clean'][1]
-                
-                clean_s, clean_t, clean_y, clean_l = api.api_call(name, year, "en-US", "movie")
-                if clean_s:
-                    prob_c = compute_tmdb_match_probability(name, year, clean_t, clean_y)
-                    if prob_c >= min_conf or not ui.AI_FALLBACK_ENABLED:
-                        success, title, tmdb_year, original_language = True, clean_t, clean_y, clean_l
-                        best_tmdb = (True, clean_t, clean_y, clean_l)
-                    else:
-                        success = False
-                
-                if not success and ui.AI_FALLBACK_ENABLED:
-                    ai_res = api.gemini_api_call(file)
-                    if ai_res and ai_res[0]:
-                        success, title, tmdb_year, original_language = True, ai_res[1], ai_res[2], ai_res[3]
-                    elif best_tmdb[0]:
-                        success, title, tmdb_year, original_language = best_tmdb
-            
-            if success:
-                year = tmdb_year
-        
-        if success and original_language in ["fr", "fr-FR"]:
-            success_fr, title_fr, year_fr, _ = api.api_call(name, year, "fr-FR", "movie")
-            if success_fr:
-                title = title_fr 
-                year = year_fr
-        
-        new_filename = generate_new_movie_filename(success, title, year, resolution, quality)
-            
+            # 1st TMDB attempt: parsed name + year
+            s, t, ty, lg = api.api_call(name, year, "en-US", "movie")
+            if s:
+                prob = compute_tmdb_match_probability(name, year, t, ty)
+                if prob >= min_conf:
+                    success, final_title, final_year, final_lang = True, t, ty, lg
+                    best_tmdb = (True, t, ty, lg)
+                else:
+                    best_tmdb = (True, t, ty, lg)
+
+            # 2nd TMDB attempt: clean name + clean year
+            if not success:
+                c_name, c_year = file["Clean"][0], file["Clean"][1]
+                s_c, t_c, ty_c, lg_c = api.api_call(c_name, c_year, "en-US", "movie")
+                if s_c:
+                    prob_c = compute_tmdb_match_probability(c_name, c_year, t_c, ty_c)
+                    if prob_c >= min_conf or not runtime.ai_fallback_enabled:
+                        success, final_title, final_year, final_lang = True, t_c, ty_c, lg_c
+                        best_tmdb = (True, t_c, ty_c, lg_c)
+
+            # 3rd: AI fallback
+            if not success and runtime.ai_fallback_enabled:
+                ai_res = api.gemini_api_call(file)
+                if ai_res and ai_res[0]:
+                    success, final_title, final_year, final_lang = True, ai_res[1], ai_res[2], ai_res[3]
+                elif best_tmdb[0]:
+                    success, final_title, final_year, final_lang = best_tmdb
+
+        # French title lookup (B7 fix: uses final_year, not a shadowed local 'year')
+        if success and final_lang in ("fr", "fr-FR"):
+            lookup_name = name
+            lookup_year = final_year or year
+            s_fr, t_fr, y_fr, _ = api.api_call(lookup_name, lookup_year, "fr-FR", "movie")
+            if s_fr:
+                final_title = t_fr
+                final_year = y_fr
+
+        new_filename = generate_new_movie_filename(
+            success,
+            final_title,
+            final_year,
+            resolution,
+            quality,
+            resolution_enabled=runtime.resolution_enabled,
+            quality_enabled=runtime.quality_enabled,
+        )
+
     except Exception as e:
-        failed_file = file.get('File', 'Unknown File')
-
-        error_message = (
-                f"Impossible to rename the following file: {failed_file}\n\n"
-                f"⤷ Error logs: {e}\n"
-            )
-        
+        failed_file = file.get("File", "Unknown File")
+        error_message = f"Impossible to rename the following file: {failed_file}\n\nError logs: {e}\n"
         mail.send_error_email(error_message=error_message, affected_file=failed_file, exception=e)
+        if runtime.verbose_enabled:
+            from src import ui
 
-        if ui.VERBOSE_ENABLED:  
             ui.print_log(error_message)
-        
         new_filename = None
 
     return new_filename
 
 
-def correct_tv_show_filename(file, ai_result=None):
+def correct_tv_show_filename(
+    file: dict,
+    ai_result: list | None = None,
+) -> tuple[str | None, str | None, str | None]:
+    """Resolves and generates the corrected TV show filename stem."""
+    from src import api, ui
 
-    new_filename = None
-    season = None
-    episode = None
+    new_filename: str | None = None
+    season: str | None = None
+    episode: str | None = None
 
     try:
-        name = file['Parse'][0]
+        name: str = file["Parse"][0]
 
-        season, episode = parse_season_episode(file['Parse'][2], file['Parse'][3], file['File'])
-        season, episode = format_season_and_episode(season, episode)
+        s_raw, e_raw = parse_season_episode(file["Parse"][2], file["Parse"][3], file["File"])
+        season, episode = format_season_and_episode(s_raw, e_raw)
+
         resolution, quality = parse_resolution_quality(
-            file['Parse'][4], file['Parse'][5],
-            file['Clean'][2], file['Clean'][3],
-            file['Path']
+            file["Parse"][4], file["Parse"][5], file["Clean"][2], file["Clean"][3], file["Path"]
         )
-        
-        min_conf = getattr(config, 'TMDB_MIN_CONFIDENCE', 0.75)
+
+        min_conf = config.TMDB_MIN_CONFIDENCE
+
+        final_title: str | None = None
+        final_lang: str | None = None
 
         if ai_result is not None:
-            success, title, _, original_language = ai_result[0], ai_result[1], ai_result[2], ai_result[3]
+            ai_success, ai_title, _, ai_lang = ai_result[0], ai_result[1], ai_result[2], ai_result[3]
+            if ai_success:
+                final_title = ai_title
+                final_lang = ai_lang
+                success = True
+            else:
+                success = False
         else:
-            success, title, _, original_language = api.api_call(name, None, "en-US", "tv")
-            best_tmdb = (success, title, original_language)
-            if success:
-                prob = compute_tmdb_match_probability(name, None, title, None)
-                if prob < min_conf and ui.AI_FALLBACK_ENABLED:
-                    success = False
+            success = False
+            best_tmdb = (False, None, None)
 
+            # 1st TMDB attempt
+            s, t, _, lg = api.api_call(name, None, "en-US", "tv")
+            if s:
+                prob = compute_tmdb_match_probability(name, None, t, None)
+                if prob >= min_conf:
+                    success, final_title, final_lang = True, t, lg
+                    best_tmdb = (True, t, lg)
+                else:
+                    best_tmdb = (True, t, lg)
+
+            # 2nd TMDB attempt: clean name
             if not success:
-                name = file['Clean'][0]
-                clean_s, clean_t, _, clean_l = api.api_call(name, None, "en-US", "tv")
-                if clean_s:
-                    prob_c = compute_tmdb_match_probability(name, None, clean_t, None)
-                    if prob_c >= min_conf or not ui.AI_FALLBACK_ENABLED:
-                        success, title, original_language = True, clean_t, clean_l
-                        best_tmdb = (True, clean_t, clean_l)
-                    else:
-                        success = False
+                c_name = file["Clean"][0]
+                s_c, t_c, _, lg_c = api.api_call(c_name, None, "en-US", "tv")
+                if s_c:
+                    prob_c = compute_tmdb_match_probability(c_name, None, t_c, None)
+                    if prob_c >= min_conf or not runtime.ai_fallback_enabled:
+                        success, final_title, final_lang = True, t_c, lg_c
+                        best_tmdb = (True, t_c, lg_c)
 
-                if not success and ui.AI_FALLBACK_ENABLED:
-                    ai_res = api.gemini_api_call(file)
-                    if ai_res and ai_res[0]:
-                        success, title, original_language = True, ai_res[1], ai_res[3]
-                    elif best_tmdb[0]:
-                        success, title, original_language = best_tmdb
-            
-        if success and original_language in ["fr", "fr-FR"]:
-            success_fr, title_fr, _, _ = api.api_call(name, None, "fr-FR", "tv")
-            if success_fr:
-                title = title_fr
+            # 3rd: AI fallback
+            if not success and runtime.ai_fallback_enabled:
+                ai_res = api.gemini_api_call(file)
+                if ai_res and ai_res[0]:
+                    success, final_title, final_lang = True, ai_res[1], ai_res[3]
+                elif best_tmdb[0]:
+                    success, final_title, final_lang = best_tmdb
 
-        new_filename = generate_new_tvshow_filename(success, title, season, episode, resolution, quality)
-    
+        # French title lookup
+        if success and final_lang in ("fr", "fr-FR"):
+            lookup_name = name
+            s_fr, t_fr, _, _ = api.api_call(lookup_name, None, "fr-FR", "tv")
+            if s_fr:
+                final_title = t_fr
+
+        new_filename = generate_new_tvshow_filename(
+            success,
+            final_title,
+            season,
+            episode,
+            resolution,
+            quality,
+            resolution_enabled=runtime.resolution_enabled,
+            quality_enabled=runtime.quality_enabled,
+        )
+
     except Exception as e:
-        failed_file = file.get('File', 'Unknown File')
-
-        error_message = (
-                f"Impossible to rename the following file: {failed_file}\n\n"
-                f"⤷ Error logs: {e}\n"
-            )
-        
+        failed_file = file.get("File", "Unknown File")
+        error_message = f"Impossible to rename the following file: {failed_file}\n\nError logs: {e}\n"
         mail.send_error_email(error_message=error_message, affected_file=failed_file, exception=e)
+        if runtime.verbose_enabled:
+            from src import ui
 
-        if ui.VERBOSE_ENABLED:  
             ui.print_log(error_message)
-        
         new_filename = None
         season = None
         episode = None
 
     return new_filename, season, episode
 
-def sanitize_filename(name: str) -> str:
-    """Sanitizes a title or filename component against directory traversal and forbidden characters."""
-    if not name or not isinstance(name, str):
-        return ""
 
-    # Replace colons with standard title separator " -"
-    sanitized = name.replace(":", " -")
+# ── DataFrame helpers ────────────────────────────────────────────────────────
 
-    # Remove directory traversal segments (e.g. "../" or "..\" or standalone "..")
-    sanitized = re.sub(r'(?:\.\.[\\/]+)+', '', sanitized)
-    sanitized = re.sub(r'\.{2,}', '', sanitized)
 
-    # Replace illegal filesystem characters (\ / * ? " < > | and null bytes) with hyphen
-    sanitized = re.sub(r'[\x00\\/*?"<>|]', '-', sanitized)
+def sort_media_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """Sorts the corrected filenames DataFrame by title, season, and episode."""
+    if df.empty:
+        return df
+    return df.sort_values(by=["Corrected", "Season", "Episode"], ascending=[True, True, True], ignore_index=True)
 
-    # Collapse multiple consecutive hyphens or spaces
-    sanitized = re.sub(r'-{2,}', '-', sanitized)
-    sanitized = re.sub(r'\s+', ' ', sanitized)
 
-    # Strip leading/trailing dots, hyphens, and whitespace
-    sanitized = sanitized.strip('. -')
-
-    return sanitized
-
-def generate_new_movie_filename(success, title, year, resolution, quality):
-    is_title_valid = title and str(title).strip()
-
-    if not success or not is_title_valid :
-        raise LookupError("API calls failed or essential metadata (Title) is missing/empty.")
-
-    safe_title = sanitize_filename(title)
-    if not safe_title:
-        raise LookupError("Title contains only invalid characters.")
-
-    new_name = safe_title
-    if year and str(year).strip():
-        safe_year = re.sub(r'[^0-9]', '', str(year).strip())
-        if safe_year:
-            new_name += f" ({safe_year})"
-
-    # quality and resolution
-    metadata_parts = []
-    if QUALITY and quality and str(quality).strip():
-        metadata_parts.append(str(quality))
-    if RESOLUTION and resolution and str(resolution).strip():
-        metadata_parts.append(str(resolution))
-    if metadata_parts:
-        new_name += f" [{' '.join(metadata_parts)}]"
-
-    return new_name
-
-def generate_new_tvshow_filename(success, title, season, episode, resolution=None, quality=None):
-    is_title_valid = title and str(title).strip()
-    is_season_valid = season is not None and str(season).strip() != ""
-    is_episode_valid = episode is not None and str(episode).strip() != ""
-
-    if not success or not is_title_valid or not is_season_valid or not is_episode_valid:
-        raise LookupError("API calls failed or essential metadata (Title, Season, or Episode) is missing/empty.")
-
-    safe_title = sanitize_filename(title)
-    if not safe_title:
-        raise LookupError("Title contains only invalid characters.")
-
-    new_name = safe_title
-
-    # season and episode
-    s_padded = str(season).zfill(2)
-    e_padded = str(episode).zfill(2)
-    new_name += f" - S{s_padded}E{e_padded}"
-
-    # quality and resolution
-    metadata_parts = []
-    if QUALITY and quality and str(quality).strip():
-        metadata_parts.append(str(quality))
-    if RESOLUTION and resolution and str(resolution).strip():
-        metadata_parts.append(str(resolution))
-    if metadata_parts:
-        new_name += f" [{' '.join(metadata_parts)}]"
-
-    return new_name
-
-def remove_url(filename):
-    # setup
-    tlds_pattern = '|'.join(TLDS)
-    url_pattern = rf"""
-        (?:
-            # CASE 1: Starts with 'www.' (Safe to greedily capture multiple subdomains)
-            (?:\b|(?<=_))www\.(?:[a-zA-Z0-9-]+\.)+(?:{tlds_pattern})(?:\b|(?=_))
-            
-            | # OR
-            
-            # CASE 2: No 'www.' (Strictly ONE word before the TLD chain)
-            # This captures "site.com" or "amazon.co.uk" but stops before "My.Movie."
-            (?:\b|(?<=_))[a-zA-Z0-9-]+\.(?:(?:{tlds_pattern})\.)*(?:{tlds_pattern})(?:\b|(?=_))
-        )
-    """
-    # clean
-    clean_filename = re.sub(url_pattern, '', filename, flags=re.IGNORECASE | re.VERBOSE)
-    clean_filename = re.sub(r'\[\s*\]|\(\s*\)', '', clean_filename)
-    clean_filename = re.sub(r'\.{2,}', '.', clean_filename)
-    clean_filename = clean_filename.strip('.-_ ')
-
-    return clean_filename
-
-def parse_filename(filename):
-    filename = normalize_season_episode(filename)
-    filename_without_url = remove_url(filename)
-    filename_without_url = re.sub(r'\d{5,}', '', filename_without_url)
-    filename_parsed = PTN.parse(filename_without_url)
-    media = "tv" if (filename_parsed.get('season') or filename_parsed.get('episode')) else "movie"
-    title = str(filename_parsed.get('title')) if filename_parsed.get('title') else ""
-    year = str(filename_parsed.get('year')) if filename_parsed.get('year') else ""
-    resolution = str(filename_parsed.get('resolution')) if filename_parsed.get('resolution') else ""
-    quality = str(filename_parsed.get('quality')) if filename_parsed.get('quality') else ""
-    if media == "movie" :
-        parse = [title, year, resolution, quality]
-    else : 
-        season = str(filename_parsed.get('season')) if filename_parsed.get('season') else ""
-        episode = str(filename_parsed.get('episode')) if filename_parsed.get('episode') else ""
-        parse = [title, year, season, episode, resolution, quality]
-
-    return parse, media
-
-def clean_filename(filename):
-    filename = normalize_season_episode(filename)
-    raw_name = filename.rsplit('.', 1)[0]
-    raw_name = raw_name.replace('_', '.')
-
-    # remove urls
-    filename_without_urls = remove_url(raw_name)
-    
-    # search for a year patern 
-    year_match = re.search(r'\(?((?:19|20)\d{2})\)?', raw_name)
-    year = year_match.group(1) if year_match else ""
-
-    resolution = ""
-    for pattern in RESOLUTION_PATTERNS:
-        res_match = re.search(pattern, raw_name, flags=re.IGNORECASE)
-        if res_match:
-            resolution = res_match.group(0)
-            break
-
-    quality = ""
-    for pattern in QUALITY_PATTERNS:
-        qual_match = re.search(pattern, raw_name, flags=re.IGNORECASE)
-        if qual_match:
-            quality = qual_match.group(0)
-            break
-
-    # regex filters
-    clean_title = re.sub(r'S\d+E\d+', '', filename_without_urls, flags=re.IGNORECASE)
-    clean_title = re.sub(r'\d{5,}', '', clean_title)
-    clean_title = re.sub(r'\(?(?:19|20)\d{2}\)?', '', clean_title)
-    clean_title = re.sub(r'\s+', ' ', clean_title).strip()
-    
-    # remove torrent file informations
-    clean_title = tag_manager.clean_text(clean_title)
-        
-    # clean spaces
-    clean_title = clean_title.replace('.', ' ').replace('_', ' ').replace('-', ' ')
-    clean_title = ' '.join(clean_title.split()).strip()
-    
-    return clean_title, year, resolution, quality
-
-import pandas as pd
-
-def handle_conflicts_and_duplicates(df, failed_files):
+def handle_conflicts_and_duplicates(df: pd.DataFrame, failed_files: list[dict]) -> pd.DataFrame:
+    """Removes duplicate corrected filenames from *df*, appending them to *failed_files*."""
     if df.empty:
         return df
 
-    # Identify all rows where the 'Corrected' name is a duplicate
-    check_for_duplicates = df[df.duplicated(subset=['Corrected'], keep=False)]
-    
+    check_for_duplicates = df[df.duplicated(subset=["Corrected"], keep=False)]
     if not check_for_duplicates.empty:
-        conflicts = check_for_duplicates['Corrected'].unique()
-        for i in conflicts:
-            # Find all original filenames associated with this specific conflict
-            fichiers_originaux = check_for_duplicates[check_for_duplicates['Corrected'] == i]['Original'].tolist()
-            
-            for original_file in fichiers_originaux:
-                failed_files.append({
-                    'Original': original_file,
-                    'Reason': f"Conflict: Multiple files resolve to '{i}'"
-                })
-        
-        # Remove ALL conflicting rows from the dataframe
-        df = df.drop_duplicates(subset=['Corrected'], keep=False)
-    
+        conflicts = check_for_duplicates["Corrected"].unique()
+        for conflict_name in conflicts:
+            originals = check_for_duplicates[check_for_duplicates["Corrected"] == conflict_name]["Original"].tolist()
+            for orig in originals:
+                failed_files.append(
+                    {"Original": orig, "Reason": f"Conflict: Multiple files resolve to '{conflict_name}'"}
+                )
+        df = df.drop_duplicates(subset=["Corrected"], keep=False)
+
     return df
 
-def get_corrected_media_filenames(messy_data_table, clean_data_table):
-    ui.print_log(f"\nAnalysing {len(messy_data_table)} files. Please wait...\n")
-    
-    new_clean_data_rows = []
-    failed_files = []
-    ai_results = {}
 
-    if ui.AI_FALLBACK_ENABLED:
-        ai_pending_items = []
-        min_conf = getattr(config, "TMDB_MIN_CONFIDENCE", 0.75)
+def has_files_to_rename(data_table: pd.DataFrame) -> bool:
+    """Returns True if the data table contains at least one file whose name changed.
+
+    B13 fix: uses vectorised pandas comparison instead of ``iterrows()`` loop.
+    """
+    if data_table.empty:
+        return False
+    return bool((data_table["Original"] != data_table["Corrected"]).any())
+
+
+# ── Main orchestration function ──────────────────────────────────────────────
+
+
+def get_corrected_media_filenames(
+    messy_data_table: pd.DataFrame,
+    clean_data_table: pd.DataFrame,
+) -> pd.DataFrame:
+    """Processes all messy media files, querying TMDB and AI as needed."""
+    from src import api, ui
+
+    ui.print_log(f"\nAnalysing {len(messy_data_table)} files. Please wait...\n")
+
+    new_clean_data_rows: list[dict] = []
+    failed_files: list[dict] = []
+    ai_results: dict[str, list] = {}
+
+    if runtime.ai_fallback_enabled:
+        ai_pending_items: list = []
+        min_conf = config.TMDB_MIN_CONFIDENCE
 
         for _, file in messy_data_table.iterrows():
             m_type = file.get("Media")
@@ -728,21 +777,21 @@ def get_corrected_media_filenames(messy_data_table, clean_data_table):
 
             needs_fallback = False
             if m_type == "movie":
-                p_name, p_year = file['Parse'][0], file['Parse'][1]
+                p_name, p_year = file["Parse"][0], file["Parse"][1]
                 s, t, y, _ = api.api_call(p_name, p_year, "en-US", "movie")
                 prob = compute_tmdb_match_probability(p_name, p_year, t, y) if s else 0.0
                 if not (s and prob >= min_conf):
-                    c_name, c_year = file['Clean'][0], file['Clean'][1]
+                    c_name, c_year = file["Clean"][0], file["Clean"][1]
                     s_c, t_c, y_c, _ = api.api_call(c_name, c_year, "en-US", "movie")
                     prob_c = compute_tmdb_match_probability(c_name, c_year, t_c, y_c) if s_c else 0.0
                     if not (s_c and prob_c >= min_conf):
                         needs_fallback = True
             elif m_type == "tv":
-                p_name = file['Parse'][0]
+                p_name = file["Parse"][0]
                 s, t, _, _ = api.api_call(p_name, None, "en-US", "tv")
                 prob = compute_tmdb_match_probability(p_name, None, t, None) if s else 0.0
                 if not (s and prob >= min_conf):
-                    c_name = file['Clean'][0]
+                    c_name = file["Clean"][0]
                     s_c, t_c, _, _ = api.api_call(c_name, None, "en-US", "tv")
                     prob_c = compute_tmdb_match_probability(c_name, None, t_c, None) if s_c else 0.0
                     if not (s_c and prob_c >= min_conf):
@@ -752,43 +801,42 @@ def get_corrected_media_filenames(messy_data_table, clean_data_table):
                 ai_pending_items.append(file)
 
         if ai_pending_items:
-            ui.print_log(f"🤖 Queuing {len(ai_pending_items)} files for AI batch fallback...\n")
-            BATCH_SIZE = 25
-            for i in range(0, len(ai_pending_items), BATCH_SIZE):
-                chunk = ai_pending_items[i : i + BATCH_SIZE]
+            ui.print_log(f"Queuing {len(ai_pending_items)} files for AI batch fallback...\n")
+            batch_size = 25
+            for i in range(0, len(ai_pending_items), batch_size):
+                chunk = ai_pending_items[i : i + batch_size]
                 chunk_dicts = [f.to_dict() if hasattr(f, "to_dict") else dict(f) for f in chunk]
                 batch_res = api.execute_ai_batch_with_failover(chunk_dicts)
                 for file_obj, res in zip(chunk, batch_res):
-                    ai_results[file_obj['File']] = res
+                    ai_results[file_obj["File"]] = res
 
     for _, file in messy_data_table.iterrows():
-        f_name = file['File']
+        f_name = file["File"]
         ai_res = ai_results.get(f_name)
 
-        if file['Media'] == "movie": 
-            corrected_name = correct_movie_filename(file, ai_result=ai_res) 
+        if file["Media"] == "movie":
+            corrected_name = correct_movie_filename(file, ai_result=ai_res)
             season, episode = None, None
-        elif file['Media'] == "tv": 
-            corrected_name, season, episode = correct_tv_show_filename(file, ai_result=ai_res) 
+        elif file["Media"] == "tv":
+            corrected_name, season, episode = correct_tv_show_filename(file, ai_result=ai_res)
         else:
             ui.print_log(f"Ignored : {file['File']}\n")
             continue
-            
+
         if corrected_name is None:
-            failed_files.append({
-                'Original': file['File'], 
-                'Reason': 'API or parsing failed'
-            })
+            failed_files.append({"Original": file["File"], "Reason": "API or parsing failed"})
         else:
-            new_clean_data_rows.append({
-                'Original': file['File'],
-                'Corrected': corrected_name,
-                'Path': file['Path'],
-                'Media': file['Media'],
-                'Season': season,
-                'Episode': episode   
-            })
-            
+            new_clean_data_rows.append(
+                {
+                    "Original": file["File"],
+                    "Corrected": corrected_name,
+                    "Path": file["Path"],
+                    "Media": file["Media"],
+                    "Season": season,
+                    "Episode": episode,
+                }
+            )
+
     new_df = pd.DataFrame(new_clean_data_rows)
     df = pd.concat([clean_data_table, new_df], ignore_index=True) if not new_df.empty else clean_data_table
 
@@ -796,14 +844,37 @@ def get_corrected_media_filenames(messy_data_table, clean_data_table):
     df = handle_conflicts_and_duplicates(df, failed_files)
 
     ui.display_skipped_filenames(failed_files)
-            
+
     return df
 
-def has_files_to_rename(data_table):
-    data_empty = data_table.empty
-    if not data_empty:
-        data_empty = True
-        for _, row in data_table.iterrows(): 
-            if row['Original'] != row['Corrected']:
-                data_empty = False
-    return not data_empty
+
+_UTILS_RUNTIME_MAP = {
+    "RESOLUTION": "resolution_enabled",
+    "QUALITY": "quality_enabled",
+}
+
+_UTILS_CONFIG_ATTRS = {
+    "MOVIES_FOLDER",
+    "TV_SHOWS_FOLDER",
+    "NOT_SORTED_MEDIA_FILES_FOLDER",
+}
+
+
+class _UtilsModule(types.ModuleType):
+    def __getattribute__(self, name: str):
+        if name in _UTILS_RUNTIME_MAP:
+            return getattr(runtime, _UTILS_RUNTIME_MAP[name])
+        if name in _UTILS_CONFIG_ATTRS:
+            return getattr(config, name, None)
+        return super().__getattribute__(name)
+
+    def __setattr__(self, name: str, value):
+        if name in _UTILS_RUNTIME_MAP:
+            setattr(runtime, _UTILS_RUNTIME_MAP[name], value)
+            setattr(config, name, value)
+        elif name in _UTILS_CONFIG_ATTRS:
+            setattr(config, name, value)
+        super().__setattr__(name, value)
+
+
+sys.modules[__name__].__class__ = _UtilsModule

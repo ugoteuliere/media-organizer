@@ -1,8 +1,6 @@
 import os
-import sys
 import tkinter as tk
-from tkinter import ttk
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 import pytest
 
 from src.config import ConfigManager
@@ -51,7 +49,7 @@ def temp_cm(tmp_path):
     cm.set("options.resolution", "true")
     cm.set("options.quality", "true")
     cm.set("options.bypass", "true")
-    cm.set("options.autonomous", "true")
+    cm.set("options.daemon", "true")
     cm.set("options.polling_interval", "20")
     cm.set("options.ai", "true")
     cm.set("options.learn", "true")
@@ -99,7 +97,7 @@ def test_config_gui_init_and_load(tk_root, temp_cm):
     assert app.var_resolution.get() is True
     assert app.var_quality.get() is True
     assert app.var_bypass.get() is True
-    assert app.var_autonomous.get() is True
+    assert app.var_daemon.get() is True
     assert app.var_interval.get() == "20"
     assert app.var_ai.get() is True
     assert app.var_learn.get() is True
@@ -215,21 +213,27 @@ def test_config_gui_test_tmdb(tk_root, temp_cm):
 
     # 2. Successful query
     app.var_tmdb.set("valid_tmdb")
-    with patch("src.api.api_call", return_value=(True, "Inception", "2010", "en")), \
-         patch("tkinter.messagebox.showinfo") as mock_info:
+    with (
+        patch("src.api.api_call", return_value=(True, "Inception", "2010", "en")),
+        patch("tkinter.messagebox.showinfo") as mock_info,
+    ):
         app._test_tmdb()
         mock_info.assert_called_once()
         assert "Inception" in mock_info.call_args[0][1]
 
     # 3. Query returned false
-    with patch("src.api.api_call", return_value=(False, None, None, None)), \
-         patch("tkinter.messagebox.showerror") as mock_err:
+    with (
+        patch("src.api.api_call", return_value=(False, None, None, None)),
+        patch("tkinter.messagebox.showerror") as mock_err,
+    ):
         app._test_tmdb()
         mock_err.assert_called_once()
 
     # 4. Exception
-    with patch("src.api.api_call", side_effect=RuntimeError("Network down")), \
-         patch("tkinter.messagebox.showerror") as mock_err:
+    with (
+        patch("src.api.api_call", side_effect=RuntimeError("Network down")),
+        patch("tkinter.messagebox.showerror") as mock_err,
+    ):
         app._test_tmdb()
         mock_err.assert_called_once()
 
@@ -250,8 +254,10 @@ def test_config_gui_test_provider_api(tk_root, temp_cm):
         mock_warn.assert_called_once()
 
     app.var_gemini.set("g_key")
-    with patch("src.api.call_gemini_batch", return_value=mock_batch_resp), \
-         patch("tkinter.messagebox.showinfo") as mock_info:
+    with (
+        patch("src.api.call_gemini_batch", return_value=mock_batch_resp),
+        patch("tkinter.messagebox.showinfo") as mock_info,
+    ):
         app._test_provider_api("gemini")
         mock_info.assert_called_once()
 
@@ -262,8 +268,10 @@ def test_config_gui_test_provider_api(tk_root, temp_cm):
         mock_warn.assert_called_once()
 
     app.var_groq.set("gr_key")
-    with patch("src.api.call_groq_batch", return_value=mock_batch_resp), \
-         patch("tkinter.messagebox.showinfo") as mock_info:
+    with (
+        patch("src.api.call_groq_batch", return_value=mock_batch_resp),
+        patch("tkinter.messagebox.showinfo") as mock_info,
+    ):
         app._test_provider_api("groq")
         mock_info.assert_called_once()
 
@@ -274,8 +282,10 @@ def test_config_gui_test_provider_api(tk_root, temp_cm):
         mock_warn.assert_called_once()
 
     app.var_openrouter.set("or_key")
-    with patch("src.api.call_openrouter_batch", return_value=mock_batch_resp), \
-         patch("tkinter.messagebox.showinfo") as mock_info:
+    with (
+        patch("src.api.call_openrouter_batch", return_value=mock_batch_resp),
+        patch("tkinter.messagebox.showinfo") as mock_info,
+    ):
         app._test_provider_api("openrouter")
         mock_info.assert_called_once()
 
@@ -287,22 +297,28 @@ def test_config_gui_test_provider_api(tk_root, temp_cm):
 
     app.var_cf_tok.set("tok")
     app.var_cf_acc.set("acc")
-    with patch("src.api.call_cloudflare_batch", return_value=mock_batch_resp), \
-         patch("tkinter.messagebox.showinfo") as mock_info:
+    with (
+        patch("src.api.call_cloudflare_batch", return_value=mock_batch_resp),
+        patch("tkinter.messagebox.showinfo") as mock_info,
+    ):
         app._test_provider_api("cloudflare")
         mock_info.assert_called_once()
 
     # 5. Empty items response
     empty_resp = MagicMock()
     empty_resp.items = []
-    with patch("src.api.call_groq_batch", return_value=empty_resp), \
-         patch("tkinter.messagebox.showwarning") as mock_warn:
+    with (
+        patch("src.api.call_groq_batch", return_value=empty_resp),
+        patch("tkinter.messagebox.showwarning") as mock_warn,
+    ):
         app._test_provider_api("groq")
         mock_warn.assert_called_once()
 
     # 6. Exception
-    with patch("src.api.call_groq_batch", side_effect=RuntimeError("Connection timeout")), \
-         patch("tkinter.messagebox.showerror") as mock_err:
+    with (
+        patch("src.api.call_groq_batch", side_effect=RuntimeError("Connection timeout")),
+        patch("tkinter.messagebox.showerror") as mock_err,
+    ):
         app._test_provider_api("groq")
         mock_err.assert_called_once()
 
@@ -323,8 +339,7 @@ def test_config_gui_send_test_email(tk_root, temp_cm):
     app.var_mail.set("user@gmail.com")
     app.var_mail_pswd.set("password123")
     mock_smtp = MagicMock()
-    with patch("smtplib.SMTP", return_value=mock_smtp), \
-         patch("tkinter.messagebox.showinfo") as mock_info:
+    with patch("smtplib.SMTP", return_value=mock_smtp), patch("tkinter.messagebox.showinfo") as mock_info:
         app._send_test_email()
         mock_info.assert_called_once()
         mock_smtp.starttls.assert_called_once()
@@ -333,16 +348,17 @@ def test_config_gui_send_test_email(tk_root, temp_cm):
         mock_smtp.quit.assert_called_once()
 
     # 3. SMTP failure
-    with patch("smtplib.SMTP", side_effect=Exception("SMTP auth error")), \
-         patch("tkinter.messagebox.showerror") as mock_err:
+    with (
+        patch("smtplib.SMTP", side_effect=Exception("SMTP auth error")),
+        patch("tkinter.messagebox.showerror") as mock_err,
+    ):
         app._send_test_email()
         mock_err.assert_called_once()
 
 
 def test_launch_config_gui():
     mock_ctk = MagicMock()
-    with patch("customtkinter.CTk", return_value=mock_ctk), \
-         patch("src.gui.ConfigGUI"):
+    with patch("customtkinter.CTk", return_value=mock_ctk), patch("src.gui.ConfigGUI"):
         assert launch_config_gui() is True
         mock_ctk.mainloop.assert_called_once()
 
@@ -458,12 +474,19 @@ def test_config_run_wizard_menu_options(tmp_path):
     cm = ConfigManager(custom_path=str(ini_file))
 
     orig_isdir = os.path.isdir
-    mock_isdir = lambda p: True if "D:/" in str(p) else orig_isdir(p)
+
+    def mock_isdir(p):
+        return True if "D:/" in str(p) else orig_isdir(p)
 
     # Full setup wizard (runs all steps sequentially without category menu)
-    with patch("rich.prompt.Prompt.ask", side_effect=["D:/F1", "D:/F2", "D:/F3", "k1", "k2", "k3", "k4", "k5", "k6", "m", "p", "15", "auto"]), \
-         patch("rich.prompt.Confirm.ask", side_effect=[False]*9 + [False, False]), \
-         patch("os.path.isdir", side_effect=mock_isdir):
+    with (
+        patch(
+            "rich.prompt.Prompt.ask",
+            side_effect=["D:/F1", "D:/F2", "D:/F3", "k1", "k2", "k3", "k4", "k5", "k6", "m", "p", "15", "auto"],
+        ),
+        patch("rich.prompt.Confirm.ask", side_effect=[False] * 9 + [False, False]),
+        patch("os.path.isdir", side_effect=mock_isdir),
+    ):
         cm.run_wizard(interactive_menu=True)
         assert cm.get("paths.movies_folder") == "D:/F1"
         assert cm.get("api.tmdb_api_key") == "k1"

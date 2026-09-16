@@ -1,7 +1,7 @@
-# Media Organizer & Renamer
+# media-organizer
 
-[![CI](https://github.com/ugoteuliere/rename/actions/workflows/github-ci.yml/badge.svg)](https://github.com/ugoteuliere/rename/actions/workflows/github-ci.yml)
-[![Release](https://img.shields.io/github/v/release/ugoteuliere/rename?color=blue)](https://github.com/ugoteuliere/rename/releases)
+[![CI](https://github.com/ugoteuliere/media-organizer/actions/workflows/github-ci.yml/badge.svg)](https://github.com/ugoteuliere/media-organizer/actions/workflows/github-ci.yml)
+[![Release](https://img.shields.io/github/v/release/ugoteuliere/media-organizer?color=blue)](https://github.com/ugoteuliere/media-organizer/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A CLI tool that parses video filenames, retrieves official titles via **The Movie Database (TMDB)**, and organizes files into Movie and TV Show directories according to **Plex naming conventions**.
@@ -29,6 +29,32 @@ media-organizer configure
 media-organizer
 ```
 
+### 3. Docker
+
+Run as an automated background daemon with Docker Compose:
+
+```yaml
+services:
+  media-organizer:
+    image: ghcr.io/ugoteuliere/media-organizer:latest
+    container_name: media-organizer
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TMDB_API_KEY="<your_tmdb_api_key>"
+    volumes:
+      - /path/to/downloads:/data/input
+      - /path/to/movies:/data/Movies
+      - /path/to/series:/data/TV_Shows
+```
+
+```bash
+docker compose up -d
+```
+
+See [Docker Documentation](docs/documentation.md#7-docker) for more details.
+
 ## Features
 
 | Mode | Description |
@@ -36,7 +62,8 @@ media-organizer
 | **Rename & Move** | Scans download folder, renames and moves items to Movies/TV Shows. |
 | **Rename Only** | Renames files in a specific folder. |
 | **Simulation** | Dry-run preview: prints proposed renames without modifying files on disk. |
-| **Autonomous** | Continuous background daemon polling download folder every X minutes. |
+| **Daemon** | Continuous background daemon polling download folder every X minutes. |
+| **Docker Container** | Headless container deployment via GitHub Container Registry (`ghcr.io`). |
 | **Cloud AI Fallback** | Uses Cloud AI models to resolve obfuscated filenames when local parsing fails. |
 | **Keyword Learning** | Discovers missing release tags via AI and saves them. |
 

@@ -31,11 +31,11 @@ def _is_file_locked_posix(file_path: Path, wait_interval: float = 0.5) -> bool:
         except (ImportError, ModuleNotFoundError):
             has_fcntl = False
 
-        with open(file_path, "a") as f:
+        with open(file_path, "rb") as f:
             if has_fcntl:
                 fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
                 fcntl.flock(f.fileno(), fcntl.LOCK_UN)
-    except (BlockingIOError, PermissionError):
+    except BlockingIOError:
         return True
     except OSError:
         pass

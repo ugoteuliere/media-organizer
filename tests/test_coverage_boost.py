@@ -1131,9 +1131,9 @@ def test_is_file_locked_posix_and_stability(tmp_path, monkeypatch):
         with patch.object(Path, "stat", side_effect=[mock_stat1, mock_stat2]):
             assert files._is_file_locked_posix(test_file, wait_interval=0.01) is True
 
-        # File with PermissionError on open
-        with patch("builtins.open", side_effect=PermissionError("Locked by process")):
-            assert files._is_file_locked_posix(test_file, wait_interval=0.01) is True
+        # PermissionError on open (read-only file is not considered locked)
+        with patch("builtins.open", side_effect=PermissionError("Permission denied")):
+            assert files._is_file_locked_posix(test_file, wait_interval=0.01) is False
 
         # Generic OSError on open (ignored gracefully)
         with patch("builtins.open", side_effect=OSError("Generic error")):

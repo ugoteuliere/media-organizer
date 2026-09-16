@@ -29,6 +29,21 @@ media-organizer configure
 media-organizer
 ```
 
+### 3. Docker (Container)
+
+Run as an automated background daemon using the official GHCR container:
+
+```bash
+docker run -d \
+  --name media-organizer \
+  -e PUID=1000 -e PGID=1000 \
+  -e TMDB_API_KEY="<your_tmdb_api_key>" \
+  -v /path/to/downloads:/data/input \
+  -v /path/to/movies:/data/Movies \
+  -v /path/to/series:/data/TV_Shows \
+  ghcr.io/ugoteuliere/media-organizer:latest
+```
+
 ## Features
 
 | Mode | Description |
@@ -37,6 +52,7 @@ media-organizer
 | **Rename Only** | Renames files in a specific folder. |
 | **Simulation** | Dry-run preview: prints proposed renames without modifying files on disk. |
 | **Daemon** | Continuous background daemon polling download folder every X minutes. |
+| **Docker Container** | Headless container deployment via GitHub Container Registry (`ghcr.io`). |
 | **Cloud AI Fallback** | Uses Cloud AI models to resolve obfuscated filenames when local parsing fails. |
 | **Keyword Learning** | Discovers missing release tags via AI and saves them. |
 

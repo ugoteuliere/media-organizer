@@ -41,8 +41,8 @@ The application operates on three directories:
 These folders are independent and can be located anywhere on local storage, external drives, or SMB/NFS network shares.
 
 Processed files follow official Plex naming conventions:
-* **Movies**: `Title (Year) [Resolution Quality].ext`
-* **TV Shows**: `Show Name/Season XX/Show Name - SXXEXX [Resolution Quality].ext`
+* **Movies**: `Title (Year).ext` (or `Title (Year) [Resolution Quality].ext` with `-R` / `-q` enabled)
+* **TV Shows**: `Show Name/Season XX/Show Name - SXXEXX.ext` (or with `[Resolution Quality]` when `-R` / `-q` enabled)
 
 ## 2. Configuration
 
@@ -227,7 +227,7 @@ The cleaning engine uses a dictionary to strip filenames:
 
 A Docker image with all necessary dependencies is published on GitHub Container Registry: `ghcr.io/ugoteuliere/media-organizer`.
 
-The container is designed to run out-of-the-box with zero manual configuration required other than mounting your 3 media folders and setting up your TMDB API key
+The container is designed to run out-of-the-box with zero manual configuration required other than mounting your 3 media folders and setting up your TMDB API key.
 
 ---
 
@@ -246,6 +246,7 @@ services:
     environment:
       - PUID=1000
       - PGID=1000
+      - TMDB_API_KEY=your_tmdb_api_key_here
     volumes:
       - /mnt/storage/downloads:/data/input
       - /mnt/storage/movies:/data/Movies
@@ -259,6 +260,7 @@ docker run -d \
   --name media-organizer \
   -e PUID=1000 \
   -e PGID=1000 \
+  -e TMDB_API_KEY=your_tmdb_api_key_here \
   -v /mnt/storage/downloads:/data/input \
   -v /mnt/storage/movies:/data/Movies \
   -v /mnt/storage/series:/data/TV_Shows \

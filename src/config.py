@@ -430,31 +430,60 @@ class ConfigManager:
         return launch_config_gui(self)
 
     def wizard_paths(self, console=None):
-        """Interactive setup for media storage folders."""
+        """Interactive setup for media storage folders.
+
+        B10 / R3 fix: paths are only written to config when the directory
+        exists on disk — invalid paths are rejected with a clear message.
+        R2 fix: cross-field validation warns when two configured folders
+        point to the same resolved path.
+        """
         from rich.console import Console
         from rich.prompt import Prompt
 
         console = console or Console()
 
-        console.print("\n[bold magenta]📂 Folder Paths Configuration[/bold magenta]")
+        console.print("\n[bold magenta]Folder Paths Configuration[/bold magenta]")
         console.print(
             "[dim]Best Practice: Keep incoming downloads in an unsorted folder, separate from your Movies and TV Shows libraries. Folders can be local drives, USB disks, or NAS network shares.[/dim]"
         )
 
-        def _prompt_and_validate_folder(label, key):
+        collected: dict[str, str] = {}
+
+        def _prompt_and_validate_folder(label: str, key: str) -> None:
             current = self.get(key) or ""
             folder_input = Prompt.ask(label, default=current)
             folder_clean = folder_input.strip()
-            if folder_clean:
-                if not os.path.isdir(folder_clean):
-                    console.print(
-                        f"[bold red]❌ Error: The directory '{folder_clean}' does not exist on disk or is not reachable.[/bold red]"
-                    )
-                self.set(key, folder_clean)
+            if not folder_clean:
+                return  # user left blank — keep existing setting unchanged
+            if not os.path.isdir(folder_clean):
+                console.print(
+                    f"[bold red]Error: The directory '{folder_clean}' does not exist on disk or is not reachable.[/bold red]\n"
+                    "[yellow]Skipping — the existing setting has not been changed.[/yellow]"
+                )
+                return  # B10 fix: do NOT save an invalid path
+            self.set(key, folder_clean)
+            collected[key] = str(Path(folder_clean).resolve())
 
         _prompt_and_validate_folder("Movies Folder", KEY_MOVIES_FOLDER)
         _prompt_and_validate_folder("TV Shows Folder", KEY_TV_SHOWS_FOLDER)
         _prompt_and_validate_folder("Unsorted Downloads Folder", KEY_INPUT_FOLDER)
+
+        # R2: Cross-field validation — warn if any two folders resolve to the same path
+        labels = {
+            KEY_MOVIES_FOLDER: "Movies Folder",
+            KEY_TV_SHOWS_FOLDER: "TV Shows Folder",
+            KEY_INPUT_FOLDER: "Unsorted Downloads Folder",
+        }
+        seen: dict[str, str] = {}
+        for key, resolved in collected.items():
+            if resolved in seen:
+                console.print(
+                    f"[bold yellow]Warning: '{labels[key]}' and '{labels[seen[resolved]]}' "
+                    f"both resolve to the same path: {resolved}.\n"
+                    "This may cause files to be moved into an unexpected location.[/bold yellow]"
+                )
+            else:
+                seen[resolved] = key
 
     def wizard_api(self, console=None):
         """Interactive setup for TMDB and Cloud AI providers."""
@@ -660,13 +689,34 @@ class ConfigManager:
     def MOVIES_FOLDER(self):
         return self.get(KEY_MOVIES_FOLDER)
 
+    @MOVIES_FOLDER.setter
+    def MOVIES_FOLDER(self, value):
+        if value is None:
+            self.unset(KEY_MOVIES_FOLDER)
+        else:
+            self.set(KEY_MOVIES_FOLDER, str(value))
+
     @property
     def TV_SHOWS_FOLDER(self):
         return self.get(KEY_TV_SHOWS_FOLDER)
 
+    @TV_SHOWS_FOLDER.setter
+    def TV_SHOWS_FOLDER(self, value):
+        if value is None:
+            self.unset(KEY_TV_SHOWS_FOLDER)
+        else:
+            self.set(KEY_TV_SHOWS_FOLDER, str(value))
+
     @property
     def NOT_SORTED_MEDIA_FILES_FOLDER(self):
         return self.get(KEY_INPUT_FOLDER)
+
+    @NOT_SORTED_MEDIA_FILES_FOLDER.setter
+    def NOT_SORTED_MEDIA_FILES_FOLDER(self, value):
+        if value is None:
+            self.unset(KEY_INPUT_FOLDER)
+        else:
+            self.set(KEY_INPUT_FOLDER, str(value))
 
     @property
     def TMDB_API_KEY(self):
@@ -780,9 +830,17 @@ class ConfigManager:
     def RESOLUTION(self):
         return bool(self.get(KEY_RESOLUTION, False))
 
+    @RESOLUTION.setter
+    def RESOLUTION(self, value):
+        self.set(KEY_RESOLUTION, "true" if value else "false")
+
     @property
     def QUALITY(self):
         return bool(self.get(KEY_QUALITY, False))
+
+    @QUALITY.setter
+    def QUALITY(self, value):
+        self.set(KEY_QUALITY, "true" if value else "false")
 
     @property
     def DAEMON(self) -> bool:

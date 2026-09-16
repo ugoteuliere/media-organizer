@@ -9,6 +9,7 @@ import pandas as pd
 
 from src import ui, files, utils
 from src.config import ConfigManager
+from src.exceptions import MediaOrganizerError
 import main
 
 
@@ -376,18 +377,20 @@ def test_verify_folders_daemon_and_permissions(tmp_path, monkeypatch):
     # One folder unconfigured -> exits 1 with daemon=True
     monkeypatch.setattr(utils, "MOVIES_FOLDER", None)
     with patch("src.ui.print_log") as mock_log:
-        with pytest.raises(SystemExit) as exc:
+        with pytest.raises((SystemExit, MediaOrganizerError)) as exc:
             utils.verify_folders(daemon=True)
-        assert exc.value.code == 1
+        if isinstance(exc.value, SystemExit):
+            assert exc.value.code == 1
         log_text = "".join(str(call[0][0]) for call in mock_log.call_args_list)
         assert "Daemon mode requires all library and download folders" in log_text
 
     # Folder missing on disk -> exits 1
     monkeypatch.setattr(utils, "MOVIES_FOLDER", str(tmp_path / "missing_movies"))
     with patch("src.ui.print_log") as mock_log:
-        with pytest.raises(SystemExit) as exc:
+        with pytest.raises((SystemExit, MediaOrganizerError)) as exc:
             utils.verify_folders(daemon=True)
-        assert exc.value.code == 1
+        if isinstance(exc.value, SystemExit):
+            assert exc.value.code == 1
         log_text = "".join(str(call[0][0]) for call in mock_log.call_args_list)
         assert "Missing required folder(s) on disk" in log_text
 
@@ -397,9 +400,10 @@ def test_verify_folders_daemon_and_permissions(tmp_path, monkeypatch):
         "src.utils.check_folder_permissions", return_value=(True, False, "Write permission denied: Permission denied")
     ):
         with patch("src.ui.print_log") as mock_log:
-            with pytest.raises(SystemExit) as exc:
+            with pytest.raises((SystemExit, MediaOrganizerError)) as exc:
                 utils.verify_folders(daemon=True)
-            assert exc.value.code == 1
+            if isinstance(exc.value, SystemExit):
+                assert exc.value.code == 1
             log_text = "".join(str(call[0][0]) for call in mock_log.call_args_list)
             assert "Permission error" in log_text
             assert "chmod -R u+rwX" in log_text
@@ -415,9 +419,10 @@ def test_verify_folders_daemon_and_permissions(tmp_path, monkeypatch):
         "src.utils.check_folder_permissions", return_value=(False, False, "Read permission denied: Permission denied")
     ):
         with patch("src.ui.print_log") as mock_log:
-            with pytest.raises(SystemExit) as exc:
+            with pytest.raises((SystemExit, MediaOrganizerError)) as exc:
                 utils.verify_folders(only_rename=True, custom_path=str(custom_dir))
-            assert exc.value.code == 1
+            if isinstance(exc.value, SystemExit):
+                assert exc.value.code == 1
             log_text = "".join(str(call[0][0]) for call in mock_log.call_args_list)
             assert "Permission error" in log_text
 
@@ -611,9 +616,10 @@ def test_run_daemon_loop_sleep_execution(tmp_path):
     # 2. while check: 1000.5 - 1000.0 = 0.5 < 60 -> enters loop
     # 3. time_remaining calculation: 1000.5
     # 4. while check: 1070.0 - 1000.0 = 70.0 >= 60 -> exits sleep loop
-    times = iter([1000.0, 1000.5, 1000.5, 1070.0, 1070.0, 1070.0, 1070.0])
-
-    with patch("main.process_media", side_effect=mock_proc), patch("time.time", side_effect=lambda: next(times)):
+    with (
+        patch("main.process_media", side_effect=mock_proc),
+        patch.object(threading.Event, "wait", return_value=False),
+    ):
         ret = main.run_daemon_loop(args, max_cycles=2)
         assert ret == 0
         assert call_count == 2

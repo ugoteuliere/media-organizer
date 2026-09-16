@@ -190,10 +190,11 @@ def test_integration_daemon_multi_cycle(media_env, monkeypatch):
         current_time += 100.0
         return current_time
 
-    monkeypatch.setattr("time.time", mock_time)
+    import threading
 
-    exit_code = main.run_daemon_loop(args, max_cycles=2)
-    assert exit_code == 0
+    with patch.object(threading.Event, "wait", return_value=False):
+        exit_code = main.run_daemon_loop(args, max_cycles=2)
+        assert exit_code == 0
 
     # Inception should be processed and moved
     assert (movies / "Inception (2010).mkv").is_file()

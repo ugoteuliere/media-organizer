@@ -1868,13 +1868,20 @@ def test_config_wizard_mocked(tmp_path, monkeypatch):
     test_ini = tmp_path / "wizard_config.ini"
     cm = ConfigManager(custom_path=str(test_ini))
 
+    movies_dir = tmp_path / "WizardMovies"
+    tv_dir = tmp_path / "WizardTV"
+    dl_dir = tmp_path / "WizardDownloads"
+    movies_dir.mkdir()
+    tv_dir.mkdir()
+    dl_dir.mkdir()
+
     # Mock Prompt.ask and Confirm.ask from rich
     with patch(
         "rich.prompt.Prompt.ask",
         side_effect=[
-            "D:/WizardMovies",  # movies
-            "D:/WizardTV",  # tv
-            "D:/WizardDownloads",  # downloads
+            str(movies_dir),  # movies
+            str(tv_dir),  # tv
+            str(dl_dir),  # downloads
             "wizard_tmdb_key",  # tmdb
             "wizard_gemini_key",  # gemini
             "wizard_groq_key",  # groq
@@ -1893,9 +1900,9 @@ def test_config_wizard_mocked(tmp_path, monkeypatch):
         ):  # bypass, daemon, ai, learn, log, verbose, notify_success, notify_error, notify_tag, res, qual
             cm.run_wizard()
 
-    assert cm.get("paths.movies_folder") == "D:/WizardMovies"
-    assert cm.get("paths.tv_shows_folder") == "D:/WizardTV"
-    assert cm.get("paths.not_sorted_media_files_folder") == "D:/WizardDownloads"
+    assert cm.get("paths.movies_folder") == str(movies_dir)
+    assert cm.get("paths.tv_shows_folder") == str(tv_dir)
+    assert cm.get("paths.not_sorted_media_files_folder") == str(dl_dir)
     assert cm.get("api.tmdb_api_key") == "wizard_tmdb_key"
     assert cm.get("api.gemini_api_key") == "wizard_gemini_key"
     assert cm.get("api.groq_api_key") == "wizard_groq_key"

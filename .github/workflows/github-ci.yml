@@ -64,6 +64,7 @@ jobs:
     - name: Lint and Code Quality (Ruff)
       run: |
         ruff check src/ tests/
+        ruff format --check src/ tests/
 
     - name: Run Tests and Generate Coverage
       shell: bash

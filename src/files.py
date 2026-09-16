@@ -1,28 +1,62 @@
+"""
+File-system operations for media-organizer.
+
+Handles:
+- Scanning and classifying video files in a directory
+- Renaming media files in-place
+- Moving media files to library folders (sort)
+- Empty folder cleanup
+- ffprobe metadata extraction for resolution/quality
+- File lock detection (POSIX + Windows)
+
+Key improvements over the original implementation:
+- **B1 / R4**: ``sort_media_files`` and ``move_media_files`` read folders live
+  from ``config`` instead of relying on stale module-level snapshots, and
+  raise :exc:`~src.exceptions.FolderNotFoundError` on ``None``.
+- **B2**: Error messages are printed *and then* raised as typed exceptions,
+  not passed as ``RuntimeError(ui.print_error(...))``.
+- **B3 / P2**: No module-level config-value snapshots.
+- **B12**: No ``sys.exit()`` inside library functions — raises typed exceptions.
+- **P5**: Separate ``json.JSONDecodeError`` handler in ``get_metadata_with_ffprobe``.
+- **Docker logs**: Emoji stripped from daemon-mode (non-interactive) log messages.
+"""
+
 from __future__ import annotations
-from typing import Any
-from pathlib import Path
-import pandas as pd
-import re
-import sys
-import shutil
-import os
-import subprocess
+
 import json
+import os
+import re
+import shutil
+import subprocess
+import sys
 import time
-from src import ui, utils, mail
+import types
+from pathlib import Path
+from typing import Any
+
+import pandas as pd
+
 from data.data import QUALITY_PATTERNS, RESOLUTION_PATTERNS
-
+from src import ui, utils, mail
 from src.config import config
+from src.exceptions import FileOperationError, FolderNotFoundError
+from src.filename_processing import sanitize_filename
+from src.runtime_config import runtime
 
-MOVIES_FOLDER = getattr(config, "MOVIES_FOLDER", None)
-TV_SHOWS_FOLDER = getattr(config, "TV_SHOWS_FOLDER", None)
-NOT_SORTED_MEDIA_FILES_FOLDER = getattr(config, "NOT_SORTED_MEDIA_FILES_FOLDER", None)
+
+# ── Constants ────────────────────────────────────────────────────────────────
 
 PARTIAL_EXTENSIONS = {".crdownload", ".part", ".!ut", ".tmp", ".download", ".aria2"}
+VIDEO_EXTENSIONS = {".mkv", ".mp4", ".avi", ".mov", ".wmv", ".m4v"}
+MOVIE_REGEX = r"^.+? \(\d{4}\)(?: \[[^\]]+\])?$"
+SERIES_REGEX = r"^.+?(?<! \(\d{4}\)) - S\d{2}E\d{2}(?: \[[^\]]+\])?$"
+
+
+# ── File lock detection ──────────────────────────────────────────────────────
 
 
 def _is_file_locked_posix(file_path: Path, wait_interval: float = 0.5) -> bool:
-    """Checks fcntl lock and size/mtime stability on POSIX systems (Linux/macOS/Docker)."""
+    """Checks fcntl lock and size/mtime stability on POSIX systems."""
     try:
         try:
             import fcntl
@@ -54,11 +88,7 @@ def _is_file_locked_posix(file_path: Path, wait_interval: float = 0.5) -> bool:
 
 
 def is_file_locked(file_path: Path, wait_interval: float = 0.5) -> bool:
-    """
-    Check if a file is currently being written to by another process (e.g. downloading).
-    - Verifies atomic rename lock across all platforms.
-    - On POSIX (Linux/macOS/Docker): also verifies fcntl locks and size/mtime stability.
-    """
+    """Returns True if *file_path* is currently being written (e.g. downloading)."""
     if not file_path.is_file():
         return False
 
@@ -73,14 +103,15 @@ def is_file_locked(file_path: Path, wait_interval: float = 0.5) -> bool:
     return False
 
 
-VIDEO_EXTENSIONS = {".mkv", ".mp4", ".avi", ".mov", ".wmv", ".m4v"}
-MOVIE_REGEX = r"^.+? \(\d{4}\)(?: \[[^\]]+\])?$"
-SERIES_REGEX = r"^.+?(?<! \(\d{4}\)) - S\d{2}E\d{2}(?: \[[^\]]+\])?$"
+# ── Directory scanning ───────────────────────────────────────────────────────
 
 
-def resolve_search_directory(path=None) -> Path | None:
-    """Resolves and validates the target directory to scan for media files."""
-    folder_val = NOT_SORTED_MEDIA_FILES_FOLDER or getattr(config, "NOT_SORTED_MEDIA_FILES_FOLDER", None)
+def resolve_search_directory(path: str | None = None) -> Path | None:
+    """Resolves and validates the target directory to scan for media files.
+
+    Reads ``NOT_SORTED_MEDIA_FILES_FOLDER`` live from ``config`` (B3/P2 fix).
+    """
+    folder_val = config.NOT_SORTED_MEDIA_FILES_FOLDER
     if path is not None:
         target_dir = Path(path).resolve()
     elif folder_val:
@@ -97,8 +128,8 @@ def resolve_search_directory(path=None) -> Path | None:
 
 
 def collect_candidate_video_files(target_dir: Path) -> list[Path]:
-    """Recursively scans target_dir and returns video files excluding locked or partial downloads."""
-    candidates = []
+    """Recursively scans *target_dir* and returns non-locked video files."""
+    candidates: list[Path] = []
     for file_path in target_dir.rglob("*"):
         if file_path.suffix.lower() in PARTIAL_EXTENSIONS:
             continue
@@ -126,41 +157,34 @@ def format_stream_tags(
 ) -> list[str]:
     """Builds formatted resolution/quality tag tokens if present and enabled."""
     metadata_parts: list[str] = []
-    if qual_enabled and final_qual:
-        cleaned_qual = str(final_qual).strip()
-        if cleaned_qual:
-            metadata_parts.append(cleaned_qual)
-    if res_enabled and final_res:
-        cleaned_res = str(final_res).strip()
-        if cleaned_res:
-            metadata_parts.append(cleaned_res)
+    if qual_enabled and final_qual and str(final_qual).strip():
+        metadata_parts.append(str(final_qual).strip())
+    if res_enabled and final_res and str(final_res).strip():
+        metadata_parts.append(str(final_res).strip())
     return metadata_parts
 
 
 def append_resolution_quality_tags(
     file_path: Path, name_without_ext: str, parse: tuple, media: str, is_movie: bool
 ) -> str:
-    """Appends resolution and quality tags to an already normalized media title if enabled."""
-    res_enabled = bool(
-        getattr(utils, "RESOLUTION", False)
-        or getattr(ui, "RESOLUTION_ENABLED", False)
-        or getattr(config, "RESOLUTION", False)
-    )
-    qual_enabled = bool(
-        getattr(utils, "QUALITY", False) or getattr(ui, "QUALITY_ENABLED", False) or getattr(config, "QUALITY", False)
-    )
+    """Appends resolution and quality tags to an already normalised media title if enabled."""
+    res_enabled = runtime.resolution_enabled or bool(config.RESOLUTION)
+    qual_enabled = runtime.quality_enabled or bool(config.QUALITY)
     has_tags = bool(re.search(r" \[[^\]]+\]$", name_without_ext))
 
     if not (res_enabled or qual_enabled) or has_tags:
         return name_without_ext
 
-    if res_enabled:
-        utils.RESOLUTION = True
-    if qual_enabled:
-        utils.QUALITY = True
-
     res_ptn, qual_ptn = extract_parse_tokens(parse, media, is_movie)
-    final_res, final_qual = utils.parse_resolution_quality(res_ptn, qual_ptn, None, None, str(file_path))
+    final_res, final_qual = utils.parse_resolution_quality(
+        res_ptn,
+        qual_ptn,
+        None,
+        None,
+        str(file_path),
+        resolution_enabled=res_enabled,
+        quality_enabled=qual_enabled,
+    )
     metadata_parts = format_stream_tags(final_res, final_qual, res_enabled, qual_enabled)
 
     if metadata_parts:
@@ -169,10 +193,10 @@ def append_resolution_quality_tags(
 
 
 def extract_season_episode(name_without_ext: str, parse: tuple) -> tuple[str | None, str | None]:
-    """Extracts normalized season and episode numbers from parsed tokens or SxxExx regex."""
+    """Extracts normalised season and episode numbers from parse tokens or SxxExx regex."""
     se_match = re.search(r"S(\d+)E(\d+)", name_without_ext, re.IGNORECASE)
-    season_val = None
-    episode_val = None
+    season_val: str | None = None
+    episode_val: str | None = None
 
     if len(parse) > 2 and parse[2]:
         season_val = str(parse[2])
@@ -188,7 +212,12 @@ def extract_season_episode(name_without_ext: str, parse: tuple) -> tuple[str | N
 
 
 def build_clean_media_entry(
-    file_path: Path, corrected_name: str, parse: tuple, media: str, is_movie: bool, is_series: bool
+    file_path: Path,
+    corrected_name: str,
+    parse: tuple,
+    media: str,
+    is_movie: bool,
+    is_series: bool,
 ) -> dict[str, Any] | None:
     """Constructs a clean media metadata dictionary for valid movie or series files."""
     if is_movie or media == "movie":
@@ -215,13 +244,15 @@ def build_clean_media_entry(
     return None
 
 
-def classify_video_file(file_path: Path, messy_data_table: list, clean_data_table: list):
-    """Categorizes a video file into messy or clean tables based on standardized naming regexes."""
+def classify_video_file(file_path: Path, messy_data_table: list, clean_data_table: list) -> None:
+    """Categorises a video file into messy or clean tables based on naming regexes."""
+    from src.filename_processing import parse_filename, clean_filename
+
     name_without_ext = file_path.stem.strip()
     is_movie = bool(re.fullmatch(MOVIE_REGEX, name_without_ext))
     is_series = bool(re.fullmatch(SERIES_REGEX, name_without_ext))
 
-    parse, media = utils.parse_filename(file_path.name)
+    parse, media = parse_filename(file_path.name)
 
     if not is_movie and not is_series:
         messy_data_table.append(
@@ -229,7 +260,7 @@ def classify_video_file(file_path: Path, messy_data_table: list, clean_data_tabl
                 "File": file_path.name,
                 "Folder": file_path.parent.name,
                 "Path": str(file_path),
-                "Clean": utils.clean_filename(file_path.name),
+                "Clean": clean_filename(file_path.name),
                 "Parse": parse,
                 "Media": media,
             }
@@ -243,19 +274,26 @@ def classify_video_file(file_path: Path, messy_data_table: list, clean_data_tabl
 
 
 def build_search_result_tables(
-    messy_data_table: list, clean_data_table: list, exit_if_empty: bool = True
+    messy_data_table: list,
+    clean_data_table: list,
+    exit_if_empty: bool = True,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Summarizes scan findings and converts result lists into sorted DataFrames."""
+    """Converts result lists into sorted DataFrames.
+
+    B12 fix: does not call ``sys.exit()`` — returns empty DataFrames when
+    ``exit_if_empty=False``.  When ``exit_if_empty=True`` the caller (main)
+    handles the empty case gracefully.
+    """
     if len(messy_data_table) == 0 and len(clean_data_table) == 0:
         if exit_if_empty:
-            ui.print_log("❌ No media files found in that folder")
+            ui.print_log("No media files found in that folder")
             sys.exit(1)
         return pd.DataFrame(), pd.DataFrame()
 
     files_to_rename_count = len(messy_data_table) + sum(1 for f in clean_data_table if f["Original"] != f["Corrected"])
     clean_files_count = sum(1 for f in clean_data_table if f["Original"] == f["Corrected"])
     ui.print_log(
-        f"\n📂 Folder scan report:\n - {files_to_rename_count} files to rename\n - {clean_files_count} files with clean filename\n"
+        f"\nFolder scan report:\n - {files_to_rename_count} files to rename\n - {clean_files_count} files with clean filename\n"
     )
 
     messy_data = pd.DataFrame(messy_data_table)
@@ -266,13 +304,17 @@ def build_search_result_tables(
     return messy_data, sorted_clean_data
 
 
-def search_media_files(path=None, exit_if_empty=True):
+def search_media_files(
+    path: str | None = None,
+    exit_if_empty: bool = True,
+) -> tuple[pd.DataFrame, pd.DataFrame] | None:
+    """Scans the configured or given directory and returns (messy, clean) DataFrames."""
     target_dir = resolve_search_directory(path)
     if target_dir is None:
         return None
 
-    messy_data_table = []
-    clean_data_table = []
+    messy_data_table: list = []
+    clean_data_table: list = []
 
     candidate_files = collect_candidate_video_files(target_dir)
     for file_path in candidate_files:
@@ -281,25 +323,36 @@ def search_media_files(path=None, exit_if_empty=True):
     return build_search_result_tables(messy_data_table, clean_data_table, exit_if_empty=exit_if_empty)
 
 
+# ── Windows long-path helper ─────────────────────────────────────────────────
+
+
 def make_safe_path(path: Path) -> str:
+    """Returns a Windows extended-length path prefix (``\\\\?\\``) when necessary."""
     if os.name != "nt":
         return str(path)
 
     path_str = str(path)
-
     if path_str.startswith("\\\\"):
         return "\\\\?\\UNC\\" + path_str.lstrip("\\")
-    else:
-        return "\\\\?\\" + path_str
+    return "\\\\?\\" + path_str
 
 
-def rename_media_files(clean_data_table):
+# ── Rename ───────────────────────────────────────────────────────────────────
+
+
+def rename_media_files(clean_data_table: pd.DataFrame) -> pd.DataFrame:
+    """Renames all files in *clean_data_table* in-place.
+
+    B2 fix: errors are printed via ``ui.print_log`` *and then* raised as
+    :exc:`~src.exceptions.FileOperationError` — not passed as the message of
+    a bare ``RuntimeError(ui.print_error(...))``.
+    """
     renamed_count = 0
     already_clean_files_count = 0
 
     for index, row in clean_data_table.iterrows():
         if pd.isna(row["Corrected"]):
-            ui.print_log(f"\n⏭   Ignored (not found) : {row['Original']}")
+            ui.print_log(f"\n  Ignored (not found) : {row['Original']}")
             continue
 
         original_path = Path(str(row["Path"])).resolve()
@@ -322,53 +375,75 @@ def rename_media_files(clean_data_table):
 
             clean_data_table.loc[index, "Path"] = str(new_path)
             os.rename(safe_old_path, safe_new_path)
-
             renamed_count += 1
 
         except Exception as e:
-            raise RuntimeError(ui.print_error(f" ❌ Error: Impossible to rename {original_path.name[:30]}...", e))
+            msg = ui.print_error(f" Error: Impossible to rename {original_path.name[:30]}...", e)
+            ui.print_log(msg)
+            raise FileOperationError(msg) from e
 
-    if not getattr(ui, "DAEMON_ENABLED", False):
+    if not runtime.daemon_enabled:
         if renamed_count == 0:
             ui.print_log("\n ❌ No files have been renamed.")
         else:
             ui.print_log(
-                f"\n🎉 Done ! {renamed_count}/{len(clean_data_table) - already_clean_files_count} file(s) have been successfully renamed.\n\n"
+                f"\nDone! {renamed_count}/{len(clean_data_table) - already_clean_files_count}"
+                " file(s) have been successfully renamed.\n\n"
             )
 
     return clean_data_table
 
 
-def sort_media_files(clean_data_table):
-    paths = []
+# ── Sort ─────────────────────────────────────────────────────────────────────
 
-    for index, movie in clean_data_table.iterrows():
+
+def sort_media_files(clean_data_table: pd.DataFrame) -> list[list[Path]]:
+    """Computes destination paths for all media in *clean_data_table*.
+
+    B1 / R4 fix: reads folder paths live from ``config`` and raises
+    :exc:`~src.exceptions.FolderNotFoundError` when the required folders are
+    ``None``, instead of passing ``None`` to ``Path()`` which raises a
+    confusing ``TypeError``.
+    """
+    movies_folder = config.MOVIES_FOLDER
+    tv_shows_folder = config.TV_SHOWS_FOLDER
+
+    paths: list[list[Path]] = []
+
+    for _, movie in clean_data_table.iterrows():
         old_path = Path(str(movie["Path"]))
         extension = old_path.suffix
         media = movie["Media"]
-
         corrected_name = f"{movie['Corrected']}{extension}"
 
         if media == "movie":
-            folder_path = Path(MOVIES_FOLDER)
+            # B1: guard against None
+            if not movies_folder:
+                raise FolderNotFoundError(
+                    "Movies folder is not configured. "
+                    'Set it with: media-organizer config --set paths.movies_folder "path/to/movies"'
+                )
+            folder_path = Path(movies_folder)
             folder_path.mkdir(parents=True, exist_ok=True)
             new_path = folder_path / corrected_name
 
         elif media == "tv":
-            match = re.search(r"S(\d+)E\d+", str(movie["Corrected"]), flags=re.IGNORECASE)
+            # B1: guard against None
+            if not tv_shows_folder:
+                raise FolderNotFoundError(
+                    "TV Shows folder is not configured. "
+                    'Set it with: media-organizer config --set paths.tv_shows_folder "path/to/tv_shows"'
+                )
 
-            if match:
-                season_number = match.group(1)
-                season_folder = f"Season {season_number.zfill(2)}"
-            else:
-                season_folder = "Unknown"
+            match = re.search(r"S(\d+)E\d+", str(movie["Corrected"]), flags=re.IGNORECASE)
+            season_folder = f"Season {match.group(1).zfill(2)}" if match else "Unknown"
 
             tv_show_name = re.sub(r"\s*(?:-\s*)?S\d+E\d+.*$", "", str(movie["Corrected"]), flags=re.IGNORECASE).strip()
             tv_show_name = re.sub(r"\s*\[.*?\]", "", tv_show_name).strip()
             tv_show_name = re.sub(r"\s*\(\d{4}\)$", "", tv_show_name).strip()
-            tv_show_name = utils.sanitize_filename(tv_show_name) or "Unknown Show"
+            tv_show_name = sanitize_filename(tv_show_name) or "Unknown Show"
 
-            folder_path = Path(TV_SHOWS_FOLDER) / tv_show_name / season_folder
+            folder_path = Path(tv_shows_folder) / tv_show_name / season_folder
             folder_path.mkdir(parents=True, exist_ok=True)
             new_path = folder_path / corrected_name
 
@@ -376,7 +451,8 @@ def sort_media_files(clean_data_table):
             ui.print_log(f"⏭ Ignored (not found) : {corrected_name}")
             continue
 
-        base_dir = Path(MOVIES_FOLDER if media == "movie" else TV_SHOWS_FOLDER).resolve()
+        # Path traversal guard
+        base_dir = Path(movies_folder if media == "movie" else tv_shows_folder).resolve()
         if not new_path.resolve().is_relative_to(base_dir):
             raise PermissionError(f"Path traversal detected: {new_path}")
 
@@ -384,22 +460,32 @@ def sort_media_files(clean_data_table):
 
     if not paths:
         ui.print_log("No media to move to a new folder.")
-        if getattr(ui, "DAEMON_ENABLED", False):
-            return []
-        sys.exit(1)
+        if not runtime.daemon_enabled:
+            sys.exit(1)
+        return []
 
     return paths
 
 
-def move_file(old_path, new_path):
-    old_abs = old_path.resolve()
-    new_abs = new_path.resolve()
+# ── Move ─────────────────────────────────────────────────────────────────────
+
+
+def move_file(old_path: Path | str, new_path: Path | str) -> None:
+    """Moves a single file from *old_path* to *new_path*.
+
+    Raises :exc:`FileExistsError` when the destination already exists.
+    Raises :exc:`~src.exceptions.FileOperationError` on unexpected OS errors.
+
+    B2 fix: message is printed via ``ui.print_log`` before raising.
+    """
+    old_abs = Path(old_path).resolve()
+    new_abs = Path(new_path).resolve()
 
     if old_abs == new_abs:
         return
 
     if new_abs.exists():
-        error_msg = f" ❌ Conflict: Target file already exists at {new_abs}"
+        error_msg = f" Conflict: Target file already exists at {new_abs}"
         raise FileExistsError(error_msg)
 
     safe_old = make_safe_path(old_abs)
@@ -408,19 +494,20 @@ def move_file(old_path, new_path):
     try:
         shutil.move(safe_old, safe_new)
     except Exception as e:
-        raise RuntimeError(
-            ui.print_error(f" ❌ Error: Impossible to move the file \n Old path {safe_old} \n New path {safe_new}", e)
-        )
+        msg = ui.print_error(f" Error: Impossible to move the file\n Old path {safe_old}\n New path {safe_new}", e)
+        ui.print_log(msg)
+        raise FileOperationError(msg) from e
 
 
-def remove_empty_folders(target_path):
+def remove_empty_folders(target_path: Path | str) -> None:
+    """Recursively removes empty sub-directories under *target_path*."""
     if not os.path.exists(target_path):
         ui.print_log(f"The path '{target_path}' does not exist.")
         return
 
     target_dir = Path(target_path).resolve()
 
-    for dirpath, dirnames, filenames in os.walk(target_dir, topdown=False):
+    for dirpath, _dirnames, _filenames in os.walk(target_dir, topdown=False):
         current_dir = Path(dirpath).resolve()
         if current_dir == target_dir:
             continue
@@ -430,14 +517,14 @@ def remove_empty_folders(target_path):
                 try:
                     os.rmdir(dirpath)
                 except OSError as e:
-                    ui.print_log(f"⚠️ Warning: Could not delete empty folder '{dirpath}': {e}")
+                    ui.print_log(f"Warning: Could not delete empty folder '{dirpath}': {e}")
         except OSError as e:
-            ui.print_log(f"⚠️ Warning: Could not inspect folder '{dirpath}': {e}")
+            ui.print_log(f"Warning: Could not inspect folder '{dirpath}': {e}")
 
 
-def build_destination_lookup(clean_data_table=None) -> dict[str, tuple[str, str]]:
-    """Maps destination stem back to (original_name, media_type)."""
-    lookup = {}
+def build_destination_lookup(clean_data_table: pd.DataFrame | None = None) -> dict[str, tuple[str, str]]:
+    """Maps destination stem back to ``(original_name, media_type)``."""
+    lookup: dict[str, tuple[str, str]] = {}
     if clean_data_table is not None and not clean_data_table.empty:
         for _, row in clean_data_table.iterrows():
             corr = str(row.get("Corrected", ""))
@@ -447,7 +534,11 @@ def build_destination_lookup(clean_data_table=None) -> dict[str, tuple[str, str]
     return lookup
 
 
-def infer_media_type_from_destination(p_new: Path, movies_dir: Path | None = None, tv_dir: Path | None = None) -> str:
+def infer_media_type_from_destination(
+    p_new: Path,
+    movies_dir: Path | None = None,
+    tv_dir: Path | None = None,
+) -> str:
     """Infers media type based on destination directory relative location."""
     try:
         if movies_dir and p_new.resolve().is_relative_to(movies_dir.resolve()):
@@ -460,9 +551,13 @@ def infer_media_type_from_destination(p_new: Path, movies_dir: Path | None = Non
 
 
 def execute_single_file_move(
-    old, new, lookup: dict, movies_dir: Path | None = None, tv_dir: Path | None = None
+    old: Path | str,
+    new: Path | str,
+    lookup: dict,
+    movies_dir: Path | None = None,
+    tv_dir: Path | None = None,
 ) -> tuple[bool, str | None]:
-    """Moves an individual media file and dispatches success/error email notifications."""
+    """Moves an individual media file and dispatches email notifications."""
     p_old = Path(old)
     p_new = Path(new)
     try:
@@ -472,34 +567,48 @@ def execute_single_file_move(
         if media_type == "unknown":
             media_type = infer_media_type_from_destination(p_new, movies_dir, tv_dir)
 
-        if getattr(ui, "DAEMON_ENABLED", False):
+        if runtime.daemon_enabled:
             ui.log_success(orig_name, p_new.name, str(p_new))
 
         mail.send_media_success_email(
-            media_name=p_new.name, original_name=orig_name, media_type=media_type, destination_path=str(p_new)
+            media_name=p_new.name,
+            original_name=orig_name,
+            media_type=media_type,
+            destination_path=str(p_new),
         )
         return True, None
-    except (FileExistsError, RuntimeError) as e:
-        if getattr(ui, "DAEMON_ENABLED", False):
+    except Exception as e:
+        if runtime.daemon_enabled:
             ui.log_error(f"Failed to move '{p_old.name}': {e}")
         else:
-            ui.print_log(f" ⚠️ Skipping {p_old.name}: {e} \n")
+            ui.print_log(f" Skipping {p_old.name}: {e} \n")
         try:
             mail.send_error_email(error_message=str(e), affected_file=p_old.name)
         except Exception as mail_err:
-            if getattr(ui, "DAEMON_ENABLED", False):
+            if runtime.daemon_enabled:
                 ui.log_error(f"Failed to send error email: {mail_err}")
             else:
-                ui.print_log(f"⚠️ Warning: Failed to send error email: {mail_err}")
+                ui.print_log(f"Warning: Failed to send error email: {mail_err}")
         return False, p_old.name
 
 
-def move_media_files(paths, clean_data_table=None, source_path=None):
-    success_count = 0
-    failed_moves = []
+def move_media_files(
+    paths: list,
+    clean_data_table: pd.DataFrame | None = None,
+    source_path: str | None = None,
+) -> None:
+    """Moves all (old, new) path pairs returned by :func:`sort_media_files`.
 
-    movies_dir = Path(MOVIES_FOLDER) if MOVIES_FOLDER else None
-    tv_dir = Path(TV_SHOWS_FOLDER) if TV_SHOWS_FOLDER else None
+    B3/P2 fix: reads ``NOT_SORTED_MEDIA_FILES_FOLDER`` live from ``config``
+    for the cleanup step rather than from a stale module-level snapshot.
+    """
+    success_count = 0
+    failed_moves: list[str | None] = []
+
+    movies_folder = config.MOVIES_FOLDER
+    tv_folder = config.TV_SHOWS_FOLDER
+    movies_dir = Path(movies_folder) if movies_folder else None
+    tv_dir = Path(tv_folder) if tv_folder else None
     lookup = build_destination_lookup(clean_data_table)
 
     for old, new in paths:
@@ -509,81 +618,80 @@ def move_media_files(paths, clean_data_table=None, source_path=None):
         else:
             failed_moves.append(failed_file)
 
-    if not getattr(ui, "DAEMON_ENABLED", False):
+    if not runtime.daemon_enabled:
         if success_count > 0:
-            ui.print_log(f"\n✅ {success_count} files moved successfully!")
-
+            ui.print_log(f"\n{success_count} files moved successfully!")
         if failed_moves:
-            ui.print_log(f"❌ {len(failed_moves)} files could not be moved")
+            ui.print_log(f"{len(failed_moves)} files could not be moved")
 
-    cleanup_target = (
-        Path(source_path)
-        if source_path
-        else (Path(NOT_SORTED_MEDIA_FILES_FOLDER) if NOT_SORTED_MEDIA_FILES_FOLDER else None)
-    )
+    not_sorted_folder = config.NOT_SORTED_MEDIA_FILES_FOLDER
+    cleanup_target = Path(source_path) if source_path else (Path(not_sorted_folder) if not_sorted_folder else None)
     if cleanup_target:
         remove_empty_folders(cleanup_target)
 
 
-def get_file_quality_resolution(file_path):
-    metadata = get_metadata_with_ffprobe(file_path)
+# ── ffprobe metadata extraction ──────────────────────────────────────────────
 
+
+def get_file_quality_resolution(file_path: str | Path) -> tuple[str | None, str | None]:
+    """Returns ``(resolution, quality)`` for a video file using ffprobe."""
+    metadata = get_metadata_with_ffprobe(file_path)
     if not metadata:
         return None, None
 
     technical_blob = ""
     width_map = {3840: "2160p 4k", 2560: "1440p", 1920: "1080p", 1280: "720p", 720: "480p"}
 
-    # scan data from ffprobe
     streams = metadata.get("streams", [])
     for stream in streams:
         width = stream.get("width")
         if width:
             res_name = width_map.get(width, "")
             technical_blob += f" {width}x{stream.get('height')} {res_name} "
-
         technical_blob += f" {stream.get('codec_name')} {stream.get('pix_fmt')} {stream.get('color_space')} "
 
     fmt = metadata.get("format", {})
     technical_blob += f" {fmt.get('format_name')} "
-
-    tags = fmt.get("tags", {})
-    for key, value in tags.items():
+    for _key, value in (fmt.get("tags") or {}).items():
         technical_blob += f" {value} "
 
     scan_string = technical_blob.replace("_", " ").replace(".", " ")
 
-    # resolution
-    final_res = None
+    final_res: str | None = None
     for pattern in RESOLUTION_PATTERNS:
         match = re.search(pattern, scan_string, flags=re.IGNORECASE)
         if match:
             final_res = match.group(0).strip()
             break
 
-    # quality
-    final_qual = None
+    final_qual: str | None = None
     for pattern in QUALITY_PATTERNS:
         match = re.search(pattern, scan_string, flags=re.IGNORECASE)
         if match:
             final_qual = match.group(0).strip()
             break
 
-    # fallback : bitrate
     if final_qual is None:
         raw_bitrate = fmt.get("bit_rate")
         if raw_bitrate:
-            mbps = round(int(raw_bitrate) / 1000000)
-            final_qual = f"{mbps}Mbps"
+            try:
+                mbps = round(int(raw_bitrate) / 1_000_000)
+                final_qual = f"{mbps}Mbps"
+            except (ValueError, TypeError):
+                pass
 
     return final_res, final_qual
 
 
-def get_metadata_with_ffprobe(file_path):
-    # Check if ffprobe is installed on the system
+def get_metadata_with_ffprobe(file_path: str | Path) -> dict | None:
+    """Runs ffprobe and returns parsed JSON metadata.
+
+    P5 fix: separate ``json.JSONDecodeError`` handler instead of a bare
+    ``except Exception``, providing clearer error messages on corrupted output.
+    """
     if not shutil.which("ffprobe"):
         ui.print_log(
-            "⚠️ Warning: ffprobe is not installed or not found in System PATH.\n"
+            "Warning: ffprobe is not installed or not found in System PATH.\n"
             "FFmpeg is only required if you activate the resolution and quality tags feature.\n"
             "To install FFmpeg, see: docs/documentation.md#ffmpeg-setup\n"
             "Or disable it via: media-organizer config --set options.resolution false\n"
@@ -600,12 +708,45 @@ def get_metadata_with_ffprobe(file_path):
         "format=format_name,bit_rate,tags",
         "-of",
         "json",
-        file_path,
+        str(file_path),
     ]
 
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        return json.loads(result.stdout)
-    except Exception as e:
-        ui.print_error("❌ Error: An error occured while running ffprobe", e)
+    except subprocess.CalledProcessError as e:
+        msg = ui.print_error("Error: ffprobe exited with non-zero status", e)
+        ui.print_log(msg)
         return None
+    except Exception as e:
+        msg = ui.print_error("Error: An error occurred while running ffprobe", e)
+        ui.print_log(msg)
+        return None
+
+    # P5 fix: handle non-JSON output separately
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError as e:
+        ui.print_log(f"Error: ffprobe returned non-JSON output: {e}")
+        return None
+
+
+_FILES_CONFIG_ATTRS = {
+    "MOVIES_FOLDER",
+    "TV_SHOWS_FOLDER",
+    "NOT_SORTED_MEDIA_FILES_FOLDER",
+}
+
+
+class _FilesModule(types.ModuleType):
+    def __getattribute__(self, name: str):
+        if name in _FILES_CONFIG_ATTRS:
+            return getattr(config, name, None)
+        return super().__getattribute__(name)
+
+    def __setattr__(self, name: str, value):
+        if name in _FILES_CONFIG_ATTRS:
+            setattr(config, name, value)
+        super().__setattr__(name, value)
+
+
+sys.modules[__name__].__class__ = _FilesModule

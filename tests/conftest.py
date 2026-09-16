@@ -11,29 +11,38 @@ for _k, _v in list(os.environ.items()):
 # Initialize global quarantine directory and point environment variables BEFORE importing src
 _global_quarantine_dir = Path(tempfile.gettempdir()) / "pytest_rename_quarantine"
 _global_quarantine_dir.mkdir(parents=True, exist_ok=True)
-_global_quarantine_file = _global_quarantine_dir / "config.ini"
+_global_quarantine_file = _global_quarantine_dir / "global_seed_config.ini"
+
+import configparser
 
 # Determine source config to read API keys and credentials from: local config.ini (CI) or user APPDATA/XDG config
-_source_ini = None
-if Path("config.ini").is_file():
-    _source_ini = Path("config.ini").resolve()
+_candidates = [Path("config.ini")]
+if os.name == "nt":
+    _appdata = os.environ.get("APPDATA")
+    if _appdata:
+        _candidates.append(Path(_appdata) / "media-organizer" / "config.ini")
+        _candidates.append(Path(_appdata) / "rename" / "config.ini")
 else:
-    if os.name == "nt":
-        _appdata = os.environ.get("APPDATA")
-        if _appdata and (Path(_appdata) / "media-organizer" / "config.ini").is_file():
-            _source_ini = Path(_appdata) / "media-organizer" / "config.ini"
-        elif _appdata and (Path(_appdata) / "rename" / "config.ini").is_file():
-            _source_ini = Path(_appdata) / "rename" / "config.ini"
-    else:
-        _xdg = os.environ.get("XDG_CONFIG_HOME")
-        if _xdg and (Path(_xdg) / "media-organizer" / "config.ini").is_file():
-            _source_ini = Path(_xdg) / "media-organizer" / "config.ini"
-        elif _xdg and (Path(_xdg) / "rename" / "config.ini").is_file():
-            _source_ini = Path(_xdg) / "rename" / "config.ini"
-        elif (Path.home() / ".config" / "media-organizer" / "config.ini").is_file():
-            _source_ini = Path.home() / ".config" / "media-organizer" / "config.ini"
-        elif (Path.home() / ".config" / "rename" / "config.ini").is_file():
-            _source_ini = Path.home() / ".config" / "rename" / "config.ini"
+    _xdg = os.environ.get("XDG_CONFIG_HOME")
+    if _xdg:
+        _candidates.append(Path(_xdg) / "media-organizer" / "config.ini")
+        _candidates.append(Path(_xdg) / "rename" / "config.ini")
+    _candidates.append(Path.home() / ".config" / "media-organizer" / "config.ini")
+    _candidates.append(Path.home() / ".config" / "rename" / "config.ini")
+
+_source_ini = None
+for _c in _candidates:
+    if _c and _c.is_file():
+        try:
+            _check_p = configparser.ConfigParser()
+            _check_p.read(str(_c), encoding="utf-8")
+            if _check_p.has_section("api") and any(_check_p.items("api")):
+                _source_ini = _c.resolve()
+                break
+        except Exception:
+            pass
+if not _source_ini and any(c and c.is_file() for c in _candidates):
+    _source_ini = next(c.resolve() for c in _candidates if c and c.is_file())
 
 import shutil
 import configparser

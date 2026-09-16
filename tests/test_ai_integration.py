@@ -19,6 +19,20 @@ def get_live_key(provider_name: str) -> str:
     return None
 
 
+def is_live_api_transient_error(e: Exception) -> bool:
+    """Detects rate limits, quota exhaustion, network timeouts or server drops on live API endpoints."""
+    err_str = str(e).lower()
+    return (
+        api.is_quota_or_rate_limit_error(e)
+        or "timeout" in err_str
+        or "timed out" in err_str
+        or "connection" in err_str
+        or "502" in err_str
+        or "503" in err_str
+        or "504" in err_str
+    )
+
+
 # ==============================================================================
 # Live Cloud AI Integration Tests (with automatic bypass when limits are reached)
 # ==============================================================================
@@ -47,8 +61,8 @@ def test_integration_groq_live():
         assert item.year == "2010"
         assert item.confidence_score >= 0.70
     except Exception as e:
-        if api.is_quota_or_rate_limit_error(e):
-            pytest.skip(f"Groq live limits reached: {e}. Gracefully bypassed.")
+        if is_live_api_transient_error(e):
+            pytest.skip(f"Groq live limits or network error: {e}. Gracefully bypassed.")
         raise
 
 
@@ -75,8 +89,8 @@ def test_integration_openrouter_live():
         assert "inception" in item.title.lower()
         assert item.confidence_score >= 0.60
     except Exception as e:
-        if api.is_quota_or_rate_limit_error(e):
-            pytest.skip(f"OpenRouter free limits reached: {e}. Gracefully bypassed.")
+        if is_live_api_transient_error(e):
+            pytest.skip(f"OpenRouter live limits or network error: {e}. Gracefully bypassed.")
         raise
 
 
@@ -103,8 +117,8 @@ def test_integration_cloudflare_live():
         assert item.title is not None
         assert "inception" in item.title.lower()
     except Exception as e:
-        if api.is_quota_or_rate_limit_error(e):
-            pytest.skip(f"Cloudflare daily neuron limit reached: {e}. Gracefully bypassed.")
+        if is_live_api_transient_error(e):
+            pytest.skip(f"Cloudflare daily neuron limit or network error: {e}. Gracefully bypassed.")
         raise
 
 
@@ -131,8 +145,8 @@ def test_integration_gemini_live():
         assert "inception" in item.title.lower()
         assert item.year == "2010"
     except Exception as e:
-        if api.is_quota_or_rate_limit_error(e):
-            pytest.skip(f"Gemini quota/rate limit reached: {e}. Gracefully bypassed.")
+        if is_live_api_transient_error(e):
+            pytest.skip(f"Gemini quota/rate limit or network error: {e}. Gracefully bypassed.")
         raise
 
 

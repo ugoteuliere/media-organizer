@@ -93,12 +93,15 @@ def isolate_user_config(tmp_path, monkeypatch):
     ui.SIMULATE_ENABLED = False
     ui.BYPASS_ENABLED = False
     ui.LOG_ENABLED = False
+    ui.LOG_MODE = "console"
     ui.VERBOSE_ENABLED = False
     ui.AI_FALLBACK_ENABLED = False
     ui.DAEMON_ENABLED = False
     ui.POLLING_INTERVAL = 15
 
     yield
+
+    ui.LOG_MODE = "console"
 
     # 5. Teardown: ensure config singleton points to quarantine, never user's real config
     config.config_path = _global_quarantine_file

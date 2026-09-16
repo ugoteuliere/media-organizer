@@ -386,6 +386,37 @@ def test_config_property_setters_and_string_getters(tmp_path):
     cm.MAIL_PSWD = None
     assert cm.MAIL_PSWD is None
 
+    # API Keys and Provider properties
+    cm.TMDB_API_KEY = "tmdb_test_key"
+    assert cm.TMDB_API_KEY == "tmdb_test_key"
+    cm.TMDB_API_KEY = None
+    assert cm.TMDB_API_KEY is None
+
+    cm.GEMINI_API_KEY = "gemini_test_key"
+    assert cm.GEMINI_API_KEY == "gemini_test_key"
+    cm.GEMINI_API_KEY = None
+    assert cm.GEMINI_API_KEY is None
+
+    cm.GROQ_API_KEY = "groq_test_key"
+    assert cm.GROQ_API_KEY == "groq_test_key"
+    cm.GROQ_API_KEY = None
+    assert cm.GROQ_API_KEY is None
+
+    cm.OPENROUTER_API_KEY = "openrouter_test_key"
+    assert cm.OPENROUTER_API_KEY == "openrouter_test_key"
+    cm.OPENROUTER_API_KEY = None
+    assert cm.OPENROUTER_API_KEY is None
+
+    cm.CLOUDFLARE_API_TOKEN = "cf_token_key"
+    assert cm.CLOUDFLARE_API_TOKEN == "cf_token_key"
+    cm.CLOUDFLARE_API_TOKEN = None
+    assert cm.CLOUDFLARE_API_TOKEN is None
+
+    cm.CLOUDFLARE_ACCOUNT_ID = "cf_account_123"
+    assert cm.CLOUDFLARE_ACCOUNT_ID == "cf_account_123"
+    cm.CLOUDFLARE_ACCOUNT_ID = None
+    assert cm.CLOUDFLARE_ACCOUNT_ID is None
+
     # NOTIFY_ON_SUCCESS
     cm.NOTIFY_ON_SUCCESS = True
     assert cm.NOTIFY_ON_SUCCESS is True

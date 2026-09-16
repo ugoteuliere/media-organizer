@@ -268,3 +268,53 @@ def test_process_media_only_rename_daemon(tmp_path, capsys, monkeypatch):
     lines = captured.out.strip().splitlines()
     assert any("[SUCCESS] 'Show.S01E01.mkv' -> 'Show.S01E01.mkv' (Destination: " in l and "(in-place)" in l for l in lines)
     assert any("[INFO] Check 2 : Successfully renamed 1 file(s)." in l for l in lines)
+
+
+def test_emit_daemon_log_cleanup_trigger(tmp_path, monkeypatch):
+    monkeypatch.setattr(ui, "DAEMON_ENABLED", True)
+    monkeypatch.setattr(ui, "LOG_ENABLED", True)
+    monkeypatch.setattr(ui, "LOG_MODE", "file")
+    monkeypatch.setattr(ui, "get_log_dir", lambda: tmp_path)
+    monkeypatch.setattr(ui, "_last_log_cleanup_date", "1970-01-01")
+
+    with patch("src.ui.cleanup_old_logs") as mock_clean:
+        ui.log_info("Trigger cleanup")
+        mock_clean.assert_called_once_with(tmp_path, max_age_days=14)
+        assert ui._last_log_cleanup_date != "1970-01-01"
+
+
+def test_emit_daemon_log_oserror_handled(tmp_path, monkeypatch):
+    monkeypatch.setattr(ui, "DAEMON_ENABLED", True)
+    monkeypatch.setattr(ui, "LOG_ENABLED", True)
+    monkeypatch.setattr(ui, "LOG_MODE", "file")
+    monkeypatch.setattr(ui, "get_log_dir", lambda: tmp_path)
+
+    with patch("builtins.open", side_effect=OSError("Disk write failure")):
+        # Should catch OSError without raising
+        ui.log_info("Handled write error")
+
+
+def test_logging_functions_non_daemon_mode(capsys, monkeypatch):
+    monkeypatch.setattr(ui, "DAEMON_ENABLED", False)
+    monkeypatch.setattr(ui, "LOG_ENABLED", False)
+    monkeypatch.setattr(ui, "LOG_MODE", "console")
+
+    ui.log_info("Classic non-daemon info")
+    assert "Classic non-daemon info\n" in capsys.readouterr().out
+
+    ui.log_error("Classic non-daemon error")
+    assert "Classic non-daemon error\n" in capsys.readouterr().out
+
+    ui.log_success("old.mkv", "new.mkv", "/dest/new.mkv")
+    assert "✅ 'old.mkv' -> 'new.mkv' (Destination: /dest/new.mkv)\n" in capsys.readouterr().out
+
+
+def test_print_log_daemon_info_prefix(capsys, monkeypatch):
+    monkeypatch.setattr(ui, "DAEMON_ENABLED", True)
+    monkeypatch.setattr(ui, "LOG_ENABLED", False)
+    monkeypatch.setattr(ui, "LOG_MODE", "console")
+
+    ui.print_log("[INFO] Pre-tagged info message")
+    captured = capsys.readouterr()
+    assert "[INFO] Pre-tagged info message" in captured.out
+

@@ -7,6 +7,7 @@ from unittest.mock import patch, MagicMock
 
 import src.files as files
 import src.utils as utils
+import src.ui as ui
 
 
 # =========================================================================
@@ -276,6 +277,45 @@ def test_execute_single_file_move(tmp_path):
         assert success is False
         assert failed == old_file.name
         mock_err_mail.assert_called_once()
+
+
+def test_execute_single_file_move_daemon_mode(tmp_path, monkeypatch):
+    old_file = tmp_path / "old.mkv"
+    old_file.touch()
+    new_file = tmp_path / "new.mkv"
+    lookup = {"new": ("old.mkv", "movie")}
+
+    monkeypatch.setattr(ui, "DAEMON_ENABLED", True)
+
+    # 1. Success in daemon mode -> ui.log_success called
+    with patch("src.files.move_file") as mock_move, \
+         patch("src.mail.send_media_success_email") as mock_mail, \
+         patch("src.ui.log_success") as mock_log_succ:
+        success, failed = files.execute_single_file_move(old_file, new_file, lookup)
+        assert success is True
+        assert failed is None
+        mock_move.assert_called_once_with(old_file, new_file)
+        mock_mail.assert_called_once()
+        mock_log_succ.assert_called_once_with("old.mkv", "new.mkv", str(new_file))
+
+    # 2. Move failure in daemon mode -> ui.log_error called
+    with patch("src.files.move_file", side_effect=RuntimeError("Disk full")), \
+         patch("src.mail.send_error_email"), \
+         patch("src.ui.log_error") as mock_log_err:
+        success, failed = files.execute_single_file_move(old_file, new_file, lookup)
+        assert success is False
+        assert failed == old_file.name
+        mock_log_err.assert_called_once_with("Failed to move 'old.mkv': Disk full")
+
+    # 3. Mail error in daemon mode -> second ui.log_error called
+    with patch("src.files.move_file", side_effect=RuntimeError("Disk full")), \
+         patch("src.mail.send_error_email", side_effect=RuntimeError("SMTP down")), \
+         patch("src.ui.log_error") as mock_log_err:
+        success, failed = files.execute_single_file_move(old_file, new_file, lookup)
+        assert success is False
+        assert failed == old_file.name
+        assert mock_log_err.call_count == 2
+        mock_log_err.assert_any_call("Failed to send error email: SMTP down")
 
 
 def test_extract_parse_tokens():

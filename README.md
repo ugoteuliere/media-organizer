@@ -29,20 +29,31 @@ media-organizer configure
 media-organizer
 ```
 
-### 3. Docker (Container)
+### 3. Docker
 
-Run as an automated background daemon using the official GHCR container:
+Run as an automated background daemon with Docker Compose:
+
+```yaml
+services:
+  media-organizer:
+    image: ghcr.io/ugoteuliere/media-organizer:latest
+    container_name: media-organizer
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TMDB_API_KEY="<your_tmdb_api_key>"
+    volumes:
+      - /path/to/downloads:/data/input
+      - /path/to/movies:/data/Movies
+      - /path/to/series:/data/TV_Shows
+```
 
 ```bash
-docker run -d \
-  --name media-organizer \
-  -e PUID=1000 -e PGID=1000 \
-  -e TMDB_API_KEY="<your_tmdb_api_key>" \
-  -v /path/to/downloads:/data/input \
-  -v /path/to/movies:/data/Movies \
-  -v /path/to/series:/data/TV_Shows \
-  ghcr.io/ugoteuliere/media-organizer:latest
+docker compose up -d
 ```
+
+See [Docker Documentation](docs/documentation.md#7-docker) for more details.
 
 ## Features
 

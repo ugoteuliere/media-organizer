@@ -235,7 +235,9 @@ The container is designed to run out-of-the-box with zero manual configuration r
 
 By default, the container starts in **daemon mode**, checking for new files in input folder every 15 minutes.
 
-#### Docker Compose (Recommended)
+#### Docker Compose
+
+Create a `docker-compose.yml`:
 
 ```yaml
 services:
@@ -253,18 +255,10 @@ services:
       - /mnt/storage/series:/data/TV_Shows
 ```
 
-#### Docker Run (CLI)
+Start the container in the background:
 
 ```bash
-docker run -d \
-  --name media-organizer \
-  -e PUID=1000 \
-  -e PGID=1000 \
-  -e TMDB_API_KEY=your_tmdb_api_key_here \
-  -v /mnt/storage/downloads:/data/input \
-  -v /mnt/storage/movies:/data/Movies \
-  -v /mnt/storage/series:/data/TV_Shows \
-  ghcr.io/ugoteuliere/media-organizer:latest
+docker compose up -d
 ```
 
 ---

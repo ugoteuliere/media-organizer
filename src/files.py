@@ -56,20 +56,21 @@ def _is_file_locked_posix(file_path: Path, wait_interval: float = 0.5) -> bool:
 def is_file_locked(file_path: Path, wait_interval: float = 0.5) -> bool:
     """
     Check if a file is currently being written to by another process (e.g. downloading).
-    - On Windows: verifies exclusive file rename lock.
-    - On POSIX (Linux/macOS/Docker): verifies fcntl locks and size/mtime stability.
+    - Verifies atomic rename lock across all platforms.
+    - On POSIX (Linux/macOS/Docker): also verifies fcntl locks and size/mtime stability.
     """
     if not file_path.is_file():
         return False
 
-    if os.name == "nt":
-        try:
-            os.rename(file_path, file_path)
-            return False
-        except OSError:
-            return True
+    try:
+        os.rename(file_path, file_path)
+    except OSError:
+        return True
 
-    return _is_file_locked_posix(file_path, wait_interval)
+    if os.name != "nt":
+        return _is_file_locked_posix(file_path, wait_interval)
+
+    return False
 
 
 VIDEO_EXTENSIONS = {".mkv", ".mp4", ".avi", ".mov", ".wmv", ".m4v"}

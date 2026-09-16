@@ -1153,7 +1153,8 @@ def test_is_file_locked_posix_and_stability(tmp_path, monkeypatch):
 
     # Test is_file_locked delegation when os.name != 'nt'
     monkeypatch.setattr(os, "name", "posix")
-    with patch("src.files._is_file_locked_posix", return_value=False) as mock_posix:
+    with patch("os.rename", return_value=None), \
+         patch("src.files._is_file_locked_posix", return_value=False) as mock_posix:
         assert files.is_file_locked(test_file) is False
         mock_posix.assert_called_once()
 

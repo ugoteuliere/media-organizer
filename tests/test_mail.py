@@ -28,7 +28,7 @@ def test_build_html_and_text_email_formatting():
     assert "#10b981" in html
     assert "Inception (2010).mkv" in html
     assert "inception.2010.mkv" in html
-    assert "Media Organizer &amp; Renamer" in html
+    assert "media-organizer" in html
 
     # Text assertions
     assert "[SUCCESS]" in text
@@ -54,7 +54,7 @@ def test_send_media_success_email_movie(monkeypatch):
         )
         mock_dispatch.assert_called_once()
         sent_msg = mock_dispatch.call_args[0][0]
-        assert "🎬 [Renamer] Successfully Processed: Dune Part Two (2024).mkv" == sent_msg["Subject"]
+        assert "🎬 [media-organizer] Successfully Processed: Dune Part Two (2024).mkv" == sent_msg["Subject"]
         assert sent_msg["From"] == "testuser@gmail.com"
         assert sent_msg["To"] == "testuser@gmail.com"
 
@@ -80,7 +80,7 @@ def test_send_media_success_email_tv(monkeypatch):
         )
         mock_dispatch.assert_called_once()
         sent_msg = mock_dispatch.call_args[0][0]
-        assert "📺 [Renamer] Successfully Processed: Severance - S01E01.mkv" == sent_msg["Subject"]
+        assert "📺 [media-organizer] Successfully Processed: Severance - S01E01.mkv" == sent_msg["Subject"]
 
 
 def test_send_media_success_email_disabled_when_flag_false(monkeypatch):
@@ -112,7 +112,7 @@ def test_send_error_email_formatted(monkeypatch):
         )
         mock_dispatch.assert_called_once()
         sent_msg = mock_dispatch.call_args[0][0]
-        assert "⚠️ [Renamer] Error Processing: Difficult.Movie.2024.mkv" == sent_msg["Subject"]
+        assert "⚠️ [media-organizer] Error Processing: Difficult.Movie.2024.mkv" == sent_msg["Subject"]
         assert sent_msg.is_multipart()
 
 
@@ -168,7 +168,7 @@ def test_send_tag_learned_email_formatted(monkeypatch):
         )
         mock_dispatch.assert_called_once()
         sent_msg = mock_dispatch.call_args[0][0]
-        assert "🏷️ [Renamer] New AI Tag(s) Learned: CustomGroup, x265" == sent_msg["Subject"]
+        assert "🏷️ [media-organizer] New AI Tag(s) Learned: CustomGroup, x265" == sent_msg["Subject"]
         assert sent_msg["From"] == "testuser@gmail.com"
         assert sent_msg["To"] == "testuser@gmail.com"
 
@@ -207,3 +207,16 @@ def test_send_tag_learned_email_dispatch_exception(monkeypatch):
         )
         logged = " ".join([str(c[0][0]) for c in mock_log.call_args_list if c[0]])
         assert "Failed to send tag learned email" in logged
+
+
+def test_send_error_email_dispatch_exception(monkeypatch):
+    monkeypatch.setattr(ui, "MAIL_ENABLED", True)
+    monkeypatch.setattr(mail, "MAIL", "testuser@gmail.com")
+    monkeypatch.setattr(mail, "MAIL_PSWD", "test_app_pass_12")
+    monkeypatch.setattr(config, "NOTIFY_ON_ERROR", True)
+
+    with patch("src.mail._dispatch_email", side_effect=RuntimeError("SMTP failed")), \
+         patch("src.ui.print_log") as mock_log:
+        mail.send_error_email(error_message="Something failed")
+        logged = " ".join([str(c[0][0]) for c in mock_log.call_args_list if c[0]])
+        assert "Failed to send error email" in logged

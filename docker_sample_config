@@ -29,5 +29,5 @@ notify_on_error = false
 notify_on_tag = false
 
 [mail]
-mail = your_email@gmail.com
-mail_pswd = your_16_char_app_password
+mail = 
+mail_pswd = 

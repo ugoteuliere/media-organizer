@@ -1,5 +1,5 @@
 """
-Modern Graphical Configuration Hub for Media Organizer & Renamer.
+Modern Graphical Configuration Hub for media-organizer.
 Built with CustomTkinter for sleek, rounded-corner UI inspired by GitHub Desktop & Adobe Creative Cloud.
 """
 
@@ -46,7 +46,7 @@ class ConfigGUI:
     def __init__(self, root: Any, cm: Optional[ConfigManager] = None):
         self.root = root
         self.cm = cm or global_config
-        self.root.title("🎬 Media Organizer & Renamer — Configuration Hub")
+        self.root.title("🎬 media-organizer — Configuration Hub")
         self.root.geometry("900x700")
         self.root.minsize(820, 620)
 
@@ -151,7 +151,7 @@ class ConfigGUI:
         # Branding Header
         lbl_brand = ctk.CTkLabel(
             self.sidebar,
-            text="🎬 Media Renamer",
+            text="🎬 media-organizer",
             font=ctk.CTkFont(family=FONT_FAMILY, size=16, weight="bold"),
             text_color=COLOR_TEXT_MAIN
         )
@@ -944,8 +944,8 @@ class ConfigGUI:
 
             import smtplib
             from email.mime.text import MIMEText
-            msg = MIMEText("This is a test notification from Media Organizer & Renamer.", "plain", "utf-8")
-            msg["Subject"] = "🎬 Media Organizer Test Email"
+            msg = MIMEText("This is a test notification from media-organizer.", "plain", "utf-8")
+            msg["Subject"] = "🎬 [media-organizer] Test Email"
             msg["From"] = address
             msg["To"] = address
 
@@ -1086,5 +1086,5 @@ def launch_config_gui(cm: Optional[ConfigManager] = None) -> bool:
         root.mainloop()
         return True
     except (tk.TclError, Exception) as e:
-        sys.stderr.write(f"\n❌ Unable to launch GUI: {e}\n💡 Running in headless/terminal mode? Use 'python main.py configure' instead.\n\n")
+        sys.stderr.write(f"\n❌ Unable to launch GUI: {e}\n💡 Running in headless/terminal mode? Use 'media-organizer configure' instead.\n\n")
         return False

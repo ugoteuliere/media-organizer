@@ -101,7 +101,7 @@ def _build_html_email(title: str, badge_text: str, badge_bg: str, rows: list, er
   <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 14px rgba(0,0,0,0.06); border: 1px solid #e2e8f0;">
     <!-- Header -->
     <div style="background-color: #0f172a; padding: 24px; text-align: left;">
-      <div style="font-size: 12px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">🎬 Media Organizer & Renamer</div>
+      <div style="font-size: 12px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">🎬 media-organizer</div>
       <div style="margin-bottom: 8px;">
         <span style="display: inline-block; background-color: {safe_badge_bg}; color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; padding: 4px 10px; border-radius: 9999px;">{safe_badge_text}</span>
       </div>
@@ -118,7 +118,7 @@ def _build_html_email(title: str, badge_text: str, badge_bg: str, rows: list, er
 
     <!-- Footer -->
     <div style="background-color: #f8fafc; padding: 16px 24px; border-top: 1px solid #e2e8f0; font-size: 12px; color: #94a3b8; text-align: center;">
-      Generated automatically by <strong>Media Organizer &amp; Renamer</strong> • {current_time}
+      Generated automatically by <strong>media-organizer</strong> • {current_time}
     </div>
   </div>
 </body>
@@ -130,7 +130,7 @@ def _build_text_email(title: str, badge_text: str, rows: list, error_details: st
     """Generate a clean, structured plaintext email."""
     lines = [
         f"==================================================",
-        f"  🎬 Media Organizer & Renamer - [{badge_text}]",
+        f"  🎬 media-organizer - [{badge_text}]",
         f"  {title}",
         f"==================================================",
         ""
@@ -192,7 +192,7 @@ def send_media_success_email(
     sender_email, _ = _get_credentials()
     type_display = "TV Show 📺" if str(media_type).lower() in ("tv", "tvshow", "tv_show") else "Movie 🎥"
     subject_icon = "📺" if str(media_type).lower() in ("tv", "tvshow", "tv_show") else "🎬"
-    subject = f"{subject_icon} [Renamer] Successfully Processed: {media_name}"
+    subject = f"{subject_icon} [media-organizer] Successfully Processed: {media_name}"
 
     tags = []
     if resolution:
@@ -244,10 +244,10 @@ def send_email(message: str, affected_file: str = None, exception: Exception = N
 
     sender_email, _ = _get_credentials()
     if affected_file:
-        subject = f"⚠️ [Renamer] Error Processing: {affected_file}"
+        subject = f"⚠️ [media-organizer] Error Processing: {affected_file}"
         title = f"Failed to Process: {affected_file}"
     else:
-        subject = "❌ [Renamer] Execution Error"
+        subject = "❌ [media-organizer] Execution Error"
         title = "Execution Error Encountered"
 
     rows = []
@@ -284,8 +284,11 @@ def send_email(message: str, affected_file: str = None, exception: Exception = N
 
 
 def send_error_email(error_message: str, affected_file: str = None, exception: Exception = None):
-    """Alias for send_email with structured error parameters."""
-    send_email(error_message, affected_file=affected_file, exception=exception)
+    """Safely dispatches error email without crashing callers if email delivery fails."""
+    try:
+        send_email(error_message, affected_file=affected_file, exception=exception)
+    except Exception as e:
+        ui.print_log(f"⚠️ Warning: Failed to send error email: {e}")
 
 
 def send_tag_learned_email(
@@ -302,7 +305,7 @@ def send_tag_learned_email(
 
     sender_email, _ = _get_credentials()
     tags_str = ", ".join(tags)
-    subject = f"🏷️ [Renamer] New AI Tag(s) Learned: {tags_str}"
+    subject = f"🏷️ [media-organizer] New AI Tag(s) Learned: {tags_str}"
     title = "New AI Keyword(s) Learned"
 
     rows = [

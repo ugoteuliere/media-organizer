@@ -37,14 +37,20 @@ if _source_ini and _source_ini.is_file():
     try:
         _src_p = configparser.ConfigParser()
         _src_p.read(str(_source_ini), encoding="utf-8")
-        # Copy credentials from api and mail so integration/api tests work seamlessly without affecting options or paths
-        for _sec in ["api", "mail"]:
+        # Copy credentials only from api (for live/integration tests), NEVER mail
+        for _sec in ["api"]:
             if _src_p.has_section(_sec):
                 _q_parser.add_section(_sec)
                 for _k, _v in _src_p.items(_sec):
                     _q_parser.set(_sec, _k, _v)
     except Exception:
         pass
+
+# Guarantee that the quarantined test config NEVER has real mail credentials
+if not _q_parser.has_section("mail"):
+    _q_parser.add_section("mail")
+_q_parser.set("mail", "mail", "")
+_q_parser.set("mail", "mail_pswd", "")
 
 with open(_global_quarantine_file, "w", encoding="utf-8") as _f:
     _q_parser.write(_f)
@@ -84,7 +90,7 @@ def isolate_user_config(tmp_path, monkeypatch):
     config.config_path = test_config_file
     config.load()
 
-    # 4. Reset runtime CLI flags
+    # 4. Reset runtime CLI flags and email credentials
     from src import ui
     ui.NOTIFY_SUCCESS_ENABLED = False
     ui.NOTIFY_ERROR_ENABLED = False
@@ -99,10 +105,42 @@ def isolate_user_config(tmp_path, monkeypatch):
     ui.DAEMON_ENABLED = False
     ui.POLLING_INTERVAL = 15
 
+    if "src.mail" in sys.modules:
+        _m = sys.modules["src.mail"]
+        _m.MAIL = None
+        _m.MAIL_PSWD = None
+
     yield
 
     ui.LOG_MODE = "console"
+    if "src.mail" in sys.modules:
+        _m = sys.modules["src.mail"]
+        _m.MAIL = None
+        _m.MAIL_PSWD = None
 
     # 5. Teardown: ensure config singleton points to quarantine, never user's real config
     config.config_path = _global_quarantine_file
     config.load()
+
+
+@pytest.fixture(autouse=True)
+def mock_smtp_network_guard(monkeypatch):
+    """
+    Global safety net: Ensure tests never establish live SMTP network connections
+    or send real emails under any circumstances.
+    Provides a safe in-memory dummy mock for smtplib.SMTP and smtplib.SMTP_SSL across the entire test suite.
+    Any test with an explicit local mock (e.g. @patch('src.mail.smtplib.SMTP_SSL')) cleanly overrides this.
+    """
+    from unittest.mock import MagicMock
+    import smtplib
+
+    mock_server = MagicMock(name="SafeDummySMTPServer")
+    mock_server.__enter__.return_value = mock_server
+    mock_cls = MagicMock(name="SafeDummySMTPClass", return_value=mock_server)
+
+    monkeypatch.setattr(smtplib, "SMTP_SSL", mock_cls)
+    monkeypatch.setattr(smtplib, "SMTP", mock_cls)
+    if "src.mail" in sys.modules:
+        monkeypatch.setattr(sys.modules["src.mail"].smtplib, "SMTP_SSL", mock_cls)
+        monkeypatch.setattr(sys.modules["src.mail"].smtplib, "SMTP", mock_cls)
+

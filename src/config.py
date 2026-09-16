@@ -580,7 +580,7 @@ class ConfigManager:
 
         console = Console()
         console.print("\n[bold cyan]==============================================[/bold cyan]")
-        console.print("[bold cyan]   🎬 Media Organizer & Renamer Setup Wizard   [/bold cyan]")
+        console.print("[bold cyan]   🎬 media-organizer Setup Wizard   [/bold cyan]")
         console.print("[bold cyan]==============================================[/bold cyan]\n")
         console.print(f"Target Configuration File: [yellow]{self.config_path}[/yellow]\n")
 

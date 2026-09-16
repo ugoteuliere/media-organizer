@@ -41,7 +41,7 @@ RUN sed -i -e 's/\r$//' /usr/local/bin/docker-entrypoint.sh \
 COPY docker_sample_config /config/config.ini
 COPY docker_sample_config /app/docker_sample_config
 
-RUN printf '#!/bin/sh\nexec python /app/main.py "$@"\n' > /usr/local/bin/organizer \
-    && chmod +x /usr/local/bin/organizer
+RUN printf '#!/bin/sh\nexec python /app/main.py "$@"\n' > /usr/local/bin/media-organizer \
+    && chmod +x /usr/local/bin/media-organizer
 
 ENTRYPOINT ["docker-entrypoint.sh"]

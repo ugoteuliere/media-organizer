@@ -75,24 +75,24 @@ def parse_arguments():
     global DAEMON_ENABLED, POLLING_INTERVAL
 
     description_text = (
-        "🎬 Media Organizer & Renamer\n"
+        "🎬 media-organizer\n"
         "Automatically parses, renames, and sorts messy video files using TMDB and Multi-Cloud AI (Gemini, Groq, OpenRouter, Cloudflare)."
     )
     
     epilog_text = (
         "Examples:\n"
-        "  python main.py                    (Default: Renames AND moves files)\n"
-        "  python main.py -r                 (Only renames the files in place)\n"
-        "  python main.py -s                 (Simulation mode: preview changes without modifying disk)\n"
-        "  python main.py -d                 (Daemon mode: continuous background polling)\n"
-        "  python main.py -d --interval 10   (Daemon mode with 10-minute polling)\n"
-        "  python main.py -L                 (Enables AI keyword learning)\n"
-        "  python main.py -t                 (Sends email notification when an AI keyword is learned)\n"
-        "  python main.py -R -q              (Appends resolution & quality tags)\n"
-        "  python main.py --notify-success   (Sends email notification on success)\n"
-        "  python main.py configure          (Interactive configuration wizard)\n"
-        "  python main.py config --list      (List all configured settings)\n"
-        "  python main.py config --set paths.movies_folder \"D:/Movies\"\n\n"
+        "  media-organizer                    (Default: Renames AND moves files)\n"
+        "  media-organizer -r                 (Only renames the files in place)\n"
+        "  media-organizer -s                 (Simulation mode: preview changes without modifying disk)\n"
+        "  media-organizer -d                 (Daemon mode: continuous background polling)\n"
+        "  media-organizer -d --interval 10   (Daemon mode with 10-minute polling)\n"
+        "  media-organizer -L                 (Enables AI keyword learning)\n"
+        "  media-organizer -t                 (Sends email notification when an AI keyword is learned)\n"
+        "  media-organizer -R -q              (Appends resolution & quality tags)\n"
+        "  media-organizer --notify-success   (Sends email notification on success)\n"
+        "  media-organizer configure          (Interactive configuration wizard)\n"
+        "  media-organizer config --list      (List all configured settings)\n"
+        "  media-organizer config --set paths.movies_folder \"D:/Movies\"\n\n"
         "Documentation & Updates: https://github.com/ugoteuliere/rename"
     )
 
@@ -127,8 +127,6 @@ def parse_arguments():
     auto_group = parser.add_argument_group("Automation & Logging")
     auto_group.add_argument("-d", "--daemon", action="store_true", dest="daemon",
                             help="Run continuously in background daemon mode with periodic polling.")
-    auto_group.add_argument("--once", "--no-daemon", action="store_true", dest="no_daemon",
-                            help="Run once and exit immediately instead of running continuously as a daemon.")
     auto_group.add_argument("--interval", type=int, default=None,
                             help="Polling interval in minutes for daemon mode (overrides config).")
     auto_group.add_argument("-b", "--bypass", action="store_true", 
@@ -192,7 +190,6 @@ def parse_arguments():
 
     is_daemon = bool(
         (getattr(args, 'daemon', False) or (args.interval is not None) or getattr(config, 'DAEMON', False))
-        and not getattr(args, 'no_daemon', False)
         and not getattr(args, 'simulate', False)
     )
     DAEMON_ENABLED = is_daemon
@@ -243,10 +240,10 @@ def parse_arguments():
             "❌ Missing configuration: Email notification flags require 'mail' and 'mail_pswd' to be configured in [mail].\n\n"
             "💡 How to fix:\n"
             "  1. Run the configuration wizard:\n"
-            "     python main.py configure\n"
+            "     media-organizer configure\n"
             "  2. Or set credentials via CLI:\n"
-            "     python main.py config --set mail.mail \"<your_email@gmail.com>\"\n"
-            "     python main.py config --set mail.mail_pswd \"<your_16_char_app_password>\""
+            "     media-organizer config --set mail.mail \"<your_email@gmail.com>\"\n"
+            "     media-organizer config --set mail.mail_pswd \"<your_16_char_app_password>\""
         )
 
     if (args.resolution or args.quality) and not shutil.which("ffprobe"):
@@ -282,10 +279,10 @@ def parse_arguments():
                 "❌ Missing configuration: The '--ai' (-a) and '--learn' (-L) options require an AI Cloud Provider API key to be configured (Gemini, Groq, OpenRouter, or Cloudflare).\n\n"
                 "💡 How to fix:\n"
                 "  1. Run the configuration wizard:\n"
-                "     python main.py configure\n"
+                "     media-organizer configure\n"
                 "  2. Or set the key via CLI:\n"
-                "     python main.py config --set api.gemini_api_key \"<your_gemini_key>\"\n"
-                "     python main.py config --set api.groq_api_key \"<your_groq_key>\"\n"
+                "     media-organizer config --set api.gemini_api_key \"<your_gemini_key>\"\n"
+                "     media-organizer config --set api.groq_api_key \"<your_groq_key>\"\n"
                 "  3. Or use environment variables:\n"
                 "     export GEMINI_API_KEY=\"<your_gemini_key>\"\n"
                 "     export GROQ_API_KEY=\"<your_groq_key>\""
@@ -380,7 +377,7 @@ def display_config_table(show_secrets=False):
     from rich.table import Table
 
     items = config.list_all(show_secrets=show_secrets)
-    table = Table(title="⚙️  [bold cyan]Media Organizer & Renamer Configuration[/bold cyan]", title_justify="left")
+    table = Table(title="⚙️  [bold cyan]media-organizer Configuration[/bold cyan]", title_justify="left")
     table.add_column("Section", style="magenta", no_wrap=True)
     table.add_column("Setting", style="white", no_wrap=True)
     table.add_column("Value", style="green")
@@ -478,11 +475,17 @@ def check_log_dir_permissions(log_dir: Path) -> Tuple[bool, str]:
     except OSError as e:
         return (False, str(e))
 
-def format_daemon_log(level: str, message: str) -> str:
+def format_daemon_log(level: str, message: str, colorize: bool = False) -> str:
     """Formats a message for daemon mode: strictly single-line with timestamp and level."""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     clean_msg = re.sub(r'\s+', ' ', str(message)).strip()
-    return f"{timestamp} [{level}] {clean_msg}"
+    raw = f"{timestamp} [{level}] {clean_msg}"
+    if colorize:
+        if level == "ERROR":
+            return f"\033[31m{raw}\033[0m"
+        if level == "SUCCESS":
+            return f"\033[32m{raw}\033[0m"
+    return raw
 
 def _emit_daemon_log(level: str, message: str, stream=None):
     """Outputs a single-line formatted log in daemon mode to console stream and log file if enabled."""
@@ -490,7 +493,7 @@ def _emit_daemon_log(level: str, message: str, stream=None):
     if stream is None:
         stream = sys.stderr if level == "ERROR" else sys.stdout
 
-    line = format_daemon_log(level, message)
+    line = format_daemon_log(level, message, colorize=False)
     should_write_file = LOG_ENABLED or LOG_MODE in ("file", "both")
     should_print_console = (not should_write_file) or LOG_MODE == "both"
 
@@ -508,7 +511,13 @@ def _emit_daemon_log(level: str, message: str, stream=None):
             pass
 
     if should_print_console:
-        stream.write(f"{line}\n")
+        is_docker = config.is_docker_environment()
+        console_line = format_daemon_log(
+            level,
+            message,
+            colorize=(is_docker or getattr(sys.modules.get("src.ui"), "COLOR_LOGS", False))
+        )
+        stream.write(f"{console_line}\n")
         stream.flush()
 
 def log_info(message: str):

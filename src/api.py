@@ -381,18 +381,22 @@ def execute_ai_batch_with_failover(media_items: list[dict]) -> list[list]:
 def api_call(name, year, language, media_type):
     api_key = globals().get("TMDB_API_KEY") or getattr(config, 'TMDB_API_KEY', None)
     if api_key is None:
-        print_log(
+        err_msg = (
             "❌ Missing configuration: TMDB API key is not configured.\n"
             "The TMDB API key is required to identify and fetch metadata for media files.\n\n"
             "💡 How to fix:\n"
             "  1. Run the interactive setup wizard:\n"
-            "     python main.py configure\n"
+            "     media-organizer configure\n"
             "  2. Or set the key via CLI:\n"
-            "     python main.py config --set api.tmdb_api_key \"<your_tmdb_api_key>\"\n"
+            "     media-organizer config --set api.tmdb_api_key \"<your_tmdb_api_key>\"\n"
             "  3. Or set the environment variable:\n"
             "     export TMDB_API_KEY=\"<your_tmdb_api_key>\"\n\n"
             "Stopping program."
         )
+        print_log(err_msg)
+        mail.send_error_email(error_message=err_msg)
+        if getattr(ui, "DAEMON_ENABLED", False):
+            return [False, None, None, None]
         sys.exit(1)
     encoded_query = urllib.parse.quote(name)
 
@@ -448,18 +452,22 @@ def gemini_api_call(media_info):
     gemini_key = globals().get("GEMINI_API_KEY") or getattr(config, 'GEMINI_API_KEY', None)
 
     if gemini_key is None:
-        print_log(
+        err_msg = (
             "❌ Missing configuration: Gemini API key is not configured.\n"
             "The Gemini API key is required for AI fallback parsing of obfuscated filenames.\n\n"
             "💡 How to fix:\n"
             "  1. Run the interactive setup wizard:\n"
-            "     python main.py configure\n"
+            "     media-organizer configure\n"
             "  2. Or set the key via CLI:\n"
-            "     python main.py config --set api.gemini_api_key \"<your_gemini_api_key>\"\n"
+            "     media-organizer config --set api.gemini_api_key \"<your_gemini_api_key>\"\n"
             "  3. Or set the environment variable:\n"
             "     export GEMINI_API_KEY=\"<your_gemini_api_key>\"\n\n"
             "Stopping program."
         )
+        print_log(err_msg)
+        mail.send_error_email(error_message=err_msg)
+        if getattr(ui, "DAEMON_ENABLED", False):
+            return [False, None, None, None, None]
         sys.exit(1)
 
     prompt = f"""You are an elite Media Metadata Extraction API. Your task is to act as a fallback parser to analyze highly obfuscated media filenames when standard regex cleaning algorithms fail.

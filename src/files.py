@@ -321,6 +321,8 @@ def sort_media_files(clean_data_table):
 
     if not paths:
         ui.print_log("No media to move to a new folder.")
+        if getattr(ui, "DAEMON_ENABLED", False):
+            return []
         sys.exit(1)
 
     return paths
@@ -517,7 +519,7 @@ def get_metadata_with_ffprobe(file_path):
             "⚠️ Warning: ffprobe is not installed or not found in System PATH.\n"
             "FFmpeg is only required if you activate the resolution and quality tags feature.\n"
             "To install FFmpeg, see: docs/documentation.md#ffmpeg-setup\n"
-            "Or disable it via: python main.py config --set options.resolution false\n"
+            "Or disable it via: media-organizer config --set options.resolution false\n"
         )
         return None
 

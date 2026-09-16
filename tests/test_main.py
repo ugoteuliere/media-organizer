@@ -1919,9 +1919,9 @@ def test_actionable_error_messages(tmp_path, monkeypatch, capsys):
     with patch("src.ui.print_log") as mock_log:
         with pytest.raises(SystemExit):
             utils.verify_folders()
-        logged = mock_log.call_args[0][0]
-        assert "paths.movies_folder" in logged
-        assert "configure" in logged
+        all_logged = " ".join(str(c[0][0]) for c in mock_log.call_args_list if c[0])
+        assert "paths.movies_folder" in all_logged
+        assert "configure" in all_logged
 
     # 2. verify_folders() with non-existent directory on disk shows tips
     monkeypatch.setattr(utils, "MOVIES_FOLDER", str(tmp_path / "does_not_exist_xyz"))
@@ -1930,8 +1930,8 @@ def test_actionable_error_messages(tmp_path, monkeypatch, capsys):
     with patch("src.ui.print_log") as mock_log:
         with pytest.raises(SystemExit):
             utils.verify_folders()
-        logged = mock_log.call_args[0][0]
-        assert "Missing required folder(s) on disk" in logged
+        all_logged = " ".join(str(c[0][0]) for c in mock_log.call_args_list if c[0])
+        assert "Missing required folder(s) on disk" in all_logged
 
     # 3. api.api_call() with missing TMDB key shows tips
     monkeypatch.setattr(api, "TMDB_API_KEY", None)
@@ -1939,9 +1939,9 @@ def test_actionable_error_messages(tmp_path, monkeypatch, capsys):
     with patch("src.api.print_log") as mock_log:
         with pytest.raises(SystemExit):
             api.api_call("Inception", "2010", "en-US", "movie")
-        logged = mock_log.call_args[0][0]
-        assert "api.tmdb_api_key" in logged
-        assert "configure" in logged
+        all_logged = " ".join(str(c[0][0]) for c in mock_log.call_args_list if c[0])
+        assert "api.tmdb_api_key" in all_logged
+        assert "configure" in all_logged
 
     # 4. api.gemini_api_call() with missing Gemini key shows tips
     monkeypatch.setattr(api, "GEMINI_API_KEY", None)
@@ -1949,9 +1949,9 @@ def test_actionable_error_messages(tmp_path, monkeypatch, capsys):
     with patch("src.api.print_log") as mock_log:
         with pytest.raises(SystemExit):
             api.gemini_api_call({'File': 't.mkv', 'Folder': 'd', 'Path': '/d/t.mkv', 'Clean': 't', 'Parse': 't', 'Media': 'movie'})
-        logged = mock_log.call_args[0][0]
-        assert "api.gemini_api_key" in logged
-        assert "configure" in logged
+        all_logged = " ".join(str(c[0][0]) for c in mock_log.call_args_list if c[0])
+        assert "api.gemini_api_key" in all_logged
+        assert "configure" in all_logged
 
 
 def test_config_validation_messages(tmp_path, monkeypatch):

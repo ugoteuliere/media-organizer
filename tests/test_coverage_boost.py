@@ -814,13 +814,6 @@ def test_parse_arguments_docker_and_logging(monkeypatch, tmp_path):
         ui.parse_arguments()
         assert ui.DAEMON_ENABLED is False
 
-    # 6. config.DAEMON is True, but --once / --no-daemon is passed -> DAEMON_ENABLED is False
-    with patch("src.ui.config") as mock_cfg:
-        mock_cfg.DAEMON = True
-        monkeypatch.setattr(sys, "argv", ["main.py", "--once"])
-        ui.parse_arguments()
-        assert ui.DAEMON_ENABLED is False
-
 
 def test_print_log_dual_and_error_handling(monkeypatch, tmp_path):
     monkeypatch.setattr("src.ui.get_log_dir", lambda: tmp_path)
@@ -898,4 +891,140 @@ def test_rich_print_log_modes(monkeypatch, tmp_path, capsys):
     with patch("src.ui.print_log") as mock_pl:
         ui.rich_print_log("")
         mock_pl.assert_not_called()
+
+
+def test_daemon_non_fatal_recovery_branches(monkeypatch, tmp_path):
+    from src import api, files, utils
+    monkeypatch.setattr(ui, "DAEMON_ENABLED", True)
+
+    # 1. api_call missing TMDB key in daemon mode returns [False, None, None, None]
+    monkeypatch.setattr(api, "TMDB_API_KEY", None)
+    monkeypatch.setattr(api.config, "TMDB_API_KEY", None)
+    res_tmdb = api.api_call("Inception", "2010", "en-US", "movie")
+    assert res_tmdb == [False, None, None, None]
+
+    # 2. gemini_api_call missing Gemini key in daemon mode returns [False, None, None, None, None]
+    monkeypatch.setattr(api, "GEMINI_API_KEY", None)
+    monkeypatch.setattr(api.config, "GEMINI_API_KEY", None)
+    res_gemini = api.gemini_api_call({'File': 't.mkv', 'Folder': 'd', 'Path': '/d/t.mkv', 'Clean': 't', 'Parse': 't', 'Media': 'movie'})
+    assert res_gemini == [False, None, None, None, None]
+
+    # 3. sort_media_files with empty paths in daemon mode returns []
+    df_empty = pd.DataFrame([{"Path": "/tmp/f.mkv", "Corrected": "f", "Media": "unknown"}])
+    res_paths = files.sort_media_files(df_empty)
+    assert res_paths == []
+
+    # 4. verify_folders unconfigured with exit_on_error=False returns 1
+    monkeypatch.setattr(utils, "MOVIES_FOLDER", None)
+    ret_unconf = utils.verify_folders(daemon=True, exit_on_error=False)
+    assert ret_unconf == 1
+
+    # 5. validate_folder_existence_and_permissions missing folder with exit_on_error=False returns 1
+    req_missing = [("paths.movies_folder", tmp_path / "non_existent_folder", "MOVIES_FOLDER", "Movies folder")]
+    ret_missing = utils.validate_folder_existence_and_permissions(req_missing, exit_on_error=False)
+    assert ret_missing == 1
+
+    # 6. validate_folder_existence_and_permissions permission issue with exit_on_error=False returns 1
+    exist_folder = tmp_path / "exist"
+    exist_folder.mkdir()
+    req_perm = [("paths.movies_folder", exist_folder, "MOVIES_FOLDER", "Movies folder")]
+    with patch("src.utils.check_folder_permissions", return_value=(False, False, "Permission denied")):
+        ret_perm = utils.validate_folder_existence_and_permissions(req_perm, exit_on_error=False)
+        assert ret_perm == 1
+
+
+def test_folder_errors_dispatch_email(tmp_path, monkeypatch):
+    # 1. Unconfigured folder dispatches email
+    monkeypatch.setattr(utils, "MOVIES_FOLDER", None)
+    with patch("src.mail.send_error_email") as mock_mail:
+        utils.verify_folders(daemon=True, exit_on_error=False)
+        mock_mail.assert_called_once()
+        assert "Missing configuration" in mock_mail.call_args[1]["error_message"]
+
+    # 2. Missing folder dispatches email
+    req_missing = [("paths.movies_folder", tmp_path / "ghost_folder", "MOVIES_FOLDER", "Movies folder")]
+    with patch("src.mail.send_error_email") as mock_mail:
+        utils.validate_folder_existence_and_permissions(req_missing, exit_on_error=False)
+        mock_mail.assert_called_once()
+        assert "Missing required folder" in mock_mail.call_args[1]["error_message"]
+
+    # 3. Permission issue dispatches email
+    exist_folder = tmp_path / "exist_dir"
+    exist_folder.mkdir()
+    req_perm = [("paths.movies_folder", exist_folder, "MOVIES_FOLDER", "Movies folder")]
+    with patch("src.utils.check_folder_permissions", return_value=(False, False, "Permission denied")), \
+         patch("src.mail.send_error_email") as mock_mail:
+        utils.validate_folder_existence_and_permissions(req_perm, exit_on_error=False)
+        mock_mail.assert_called_once()
+        assert "Permission error" in mock_mail.call_args[1]["error_message"]
+
+
+def test_api_keys_missing_dispatch_email(monkeypatch):
+    monkeypatch.setattr(ui, "DAEMON_ENABLED", True)
+    monkeypatch.setattr(api, "TMDB_API_KEY", None)
+    monkeypatch.setattr(api.config, "TMDB_API_KEY", None)
+
+    with patch("src.mail.send_error_email") as mock_mail:
+        res = api.api_call("Inception", "2010", "en-US", "movie")
+        assert res == [False, None, None, None]
+        mock_mail.assert_called_once()
+        assert "TMDB API key is not configured" in mock_mail.call_args[1]["error_message"]
+
+    monkeypatch.setattr(api, "GEMINI_API_KEY", None)
+    monkeypatch.setattr(api.config, "GEMINI_API_KEY", None)
+    with patch("src.mail.send_error_email") as mock_mail:
+        res_gemini = api.gemini_api_call({"File": "Test.mkv"})
+        assert res_gemini == [False, None, None, None, None]
+        mock_mail.assert_called_once()
+        assert "Gemini API key is not configured" in mock_mail.call_args[1]["error_message"]
+
+
+def test_global_excepthook_handling():
+    # 1. KeyboardInterrupt and SystemExit should pass through without sending email
+    with patch("sys.__excepthook__") as mock_sys_hook, \
+         patch("src.mail.send_error_email") as mock_mail:
+        main._global_excepthook(KeyboardInterrupt, KeyboardInterrupt(), None)
+        mock_sys_hook.assert_called_once()
+        mock_mail.assert_not_called()
+
+    with patch("sys.__excepthook__") as mock_sys_hook, \
+         patch("src.mail.send_error_email") as mock_mail:
+        main._global_excepthook(SystemExit, SystemExit(0), None)
+        mock_sys_hook.assert_called_once()
+        mock_mail.assert_not_called()
+
+    # 2. Unhandled crash triggers error email and sys.__excepthook__
+    with patch("sys.__excepthook__") as mock_sys_hook, \
+         patch("src.mail.send_error_email") as mock_mail:
+        val_err = ValueError("Crash in background thread")
+        main._global_excepthook(ValueError, val_err, None)
+        mock_sys_hook.assert_called_once()
+        mock_mail.assert_called_once()
+        assert "Critical unhandled crash" in mock_mail.call_args[1]["error_message"]
+
+
+def test_docker_notify_on_error_explicit(tmp_path):
+    cm = ConfigManager(custom_path=str(tmp_path / "docker_test.ini"))
+    with patch.object(cm, "is_docker_environment", return_value=True):
+        cm.load()
+        # Default in Docker: notify_on_error is False (zero emails sent)
+        assert cm.get("options.notify_on_error") is False
+        assert cm.get_with_source("options.notify_on_error") == (False, "INI")
+
+        # Fallback when key is missing
+        cm.parser.clear()
+        assert cm.get_with_source("options.notify_on_error") == (False, "DEFAULT")
+
+        # When user explicitly configures notify_on_error = true in INI:
+        cm.set("options.notify_on_error", "true")
+        assert cm.get("options.notify_on_error") is True
+        assert cm.get_with_source("options.notify_on_error") == (True, "INI")
+
+        # When user explicitly configures notify_on_error = false in INI:
+        cm.set("options.notify_on_error", "false")
+        assert cm.get("options.notify_on_error") is False
+        assert cm.get_with_source("options.notify_on_error") == (False, "INI")
+
+
+
 

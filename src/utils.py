@@ -99,11 +99,11 @@ def format_missing_config_message(unconfigured: List[str], daemon=False, custom_
             f"{prefix}\n\n"
             "💡 How to fix:\n"
             "  1. Run the interactive setup wizard:\n"
-            "     python main.py configure\n"
+            "     media-organizer configure\n"
             "  2. Or set individual values via CLI:\n"
-            "     python main.py config --set paths.movies_folder \"path/to/movies\"\n"
-            "     python main.py config --set paths.tv_shows_folder \"path/to/tv_shows\"\n"
-            "     python main.py config --set paths.not_sorted_media_files_folder \"path/to/downloads\"\n\n"
+            "     media-organizer config --set paths.movies_folder \"path/to/movies\"\n"
+            "     media-organizer config --set paths.tv_shows_folder \"path/to/tv_shows\"\n"
+            "     media-organizer config --set paths.not_sorted_media_files_folder \"path/to/downloads\"\n\n"
             "Stopping program."
         )
     if custom_path:
@@ -113,12 +113,12 @@ def format_missing_config_message(unconfigured: List[str], daemon=False, custom_
             f"{prefix}\n\n"
             "💡 How to fix:\n"
             "  1. Run the interactive setup wizard:\n"
-            "     python main.py configure\n"
+            "     media-organizer configure\n"
             "  2. Or set library paths via CLI:\n"
-            "     python main.py config --set paths.movies_folder \"path/to/movies\"\n"
-            "     python main.py config --set paths.tv_shows_folder \"path/to/tv_shows\"\n"
+            "     media-organizer config --set paths.movies_folder \"path/to/movies\"\n"
+            "     media-organizer config --set paths.tv_shows_folder \"path/to/tv_shows\"\n"
             "  3. Or rename files in-place without moving them (standalone):\n"
-            f"     python main.py -r --path=\"{custom_path}\"\n\n"
+            f"     media-organizer -r --path=\"{custom_path}\"\n\n"
             "Stopping program."
         )
     if only_rename:
@@ -128,11 +128,11 @@ def format_missing_config_message(unconfigured: List[str], daemon=False, custom_
             f"{prefix}\n\n"
             "💡 How to fix:\n"
             "  1. Run the interactive setup wizard:\n"
-            "     python main.py configure\n"
+            "     media-organizer configure\n"
             "  2. Or specify a folder directly with --path:\n"
-            "     python main.py -r --path \"path/to/folder\"\n"
+            "     media-organizer -r --path \"path/to/folder\"\n"
             "  3. Or set the downloads folder via CLI:\n"
-            "     python main.py config --set paths.not_sorted_media_files_folder \"path/to/downloads\"\n\n"
+            "     media-organizer config --set paths.not_sorted_media_files_folder \"path/to/downloads\"\n\n"
             "Stopping program."
         )
     return (
@@ -141,32 +141,36 @@ def format_missing_config_message(unconfigured: List[str], daemon=False, custom_
         f"{prefix}\n\n"
         "💡 How to fix:\n"
         "  1. Run the interactive setup wizard:\n"
-        "     python main.py configure\n"
+        "     media-organizer configure\n"
         "  2. Or set individual values via CLI:\n"
-        "     python main.py config --set paths.movies_folder \"path/to/movies\"\n"
-        "     python main.py config --set paths.tv_shows_folder \"path/to/tv_shows\"\n"
-        "     python main.py config --set paths.not_sorted_media_files_folder \"path/to/downloads\"\n"
+        "     media-organizer config --set paths.movies_folder \"path/to/movies\"\n"
+        "     media-organizer config --set paths.tv_shows_folder \"path/to/tv_shows\"\n"
+        "     media-organizer config --set paths.not_sorted_media_files_folder \"path/to/downloads\"\n"
         "  3. Or use environment variables (e.g. MOVIES_FOLDER)\n\n"
         "Stopping program."
     )
 
-def validate_folder_existence_and_permissions(required_folders, simulate=False):
-    """Checks that all folders exist on disk and have proper permissions. Exits on failure."""
+def validate_folder_existence_and_permissions(required_folders, simulate=False, exit_on_error=True):
+    """Checks that all folders exist on disk and have proper permissions. Exits on failure (or returns 1)."""
     missing_folders = [
         f"  • {folder_path} ({label})"
         for _, folder_path, _, label in required_folders
         if not os.path.isdir(str(folder_path))
     ]
     if missing_folders:
+        suffix = "Stopping program." if exit_on_error else "Will retry on next polling cycle."
         msg = (
             "❌ Missing required folder(s) on disk:\n"
             + "\n".join(missing_folders) + "\n\n"
             "💡 Please create the directory or update your configuration:\n"
-            "   python main.py config --set <key> \"correct/path\"\n\n"
-            "Stopping program."
+            "   media-organizer config --set <key> \"correct/path\"\n\n"
+            f"{suffix}"
         )
         ui.print_log(msg)
-        sys.exit(1)
+        mail.send_error_email(error_message=msg)
+        if exit_on_error:
+            sys.exit(1)
+        return 1
 
     permission_issues = []
     for _, folder_path, _, label in required_folders:
@@ -175,6 +179,7 @@ def validate_folder_existence_and_permissions(required_folders, simulate=False):
             permission_issues.append(f"  • {folder_path} ({label}): {err_detail}")
 
     if permission_issues:
+        suffix = "Stopping program." if exit_on_error else "Will retry on next polling cycle."
         msg = (
             "❌ Permission error:\n"
             "The program does not have the required read and write permissions for the following folder(s):\n"
@@ -185,12 +190,17 @@ def validate_folder_existence_and_permissions(required_folders, simulate=False):
             "  2. In Docker, ensure PUID and PGID environment variables match the folder owner:\n"
             "     PUID=1000, PGID=1000\n"
             "  3. Check filesystem ACLs or share permissions (e.g. TrueNAS, Unraid, SMB/NFS).\n\n"
-            "Stopping program."
+            f"{suffix}"
         )
         ui.print_log(msg)
-        sys.exit(1)
+        mail.send_error_email(error_message=msg)
+        if exit_on_error:
+            sys.exit(1)
+        return 1
 
-def verify_folders(only_rename=False, custom_path=None, daemon=False, simulate=False):
+    return 0
+
+def verify_folders(only_rename=False, custom_path=None, daemon=False, simulate=False, exit_on_error=True):
     required_folders = determine_required_folders(daemon, custom_path, only_rename)
 
     unconfigured = [
@@ -201,10 +211,12 @@ def verify_folders(only_rename=False, custom_path=None, daemon=False, simulate=F
     if unconfigured:
         msg = format_missing_config_message(unconfigured, daemon, custom_path, only_rename)
         ui.print_log(msg)
-        sys.exit(1)
+        mail.send_error_email(error_message=msg)
+        if exit_on_error:
+            sys.exit(1)
+        return 1
 
-    validate_folder_existence_and_permissions(required_folders, simulate=simulate)
-    return 0
+    return validate_folder_existence_and_permissions(required_folders, simulate=simulate, exit_on_error=exit_on_error)
 
 def add_new_tags(missing_tags):
     if not missing_tags:

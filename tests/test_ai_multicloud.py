@@ -345,6 +345,30 @@ def test_call_cloudflare_batch(monkeypatch):
         res = api.call_cloudflare_batch(dummy_items)
         assert res.items[0].title == "Dict CF Movie"
 
+    # 4b. Result dict containing choices array (OpenAI-compatible format)
+    mock_resp.json.return_value = {
+        "result": {
+            "choices": [{
+                "message": {
+                    "content": json.dumps({
+                        "items": [{
+                            "file_id": 0,
+                            "title": "Choices CF Movie",
+                            "year": "2024",
+                            "original_language": "en",
+                            "missing_tags": [],
+                            "confidence_score": 0.95
+                        }]
+                    })
+                }
+            }]
+        },
+        "success": True
+    }
+    with patch("requests.post", return_value=mock_resp):
+        res = api.call_cloudflare_batch(dummy_items)
+        assert res.items[0].title == "Choices CF Movie"
+
     # 5. HTTP error
     mock_resp.status_code = 400
     mock_resp.text = "Bad Request"

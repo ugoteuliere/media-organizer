@@ -10,7 +10,7 @@ if [ -d /config ] && [ ! -f /config/config.ini ]; then
     cp /app/docker_sample_config /config/config.ini 2>/dev/null || true
 fi
 
-echo "Starting media organizer..." >&2
+echo "Starting media-organizer..." >&2
 
 if [ "$(id -u)" = "0" ]; then
     # Adjust group GID
@@ -30,16 +30,30 @@ if [ "$(id -u)" = "0" ]; then
     [ -d /app/log ] && chown -R renamer:renamer /app/log 2>/dev/null || true
 
     # If first argument is an existing command in PATH (like bash, sh, ffmpeg, ffprobe) and not a renamer subcommand
-    if [ $# -gt 0 ] && command -v "$1" > /dev/null 2>&1 && [ "$1" != "config" ] && [ "$1" != "configure" ]; then
+    if [ $# -gt 0 ] && command -v "$1" > /dev/null 2>&1 && [ "$1" != "config" ] && [ "$1" != "configure" ] && [ "$1" != "media-organizer" ]; then
         exec gosu renamer:renamer "$@"
     fi
 
-    exec gosu renamer:renamer organizer "$@"
+    RUN_CMD="gosu renamer:renamer media-organizer"
 else
     # Running directly as non-root
-    if [ $# -gt 0 ] && command -v "$1" > /dev/null 2>&1 && [ "$1" != "config" ] && [ "$1" != "configure" ]; then
+    if [ $# -gt 0 ] && command -v "$1" > /dev/null 2>&1 && [ "$1" != "config" ] && [ "$1" != "configure" ] && [ "$1" != "media-organizer" ]; then
         exec "$@"
     fi
 
-    exec organizer "$@"
+    RUN_CMD="media-organizer"
 fi
+
+START_TIME=$(date +%s)
+$RUN_CMD "$@" &
+CHILD_PID=$!
+trap 'kill -TERM "$CHILD_PID" 2>/dev/null' TERM INT
+wait "$CHILD_PID" 2>/dev/null || true
+EXIT_CODE=$?
+END_TIME=$(date +%s)
+
+if [ "$EXIT_CODE" -ne 0 ] && [ $((END_TIME - START_TIME)) -lt 5 ]; then
+    printf "\033[31mmedia-organizer terminated unexpectedly with code %s within 5s. Waiting 30s cooldown before container termination to prevent rapid restart loops...\033[0m\n" "$EXIT_CODE" >&2
+    sleep 30
+fi
+exit "$EXIT_CODE"

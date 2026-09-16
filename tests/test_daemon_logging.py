@@ -318,3 +318,41 @@ def test_print_log_daemon_info_prefix(capsys, monkeypatch):
     captured = capsys.readouterr()
     assert "[INFO] Pre-tagged info message" in captured.out
 
+
+def test_format_daemon_log_colorize():
+    err_line = ui.format_daemon_log("ERROR", "Failed to connect", colorize=True)
+    assert err_line.startswith("\033[31m")
+    assert err_line.endswith("\033[0m")
+    assert "[ERROR] Failed to connect" in err_line
+
+    succ_line = ui.format_daemon_log("SUCCESS", "File processed", colorize=True)
+    assert succ_line.startswith("\033[32m")
+    assert succ_line.endswith("\033[0m")
+    assert "[SUCCESS] File processed" in succ_line
+
+    info_line = ui.format_daemon_log("INFO", "Running cycle", colorize=True)
+    assert not info_line.startswith("\033[")
+    assert "[INFO] Running cycle" in info_line
+
+
+def test_docker_logging_colorization(capsys, monkeypatch):
+    monkeypatch.setattr(ui, "DAEMON_ENABLED", True)
+    monkeypatch.setattr(ui, "LOG_ENABLED", False)
+    monkeypatch.setattr(ui, "LOG_MODE", "console")
+    monkeypatch.setenv("DOCKER_CONTAINER", "1")
+
+    # Error should be entirely red in stderr
+    ui.log_error("A critical error in Docker")
+    captured = capsys.readouterr()
+    assert captured.err.startswith("\033[31m")
+    assert captured.err.endswith("\033[0m\n")
+    assert "[ERROR] A critical error in Docker" in captured.err
+
+    # Success should be entirely green in stdout
+    ui.log_success("source.mkv", "dest.mkv", "/data/Movies/dest.mkv")
+    captured = capsys.readouterr()
+    assert captured.out.startswith("\033[32m")
+    assert captured.out.endswith("\033[0m\n")
+    assert "[SUCCESS] 'source.mkv' -> 'dest.mkv'" in captured.out
+
+

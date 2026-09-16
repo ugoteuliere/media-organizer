@@ -12,7 +12,7 @@ import pandas as pd
 
 import main
 from src import ui, files, utils, mail, api
-from src.config import ConfigManager
+from src.config import ConfigManager, config
 
 # =========================================================================
 # 1. Tests for main.py execution flows and error handling
@@ -867,11 +867,10 @@ def test_parse_arguments_docker_and_logging(monkeypatch, tmp_path):
     assert ui.LOG_ENABLED is False
 
     # 5. config.DAEMON is True, but --simulate is passed -> DAEMON_ENABLED is False
-    with patch("src.ui.config") as mock_cfg:
-        mock_cfg.DAEMON = True
-        monkeypatch.setattr(sys, "argv", ["main.py", "--simulate"])
-        ui.parse_arguments()
-        assert ui.DAEMON_ENABLED is False
+    monkeypatch.setattr(config, "DAEMON", True)
+    monkeypatch.setattr(sys, "argv", ["main.py", "--simulate"])
+    ui.parse_arguments()
+    assert ui.DAEMON_ENABLED is False
 
 
 def test_print_log_dual_and_error_handling(monkeypatch, tmp_path):
@@ -1153,8 +1152,10 @@ def test_is_file_locked_posix_and_stability(tmp_path, monkeypatch):
 
     # Test is_file_locked delegation when os.name != 'nt'
     monkeypatch.setattr(os, "name", "posix")
-    with patch("os.rename", return_value=None), \
-         patch("src.files._is_file_locked_posix", return_value=False) as mock_posix:
+    with (
+        patch("os.rename", return_value=None),
+        patch("src.files._is_file_locked_posix", return_value=False) as mock_posix,
+    ):
         assert files.is_file_locked(test_file) is False
         mock_posix.assert_called_once()
 

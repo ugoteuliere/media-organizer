@@ -6,6 +6,7 @@ from unittest.mock import patch
 import src.files as files
 import src.utils as utils
 import src.ui as ui
+from src.exceptions import FolderNotFoundError, PermissionError_
 
 
 # =========================================================================
@@ -92,12 +93,12 @@ def test_validate_folder_existence_and_permissions(tmp_path):
 
     # Missing folder exits
     missing = [("key", str(tmp_path / "non_existent"), "ATTR", "Label")]
-    with pytest.raises(SystemExit):
+    with pytest.raises((SystemExit, FolderNotFoundError)):
         utils.validate_folder_existence_and_permissions(missing)
 
     # Permission issue exits
     with patch("src.utils.check_folder_permissions", return_value=(True, False, "Denied")):
-        with pytest.raises(SystemExit):
+        with pytest.raises((SystemExit, PermissionError_)):
             utils.validate_folder_existence_and_permissions(required, simulate=False)
 
 

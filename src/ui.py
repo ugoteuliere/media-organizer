@@ -103,7 +103,7 @@ def parse_arguments():
         "  media-organizer configure          (Interactive configuration wizard)\n"
         "  media-organizer config --list      (List all configured settings)\n"
         '  media-organizer config --set paths.movies_folder "D:/Movies"\n\n'
-        "Documentation & Updates: https://github.com/ugoteuliere/rename"
+        "Documentation & Updates: https://github.com/ugoteuliere/media-organizer"
     )
 
     parser = argparse.ArgumentParser(

@@ -210,7 +210,7 @@ class TagManager:
             return self._config_dir
         if hasattr(config, "config_path") and config.config_path:
             return config.config_path.parent
-        return Path.home() / ".config" / "rename"
+        return Path.home() / ".config" / "media-organizer"
 
     @property
     def user_tags_path(self) -> Path:

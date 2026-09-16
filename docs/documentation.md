@@ -62,8 +62,8 @@ media-organizer configure
 ### Configuration File
 
 Default file location:
-* **Windows**: `%APPDATA%\rename\config.ini`
-* **Linux / macOS**: `~/.config/rename/config.ini`
+* **Windows**: `%APPDATA%\media-organizer\config.ini`
+* **Linux / macOS**: `~/.config/media-organizer/config.ini`
 
 ```ini
 [paths]
@@ -227,7 +227,7 @@ The cleaning engine uses a dictionary to strip filenames:
 
 ## 7. Docker
 
-A Docker image with all necessary dependencies is published on GitHub Container Registry: `ghcr.io/ugoteuliere/rename`.
+A Docker image with all necessary dependencies is published on GitHub Container Registry: `ghcr.io/ugoteuliere/media-organizer`.
 
 The container is designed to run out-of-the-box with zero manual configuration required other than mounting your 3 media folders.
 
@@ -242,7 +242,7 @@ By default, the container starts in **daemon mode**, checking for new files in i
 ```yaml
 services:
   media-organizer:
-    image: ghcr.io/ugoteuliere/rename:latest
+    image: ghcr.io/ugoteuliere/media-organizer:latest
     container_name: media-organizer
     restart: unless-stopped
     environment:
@@ -264,7 +264,7 @@ docker run -d \
   -v /mnt/storage/downloads:/data/input \
   -v /mnt/storage/movies:/data/Movies \
   -v /mnt/storage/series:/data/TV_Shows \
-  ghcr.io/ugoteuliere/rename:latest
+  ghcr.io/ugoteuliere/media-organizer:latest
 ```
 
 ---
@@ -340,7 +340,7 @@ version: "3.8"
 
 services:
   media-organizer:
-    image: ghcr.io/ugoteuliere/rename:latest
+    image: ghcr.io/ugoteuliere/media-organizer:latest
     container_name: media-organizer
     restart: unless-stopped
     environment:
@@ -358,6 +358,6 @@ services:
       - /mnt/storage/downloads:/data/input
       - /mnt/storage/movies:/data/Movies
       - /mnt/storage/series:/data/TV_Shows
-      - /mnt/storage/appdata/rename/config:/config
-      - /mnt/storage/appdata/rename/logs:/app/log
+      - /mnt/storage/appdata/media-organizer/config:/config
+      - /mnt/storage/appdata/media-organizer/logs:/app/log
 ```

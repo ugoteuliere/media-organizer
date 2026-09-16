@@ -1,7 +1,7 @@
 # media-organizer
 
-[![CI](https://github.com/ugoteuliere/rename/actions/workflows/github-ci.yml/badge.svg)](https://github.com/ugoteuliere/rename/actions/workflows/github-ci.yml)
-[![Release](https://img.shields.io/github/v/release/ugoteuliere/rename?color=blue)](https://github.com/ugoteuliere/rename/releases)
+[![CI](https://github.com/ugoteuliere/media-organizer/actions/workflows/github-ci.yml/badge.svg)](https://github.com/ugoteuliere/media-organizer/actions/workflows/github-ci.yml)
+[![Release](https://img.shields.io/github/v/release/ugoteuliere/media-organizer?color=blue)](https://github.com/ugoteuliere/media-organizer/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A CLI tool that parses video filenames, retrieves official titles via **The Movie Database (TMDB)**, and organizes files into Movie and TV Show directories according to **Plex naming conventions**.

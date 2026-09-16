@@ -204,12 +204,12 @@ class ConfigManager:
         if os.name == "nt":
             appdata = os.environ.get("APPDATA")
             if appdata:
-                return Path(appdata) / "rename"
-            return Path.home() / ".config" / "rename"
+                return Path(appdata) / "media-organizer"
+            return Path.home() / ".config" / "media-organizer"
         xdg = os.environ.get("XDG_CONFIG_HOME")
         if xdg:
-            return Path(xdg) / "rename"
-        return Path.home() / ".config" / "rename"
+            return Path(xdg) / "media-organizer"
+        return Path.home() / ".config" / "media-organizer"
 
     def load(self):
         self.parser = configparser.ConfigParser()

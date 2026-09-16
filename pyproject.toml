@@ -1,3 +1,10 @@
+[project]
+name = "media-organizer"
+version = "2.0.0"
+description = "Automated media renamer and organizer supporting Plex naming standards and multi-cloud AI"
+readme = "README.md"
+requires-python = ">=3.11"
+
 [tool.ruff]
 line-length = 120
 target-version = "py311"

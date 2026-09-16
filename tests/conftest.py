@@ -20,12 +20,18 @@ if Path("config.ini").is_file():
 else:
     if os.name == "nt":
         _appdata = os.environ.get("APPDATA")
-        if _appdata and (Path(_appdata) / "rename" / "config.ini").is_file():
+        if _appdata and (Path(_appdata) / "media-organizer" / "config.ini").is_file():
+            _source_ini = Path(_appdata) / "media-organizer" / "config.ini"
+        elif _appdata and (Path(_appdata) / "rename" / "config.ini").is_file():
             _source_ini = Path(_appdata) / "rename" / "config.ini"
     else:
         _xdg = os.environ.get("XDG_CONFIG_HOME")
-        if _xdg and (Path(_xdg) / "rename" / "config.ini").is_file():
+        if _xdg and (Path(_xdg) / "media-organizer" / "config.ini").is_file():
+            _source_ini = Path(_xdg) / "media-organizer" / "config.ini"
+        elif _xdg and (Path(_xdg) / "rename" / "config.ini").is_file():
             _source_ini = Path(_xdg) / "rename" / "config.ini"
+        elif (Path.home() / ".config" / "media-organizer" / "config.ini").is_file():
+            _source_ini = Path.home() / ".config" / "media-organizer" / "config.ini"
         elif (Path.home() / ".config" / "rename" / "config.ini").is_file():
             _source_ini = Path.home() / ".config" / "rename" / "config.ini"
 

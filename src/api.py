@@ -235,8 +235,8 @@ def call_openrouter_batch(media_items: list[dict]) -> BatchMediaResponse:
     headers = {
         "Authorization": f"Bearer {or_key}",
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://github.com/ugoteuliere/rename",
-        "X-Title": "Rename Media Parser",
+        "HTTP-Referer": "https://github.com/ugoteuliere/media-organizer",
+        "X-Title": "media-organizer",
     }
     models = ["liquid/lfm-2.5-2.6b:free", "nex-agi/nex-n2.5-mini:free", "nvidia/nemotron-3.5-lightning:free"]
     last_err = None

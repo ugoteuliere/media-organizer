@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Set up working directory and default non-root user
 WORKDIR /app
-RUN groupadd -r -g 1000 renamer && useradd -r -u 1000 -g renamer -m -d /home/renamer renamer
+RUN groupadd -r -g 1000 organizer && useradd -r -u 1000 -g organizer -m -d /home/organizer organizer
 
 # Install Python dependencies
 COPY requirements.txt .
@@ -36,7 +36,7 @@ COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN sed -i -e 's/\r$//' /usr/local/bin/docker-entrypoint.sh \
     && chmod +x /usr/local/bin/docker-entrypoint.sh \
     && mkdir -p /config /app/log /data/Movies /data/TV_Shows /data/input \
-    && chown -R renamer:renamer /config /data /app /app/log
+    && chown -R organizer:organizer /config /data /app /app/log
 
 COPY docker_sample_config /config/config.ini
 COPY docker_sample_config /app/docker_sample_config

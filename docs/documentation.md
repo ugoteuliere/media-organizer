@@ -5,7 +5,6 @@ Technical guide and reference for media-organizer.
 ## Table of Contents
 
 1. [Folder Structure & Plex Standards](#1-folder-structure--plex-standards)
-   - [Plex Standard Formatting](#plex-standard-formatting)
 2. [Configuration](#2-configuration)
    - [Configuration Tool](#configuration-tool)
    - [Configuration File](#configuration-file)
@@ -41,10 +40,9 @@ The application operates on three directories:
 
 These folders are independent and can be located anywhere on local storage, external drives, or SMB/NFS network shares.
 
-### Plex Standard Formatting
 Processed files follow official Plex naming conventions:
-* **Movies**: `Title (Year).ext` or `Title (Year) [Resolution Quality].ext`
-* **TV Shows**: `Show Name/Season XX/Show Name - SXXEXX.ext`
+* **Movies**: `Title (Year) [Resolution Quality].ext`
+* **TV Shows**: `Show Name/Season XX/Show Name - SXXEXX [Resolution Quality].ext`
 
 ## 2. Configuration
 
@@ -60,10 +58,6 @@ media-organizer configure
 ```
 
 ### Configuration File
-
-Default file location:
-* **Windows**: `%APPDATA%\media-organizer\config.ini`
-* **Linux / macOS**: `~/.config/media-organizer/config.ini`
 
 ```ini
 [paths]
@@ -100,6 +94,10 @@ notify_on_tag = false
 mail = your_email@gmail.com
 mail_pswd = your_16_char_app_password
 ```
+
+Default file location:
+* **Windows**: `%APPDATA%\media-organizer\config.ini`
+* **Linux / macOS**: `~/.config/media-organizer/config.ini`
 
 ### Obtaining API Keys
 
@@ -229,7 +227,7 @@ The cleaning engine uses a dictionary to strip filenames:
 
 A Docker image with all necessary dependencies is published on GitHub Container Registry: `ghcr.io/ugoteuliere/media-organizer`.
 
-The container is designed to run out-of-the-box with zero manual configuration required other than mounting your 3 media folders.
+The container is designed to run out-of-the-box with zero manual configuration required other than mounting your 3 media folders and setting up your TMDB API key
 
 ---
 

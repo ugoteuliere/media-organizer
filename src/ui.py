@@ -14,17 +14,17 @@ if hasattr(sys.stdout, "reconfigure"):
 from rich.console import Console
 from rich.table import Table
 from datetime import datetime, timedelta
-from typing import Optional, List, Tuple
 from pathlib import Path
 import argparse
 import uuid
 
 from src.config import config
-MOVIES_FOLDER = getattr(config, 'MOVIES_FOLDER', None)
-TV_SHOWS_FOLDER = getattr(config, 'TV_SHOWS_FOLDER', None)
-GEMINI_API_KEY = getattr(config, 'GEMINI_API_KEY', None)
-MAIL = getattr(config, 'MAIL', None)
-MAIL_PSWD = getattr(config, 'MAIL_PSWD', None)
+
+MOVIES_FOLDER = getattr(config, "MOVIES_FOLDER", None)
+TV_SHOWS_FOLDER = getattr(config, "TV_SHOWS_FOLDER", None)
+GEMINI_API_KEY = getattr(config, "GEMINI_API_KEY", None)
+MAIL = getattr(config, "MAIL", None)
+MAIL_PSWD = getattr(config, "MAIL_PSWD", None)
 
 LOG_ENABLED = False
 LOG_MODE = "console"
@@ -49,6 +49,7 @@ def is_double_clicked() -> bool:
     if sys.platform == "win32" and len(sys.argv) == 1:
         try:
             import ctypes
+
             pids = (ctypes.c_uint * 2)()
             count = ctypes.windll.kernel32.GetConsoleProcessList(pids, 2)
             return count <= 1
@@ -62,6 +63,7 @@ def hide_console_window() -> None:
     if sys.platform == "win32":
         try:
             import ctypes
+
             hwnd = ctypes.windll.kernel32.GetConsoleWindow()
             if hwnd:
                 ctypes.windll.user32.ShowWindow(hwnd, 0)
@@ -70,7 +72,15 @@ def hide_console_window() -> None:
 
 
 def parse_arguments():
-    global LOG_ENABLED, LOG_MODE, MAIL_ENABLED, AI_FALLBACK_ENABLED, LEARN_ENABLED, BYPASS_ENABLED, VERBOSE_ENABLED, SIMULATE_ENABLED
+    global \
+        LOG_ENABLED, \
+        LOG_MODE, \
+        MAIL_ENABLED, \
+        AI_FALLBACK_ENABLED, \
+        LEARN_ENABLED, \
+        BYPASS_ENABLED, \
+        VERBOSE_ENABLED, \
+        SIMULATE_ENABLED
     global RESOLUTION_ENABLED, QUALITY_ENABLED, NOTIFY_SUCCESS_ENABLED, NOTIFY_ERROR_ENABLED, NOTIFY_TAG_ENABLED
     global DAEMON_ENABLED, POLLING_INTERVAL
 
@@ -78,7 +88,7 @@ def parse_arguments():
         "🎬 media-organizer\n"
         "Automatically parses, renames, and sorts messy video files using TMDB and Multi-Cloud AI (Gemini, Groq, OpenRouter, Cloudflare)."
     )
-    
+
     epilog_text = (
         "Examples:\n"
         "  media-organizer                    (Default: Renames AND moves files)\n"
@@ -92,55 +102,106 @@ def parse_arguments():
         "  media-organizer --notify-success   (Sends email notification on success)\n"
         "  media-organizer configure          (Interactive configuration wizard)\n"
         "  media-organizer config --list      (List all configured settings)\n"
-        "  media-organizer config --set paths.movies_folder \"D:/Movies\"\n\n"
+        '  media-organizer config --set paths.movies_folder "D:/Movies"\n\n'
         "Documentation & Updates: https://github.com/ugoteuliere/rename"
     )
 
     parser = argparse.ArgumentParser(
-        description=description_text,
-        epilog=epilog_text,
-        formatter_class=argparse.RawTextHelpFormatter
+        description=description_text, epilog=epilog_text, formatter_class=argparse.RawTextHelpFormatter
     )
 
     modes_group = parser.add_argument_group("Operational Modes")
-    modes_group.add_argument("-g", "--gui", action="store_true",
-                             help="Launch modern graphical configuration interface (GUI).")
-    modes_group.add_argument("-r", "--only-rename", "--only_rename", action="store_true", dest="only_rename",
-                             help="Renames files in place without moving them to Movie/TV Show folders.")
-    modes_group.add_argument("-s", "--simulate", action="store_true",
-                             help="Simulates renaming and sorting without modifying any files on disk.")
+    modes_group.add_argument(
+        "-g", "--gui", action="store_true", help="Launch modern graphical configuration interface (GUI)."
+    )
+    modes_group.add_argument(
+        "-r",
+        "--only-rename",
+        "--only_rename",
+        action="store_true",
+        dest="only_rename",
+        help="Renames files in place without moving them to Movie/TV Show folders.",
+    )
+    modes_group.add_argument(
+        "-s",
+        "--simulate",
+        action="store_true",
+        help="Simulates renaming and sorting without modifying any files on disk.",
+    )
 
     proc_group = parser.add_argument_group("Processing Options")
-    proc_group.add_argument("-R", "--resolution", action="store_true",
-                            help="Detect and append video resolution tags (e.g. [1080p], [4K]).")
-    proc_group.add_argument("-q", "--quality", action="store_true",
-                            help="Detect and append video encoding/quality tags (e.g. [FullHD BluRay]).")
-    proc_group.add_argument("-a", "--ai", action="store_true", 
-                            help="Enables the Gemini AI fallback to intelligently parse and correct highly obfuscated filenames.")
-    proc_group.add_argument("-L", "--learn", action="store_true",
-                            help="Enable AI keyword learning to discover and save missing tags from Gemini.")
-    proc_group.add_argument("--provider", choices=["auto", "gemini", "groq", "openrouter", "cloudflare"], default=None,
-                            help="Specify the AI cloud provider to use for fallback parsing (auto, gemini, groq, openrouter, cloudflare).")
-    proc_group.add_argument("--path", type=str, default=None,
-                            help="Target a specific folder as source (overrides downloads folder, or renames in-place with -r).")
+    proc_group.add_argument(
+        "-R", "--resolution", action="store_true", help="Detect and append video resolution tags (e.g. [1080p], [4K])."
+    )
+    proc_group.add_argument(
+        "-q",
+        "--quality",
+        action="store_true",
+        help="Detect and append video encoding/quality tags (e.g. [FullHD BluRay]).",
+    )
+    proc_group.add_argument(
+        "-a",
+        "--ai",
+        action="store_true",
+        help="Enables the Gemini AI fallback to intelligently parse and correct highly obfuscated filenames.",
+    )
+    proc_group.add_argument(
+        "-L",
+        "--learn",
+        action="store_true",
+        help="Enable AI keyword learning to discover and save missing tags from Gemini.",
+    )
+    proc_group.add_argument(
+        "--provider",
+        choices=["auto", "gemini", "groq", "openrouter", "cloudflare"],
+        default=None,
+        help="Specify the AI cloud provider to use for fallback parsing (auto, gemini, groq, openrouter, cloudflare).",
+    )
+    proc_group.add_argument(
+        "--path",
+        type=str,
+        default=None,
+        help="Target a specific folder as source (overrides downloads folder, or renames in-place with -r).",
+    )
 
     auto_group = parser.add_argument_group("Automation & Logging")
-    auto_group.add_argument("-d", "--daemon", action="store_true", dest="daemon",
-                            help="Run continuously in background daemon mode with periodic polling.")
-    auto_group.add_argument("--interval", type=int, default=None,
-                            help="Polling interval in minutes for daemon mode (overrides config).")
-    auto_group.add_argument("-b", "--bypass", action="store_true", 
-                            help="Bypass user confirmation prompts before renaming or moving files.")
-    auto_group.add_argument("-l", "--log", action="store_true", 
-                            help="Suppresses terminal output and writes all console messages to a dedicated log file instead.")
-    auto_group.add_argument("-v", "--verbose", action="store_true", 
-                            help="Display detailed error logs after error messages.")
-    auto_group.add_argument("--notify-success", action="store_true",
-                            help="Send an email notification on successful media processing.")
-    auto_group.add_argument("--notify-error", action="store_true",
-                            help="Send an email notification when a processing error occurs.")
-    auto_group.add_argument("-t", "--notify-tag", action="store_true",
-                            help="Send an email notification when a new AI keyword tag is discovered and saved.")
+    auto_group.add_argument(
+        "-d",
+        "--daemon",
+        action="store_true",
+        dest="daemon",
+        help="Run continuously in background daemon mode with periodic polling.",
+    )
+    auto_group.add_argument(
+        "--interval",
+        type=int,
+        default=None,
+        help="Polling interval in minutes for daemon mode (automatically enables daemon mode).",
+    )
+    auto_group.add_argument(
+        "-b", "--bypass", action="store_true", help="Bypass user confirmation prompts before renaming or moving files."
+    )
+    auto_group.add_argument(
+        "-l",
+        "--log",
+        action="store_true",
+        help="Suppresses terminal output and writes all console messages to a dedicated log file instead.",
+    )
+    auto_group.add_argument(
+        "-v", "--verbose", action="store_true", help="Display detailed error logs after error messages."
+    )
+    auto_group.add_argument(
+        "--notify-success", action="store_true", help="Send an email notification on successful media processing."
+    )
+    auto_group.add_argument(
+        "--notify-error", action="store_true", help="Send an email notification when a processing error occurs."
+    )
+    auto_group.add_argument(
+        "-t",
+        "--notify-tag",
+        action="store_true",
+        help="Send an email notification when a new AI keyword tag is discovered and saved.",
+    )
 
     # Subparsers for config commands
     subparsers = parser.add_subparsers(dest="subcommand")
@@ -148,28 +209,55 @@ def parse_arguments():
     config_parser = subparsers.add_parser(
         "config",
         help="View and manage configuration settings (INI file & environment variables).",
-        formatter_class=argparse.RawTextHelpFormatter
+        formatter_class=argparse.RawTextHelpFormatter,
     )
-    config_parser.add_argument("-g", "--gui", action="store_true", help="Launch modern graphical configuration interface (GUI).")
-    config_parser.add_argument("-l", "--list", action="store_true", help="List all configured settings and their sources.")
-    config_parser.add_argument("--show-secrets", action="store_true", help="Display sensitive values (API keys, passwords) without masking.")
-    config_parser.add_argument("--get", metavar="KEY", help="Get the value for a specific setting (e.g. paths.movies_folder, api.tmdb_api_key).")
-    config_parser.add_argument("--set", nargs=2, metavar=("KEY", "VALUE"), help="Set a configuration setting (e.g. paths.movies_folder 'D:/Movies').")
+    config_parser.add_argument(
+        "-g", "--gui", action="store_true", help="Launch modern graphical configuration interface (GUI)."
+    )
+    config_parser.add_argument(
+        "-l", "--list", action="store_true", help="List all configured settings and their sources."
+    )
+    config_parser.add_argument(
+        "--show-secrets", action="store_true", help="Display sensitive values (API keys, passwords) without masking."
+    )
+    config_parser.add_argument(
+        "--get",
+        metavar="KEY",
+        help="Get the value for a specific setting (e.g. paths.movies_folder, api.tmdb_api_key).",
+    )
+    config_parser.add_argument(
+        "--set",
+        nargs=2,
+        metavar=("KEY", "VALUE"),
+        help="Set a configuration setting (e.g. paths.movies_folder 'D:/Movies').",
+    )
     config_parser.add_argument("--unset", metavar="KEY", help="Remove a configuration setting from the INI file.")
     config_parser.add_argument("--path", action="store_true", help="Display the path of the active configuration file.")
 
     configure_parser = subparsers.add_parser(
         "configure",
         help="Launch interactive configuration wizard or GUI.",
-        formatter_class=argparse.RawTextHelpFormatter
+        formatter_class=argparse.RawTextHelpFormatter,
     )
-    configure_parser.add_argument("-g", "--gui", action="store_true", help="Launch modern graphical configuration tool (GUI).")
-    configure_parser.add_argument("--paths", action="store_true", help="Configure storage and library folders directly.")
-    configure_parser.add_argument("--ai", action="store_true", help="Configure API keys and Cloud AI providers directly.")
-    configure_parser.add_argument("--email", action="store_true", help="Configure email alerts and SMTP credentials directly.")
-    configure_parser.add_argument("--options", action="store_true", help="Configure runtime and automation options directly.")
+    configure_parser.add_argument(
+        "-g", "--gui", action="store_true", help="Launch modern graphical configuration tool (GUI)."
+    )
+    configure_parser.add_argument(
+        "--paths", action="store_true", help="Configure storage and library folders directly."
+    )
+    configure_parser.add_argument(
+        "--ai", action="store_true", help="Configure API keys and Cloud AI providers directly."
+    )
+    configure_parser.add_argument(
+        "--email", action="store_true", help="Configure email alerts and SMTP credentials directly."
+    )
+    configure_parser.add_argument(
+        "--options", action="store_true", help="Configure runtime and automation options directly."
+    )
     configure_parser.add_argument("--video", action="store_true", help="Configure video stream options directly.")
-    configure_parser.add_argument("--full", action="store_true", help="Run full step-by-step setup wizard without menu.")
+    configure_parser.add_argument(
+        "--full", action="store_true", help="Run full step-by-step setup wizard without menu."
+    )
 
     args = parser.parse_args()
 
@@ -180,33 +268,33 @@ def parse_arguments():
     # Path check: must exist if specified
     if args.path:
         if not os.path.isdir(args.path):
-            parser.error(
-                f"Invalid path: The directory '{args.path}' does not exist or is not a valid folder."
-            )
+            parser.error(f"Invalid path: The directory '{args.path}' does not exist or is not a valid folder.")
 
-    current_mail = MAIL or getattr(config, 'MAIL', None)
-    current_pswd = MAIL_PSWD or getattr(config, 'MAIL_PSWD', None)
+    current_mail = MAIL or getattr(config, "MAIL", None)
+    current_pswd = MAIL_PSWD or getattr(config, "MAIL_PSWD", None)
     MAIL_ENABLED = bool(current_mail and current_pswd)
 
     is_daemon = bool(
-        (getattr(args, 'daemon', False) or (args.interval is not None) or getattr(config, 'DAEMON', False))
-        and not getattr(args, 'simulate', False)
+        (getattr(args, "daemon", False) or (args.interval is not None) or getattr(config, "DAEMON", False))
+        and not getattr(args, "simulate", False)
     )
+    if getattr(args, "simulate", False) and (getattr(args, "daemon", False) or args.interval is not None):
+        print_log(
+            "💡 Note: Continuous daemon polling is disabled in simulation mode. Running a single preview cycle.\n"
+        )
     DAEMON_ENABLED = is_daemon
     if args.interval is not None:
         if args.interval < 1:
-            parser.error(
-                "Invalid interval: The '--interval' option requires a positive integer of at least 1 minute."
-            )
+            parser.error("Invalid interval: The '--interval' option requires a positive integer of at least 1 minute.")
         POLLING_INTERVAL = args.interval
     else:
-        POLLING_INTERVAL = getattr(config, 'POLLING_INTERVAL', 15)
+        POLLING_INTERVAL = getattr(config, "POLLING_INTERVAL", 15)
 
-    LEARN_ENABLED = bool(args.learn or getattr(config, 'LEARN', False))
-    AI_FALLBACK_ENABLED = bool(args.ai or getattr(config, 'AI', False) or LEARN_ENABLED)
-    BYPASS_ENABLED = bool(args.bypass or getattr(config, 'BYPASS', False) or DAEMON_ENABLED)
+    LEARN_ENABLED = bool(args.learn or getattr(config, "LEARN", False))
+    AI_FALLBACK_ENABLED = bool(args.ai or getattr(config, "AI", False) or LEARN_ENABLED)
+    BYPASS_ENABLED = bool(args.bypass or getattr(config, "BYPASS", False) or DAEMON_ENABLED)
     is_docker = os.environ.get("DOCKER_CONTAINER") == "1" or os.path.exists("/.dockerenv")
-    wants_log = bool(args.log or getattr(config, 'LOG', False))
+    wants_log = bool(args.log or getattr(config, "LOG", False))
     if wants_log:
         log_dir = get_log_dir()
         has_perm, reason = check_log_dir_permissions(log_dir)
@@ -223,15 +311,16 @@ def parse_arguments():
     else:
         LOG_MODE = "console"
         LOG_ENABLED = False
-    VERBOSE_ENABLED = bool(args.verbose or getattr(config, 'VERBOSE', False))
+    VERBOSE_ENABLED = bool(args.verbose or getattr(config, "VERBOSE", False))
     SIMULATE_ENABLED = bool(args.simulate)
-    RESOLUTION_ENABLED = bool(args.resolution or getattr(config, 'RESOLUTION', False))
-    QUALITY_ENABLED = bool(args.quality or getattr(config, 'QUALITY', False))
+    RESOLUTION_ENABLED = bool(args.resolution or getattr(config, "RESOLUTION", False))
+    QUALITY_ENABLED = bool(args.quality or getattr(config, "QUALITY", False))
     NOTIFY_SUCCESS_ENABLED = bool(args.notify_success)
     NOTIFY_ERROR_ENABLED = bool(args.notify_error)
     NOTIFY_TAG_ENABLED = bool(args.notify_tag)
 
     from src import utils as utils_module
+
     utils_module.RESOLUTION = RESOLUTION_ENABLED
     utils_module.QUALITY = QUALITY_ENABLED
 
@@ -242,8 +331,8 @@ def parse_arguments():
             "  1. Run the configuration wizard:\n"
             "     media-organizer configure\n"
             "  2. Or set credentials via CLI:\n"
-            "     media-organizer config --set mail.mail \"<your_email@gmail.com>\"\n"
-            "     media-organizer config --set mail.mail_pswd \"<your_16_char_app_password>\""
+            '     media-organizer config --set mail.mail "<your_email@gmail.com>"\n'
+            '     media-organizer config --set mail.mail_pswd "<your_16_char_app_password>"'
         )
 
     if (args.resolution or args.quality) and not shutil.which("ffprobe"):
@@ -259,11 +348,11 @@ def parse_arguments():
 
     if AI_FALLBACK_ENABLED:
         available_ai = []
-        current_gemini = GEMINI_API_KEY or getattr(config, 'GEMINI_API_KEY', None)
-        current_groq = getattr(config, 'GROQ_API_KEY', None)
-        current_openrouter = getattr(config, 'OPENROUTER_API_KEY', None)
-        current_cf_tok = getattr(config, 'CLOUDFLARE_API_TOKEN', None)
-        current_cf_acc = getattr(config, 'CLOUDFLARE_ACCOUNT_ID', None)
+        current_gemini = GEMINI_API_KEY or getattr(config, "GEMINI_API_KEY", None)
+        current_groq = getattr(config, "GROQ_API_KEY", None)
+        current_openrouter = getattr(config, "OPENROUTER_API_KEY", None)
+        current_cf_tok = getattr(config, "CLOUDFLARE_API_TOKEN", None)
+        current_cf_acc = getattr(config, "CLOUDFLARE_ACCOUNT_ID", None)
 
         if current_gemini:
             available_ai.append("gemini")
@@ -281,11 +370,11 @@ def parse_arguments():
                 "  1. Run the configuration wizard:\n"
                 "     media-organizer configure\n"
                 "  2. Or set the key via CLI:\n"
-                "     media-organizer config --set api.gemini_api_key \"<your_gemini_key>\"\n"
-                "     media-organizer config --set api.groq_api_key \"<your_groq_key>\"\n"
+                '     media-organizer config --set api.gemini_api_key "<your_gemini_key>"\n'
+                '     media-organizer config --set api.groq_api_key "<your_groq_key>"\n'
                 "  3. Or use environment variables:\n"
-                "     export GEMINI_API_KEY=\"<your_gemini_key>\"\n"
-                "     export GROQ_API_KEY=\"<your_groq_key>\""
+                '     export GEMINI_API_KEY="<your_gemini_key>"\n'
+                '     export GROQ_API_KEY="<your_groq_key>"'
             )
 
         if args.provider and args.provider != "auto" and args.provider not in available_ai:
@@ -295,9 +384,10 @@ def parse_arguments():
 
     return args
 
+
 def handle_config_command(args):
     from src.config import config
-    
+
     if getattr(args, "gui", None) is True:
         config.run_gui()
         return
@@ -314,7 +404,7 @@ def handle_config_command(args):
             section = "options"
         elif getattr(args, "video", None) is True:
             section = "video"
-        
+
         config.run_wizard(section=section, interactive_menu=False)
         return
 
@@ -336,22 +426,30 @@ def handle_config_command(args):
         try:
             val_clean = val.strip()
             if key.startswith("paths.") and not os.path.isdir(val_clean):
-                rich_print_log(f"\n❌ [bold red]Error:[/bold red] The directory '[white]{val_clean}[/white]' does not exist on disk or is not reachable.")
+                rich_print_log(
+                    f"\n❌ [bold red]Error:[/bold red] The directory '[white]{val_clean}[/white]' does not exist on disk or is not reachable."
+                )
 
             if key in ("options.resolution", "options.quality"):
                 val_bool = val_clean.lower() in ("true", "1", "yes", "y", "t")
                 if val_bool and not shutil.which("ffprobe"):
-                    rich_print_log("\n❌ [bold red]Error:[/bold red] 'ffprobe' (FFmpeg) is not installed or not in System PATH.\nResolution and quality tags will fail to be detected until FFmpeg is installed.")
+                    rich_print_log(
+                        "\n❌ [bold red]Error:[/bold red] 'ffprobe' (FFmpeg) is not installed or not in System PATH.\nResolution and quality tags will fail to be detected until FFmpeg is installed."
+                    )
 
             if key in ("options.notify_on_success", "options.notify_on_error"):
                 val_bool = val_clean.lower() in ("true", "1", "yes", "y", "t")
-                cur_mail = getattr(config, 'MAIL', None)
-                cur_pswd = getattr(config, 'MAIL_PSWD', None)
+                cur_mail = getattr(config, "MAIL", None)
+                cur_pswd = getattr(config, "MAIL_PSWD", None)
                 if val_bool and not (cur_mail and cur_pswd):
-                    rich_print_log("\n⚠️  [bold yellow]Notice:[/bold yellow] Email notifications are enabled, but Gmail credentials ('mail' and 'mail_pswd') are not yet configured in [mail].")
+                    rich_print_log(
+                        "\n⚠️  [bold yellow]Notice:[/bold yellow] Email notifications are enabled, but Gmail credentials ('mail' and 'mail_pswd') are not yet configured in [mail]."
+                    )
 
             config.set(key, val)
-            rich_print_log(f"\n✅ Set [bold green]{key}[/bold green] = [yellow]{val}[/yellow] in [green]{config.config_path}[/green]\n")
+            rich_print_log(
+                f"\n✅ Set [bold green]{key}[/bold green] = [yellow]{val}[/yellow] in [green]{config.config_path}[/green]\n"
+            )
         except ValueError as e:
             rich_print_log(f"\n❌ [bold red]Configuration error:[/bold red] {e}\n")
             sys.exit(1)
@@ -372,6 +470,7 @@ def handle_config_command(args):
     # Default action for `config`: --list or display table
     display_config_table(show_secrets=getattr(args, "show_secrets", False))
 
+
 def display_config_table(show_secrets=False):
     from src.config import config
     from rich.table import Table
@@ -388,9 +487,9 @@ def display_config_table(show_secrets=False):
             "ENV": "[bold cyan]ENV[/bold cyan]",
             "INI": "[bold green]INI[/bold green]",
             "LEGACY": "[yellow]config.py[/yellow]",
-            "DEFAULT": "[dim]DEFAULT[/dim]"
+            "DEFAULT": "[dim]DEFAULT[/dim]",
         }.get(item["source"], item["source"])
-        
+
         table.add_row(item["section"], item["key"], str(item["display_value"]), source_color)
 
     rich_print_log()
@@ -398,6 +497,7 @@ def display_config_table(show_secrets=False):
     rich_print_log(f"📄 Active INI file: [yellow]{config.config_path}[/yellow]")
     if not show_secrets:
         rich_print_log("🔒 Secrets masked. Use [cyan]--show-secrets[/cyan] to reveal.\n")
+
 
 def get_log_dir() -> Path:
     """Resolve the log directory: current working directory when frozen, otherwise project root."""
@@ -414,14 +514,15 @@ def get_log_dir() -> Path:
     log_dir.mkdir(parents=True, exist_ok=True)
     return log_dir
 
-def cleanup_old_logs(log_dir: Optional[Path] = None, max_age_days: int = 14) -> List[Path]:
+
+def cleanup_old_logs(log_dir: Path | None = None, max_age_days: int = 14) -> list[Path]:
     """Delete log files in log_dir older than max_age_days (default: 14 days / 2 weeks)."""
     if log_dir is None:
         log_dir = get_log_dir()
     if not log_dir.is_dir():
         return []
 
-    deleted_files: List[Path] = []
+    deleted_files: list[Path] = []
     cutoff_datetime = datetime.now() - timedelta(days=max_age_days)
     cutoff_date = cutoff_datetime.date()
     cutoff_timestamp = cutoff_datetime.timestamp()
@@ -463,7 +564,8 @@ def cleanup_old_logs(log_dir: Optional[Path] = None, max_age_days: int = 14) -> 
 
     return deleted_files
 
-def check_log_dir_permissions(log_dir: Path) -> Tuple[bool, str]:
+
+def check_log_dir_permissions(log_dir: Path) -> tuple[bool, str]:
     """Verify read and write permissions on log directory using a probe file."""
     try:
         log_dir.mkdir(parents=True, exist_ok=True)
@@ -475,10 +577,11 @@ def check_log_dir_permissions(log_dir: Path) -> Tuple[bool, str]:
     except OSError as e:
         return (False, str(e))
 
+
 def format_daemon_log(level: str, message: str, colorize: bool = False) -> str:
     """Formats a message for daemon mode: strictly single-line with timestamp and level."""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    clean_msg = re.sub(r'\s+', ' ', str(message)).strip()
+    clean_msg = re.sub(r"\s+", " ", str(message)).strip()
     raw = f"{timestamp} [{level}] {clean_msg}"
     if colorize:
         if level == "ERROR":
@@ -486,6 +589,7 @@ def format_daemon_log(level: str, message: str, colorize: bool = False) -> str:
         if level == "SUCCESS":
             return f"\033[32m{raw}\033[0m"
     return raw
+
 
 def _emit_daemon_log(level: str, message: str, stream=None):
     """Outputs a single-line formatted log in daemon mode to console stream and log file if enabled."""
@@ -513,12 +617,11 @@ def _emit_daemon_log(level: str, message: str, stream=None):
     if should_print_console:
         is_docker = config.is_docker_environment()
         console_line = format_daemon_log(
-            level,
-            message,
-            colorize=(is_docker or getattr(sys.modules.get("src.ui"), "COLOR_LOGS", False))
+            level, message, colorize=(is_docker or getattr(sys.modules.get("src.ui"), "COLOR_LOGS", False))
         )
         stream.write(f"{console_line}\n")
         stream.flush()
+
 
 def log_info(message: str):
     """Logs an operational/informational message (single line to stdout in daemon mode)."""
@@ -527,12 +630,14 @@ def log_info(message: str):
     else:
         print_log(message)
 
+
 def log_error(message: str):
     """Logs an error message (single line to stderr in daemon mode)."""
     if DAEMON_ENABLED:
         _emit_daemon_log("ERROR", message, stream=sys.stderr)
     else:
         print_log(message)
+
 
 def log_success(original_name: str, new_name: str, destination_path: str):
     """Logs a successful media rename and move operation (single line to stdout in daemon mode)."""
@@ -542,6 +647,7 @@ def log_success(original_name: str, new_name: str, destination_path: str):
     else:
         print_log(f"✅ {msg}")
 
+
 def print_log(message):
     global _last_log_cleanup_date
     if DAEMON_ENABLED:
@@ -549,13 +655,13 @@ def print_log(message):
         level = "INFO"
         if msg_str.startswith("[ERROR]") or "❌" in msg_str or "Error:" in msg_str or "error:" in msg_str:
             level = "ERROR"
-            msg_str = re.sub(r'^(?:❌\s*|\[ERROR\]\s*)', '', msg_str).strip()
+            msg_str = re.sub(r"^(?:❌\s*|\[ERROR\]\s*)", "", msg_str).strip()
         elif msg_str.startswith("[SUCCESS]"):
             level = "SUCCESS"
-            msg_str = re.sub(r'^\[SUCCESS\]\s*', '', msg_str).strip()
+            msg_str = re.sub(r"^\[SUCCESS\]\s*", "", msg_str).strip()
         elif msg_str.startswith("[INFO]"):
             level = "INFO"
-            msg_str = re.sub(r'^\[INFO\]\s*', '', msg_str).strip()
+            msg_str = re.sub(r"^\[INFO\]\s*", "", msg_str).strip()
         _emit_daemon_log(level, msg_str)
         return
 
@@ -580,11 +686,13 @@ def print_log(message):
     if should_print_console:
         print(message)
 
+
 def print_error(message, logs):
     if VERBOSE_ENABLED:
         return f"\n {message} \n\n ⤷ Error logs: {logs} \n"
     else:
         return f"\n {message} \n"
+
 
 def rich_print_log(*args, **kwargs):
     global LOG_MODE
@@ -604,7 +712,7 @@ def rich_print_log(*args, **kwargs):
         console_capture = Console(force_terminal=False, no_color=True, width=150)
         with console_capture.capture() as capture:
             console_capture.print(*args, **kwargs)
-            
+
         raw_text = capture.get()
         if raw_text.strip():
             saved_mode = LOG_MODE
@@ -619,13 +727,14 @@ def rich_print_log(*args, **kwargs):
         console = Console()
         console.print(*args, **kwargs)
 
+
 def display_corrected_filenames(clean_data_table):
-    if clean_data_table.empty or 'Media' not in clean_data_table:
+    if clean_data_table.empty or "Media" not in clean_data_table:
         rich_print_log("[yellow]No media files detected.[/yellow]")
         return
 
-    movies_df = clean_data_table[clean_data_table['Media'] == 'movie']
-    tv_shows_df = clean_data_table[clean_data_table['Media'] == 'tv']
+    movies_df = clean_data_table[clean_data_table["Media"] == "movie"]
+    tv_shows_df = clean_data_table[clean_data_table["Media"] == "tv"]
 
     if tv_shows_df.empty and movies_df.empty:
         rich_print_log("[yellow]No media files detected.[/yellow]")
@@ -635,13 +744,13 @@ def display_corrected_filenames(clean_data_table):
     if not movies_df.empty:
         rich_print_log()
         table_movies = Table(title="🍿 [bold magenta]Movies[/bold magenta]", title_justify="left")
-        
+
         table_movies.add_column("Original", style="white", no_wrap=True, max_width=60, overflow="ellipsis")
         table_movies.add_column("Corrected", style="green", no_wrap=True, max_width=60, overflow="ellipsis")
 
         for _, row in movies_df.iterrows():
-            if row['Original'] != row['Corrected']:
-                table_movies.add_row(str(row['Original']), str(row['Corrected']))
+            if row["Original"] != row["Corrected"]:
+                table_movies.add_row(str(row["Original"]), str(row["Corrected"]))
 
         rich_print_log(table_movies)
 
@@ -649,25 +758,21 @@ def display_corrected_filenames(clean_data_table):
     if not tv_shows_df.empty:
         rich_print_log()
         table_tv = Table(title="📺 [bold blue]TV Shows[/bold blue]", title_justify="left")
-        
+
         table_tv.add_column("Original", style="white", no_wrap=True, max_width=60, overflow="ellipsis")
         table_tv.add_column("Season", justify="center", style="yellow")
         table_tv.add_column("Épisode", justify="center", style="yellow")
         table_tv.add_column("Corrected", style="green", no_wrap=True, max_width=60, overflow="ellipsis")
 
         for _, row in tv_shows_df.iterrows():
-            orig = str(row.get('Original', ''))
-            corr = str(row.get('Corrected', ''))
+            orig = str(row.get("Original", ""))
+            corr = str(row.get("Corrected", ""))
             if orig != corr:
-                table_tv.add_row(
-                    orig,
-                    str(row.get('Season', '')),
-                    str(row.get('Episode', '')),
-                    corr
-                )
+                table_tv.add_row(orig, str(row.get("Season", "")), str(row.get("Episode", "")), corr)
 
         rich_print_log(table_tv)
         rich_print_log()
+
 
 def display_sorted_files(paths):
     if not paths:
@@ -688,7 +793,7 @@ def display_sorted_files(paths):
         if movie_dir and p_new.is_relative_to(movie_dir):
             short_path = Path(movie_dir.name) / p_new.relative_to(movie_dir)
             movies_data.append((old_name, str(short_path)))
-            
+
         elif tv_dir and p_new.is_relative_to(tv_dir):
             short_path = Path(tv_dir.name) / p_new.relative_to(tv_dir)
             tv_shows_data.append((old_name, str(short_path)))
@@ -699,7 +804,7 @@ def display_sorted_files(paths):
     if movies_data:
         rich_print_log()
         table_movies = Table(title="🍿 [bold magenta]Sorted Movies[/bold magenta]", title_justify="left")
-        
+
         table_movies.add_column("Old", style="white", no_wrap=True, max_width=40, overflow="ellipsis")
         table_movies.add_column("New Path", style="green", no_wrap=True, max_width=70, overflow="ellipsis")
 
@@ -712,7 +817,7 @@ def display_sorted_files(paths):
     if tv_shows_data:
         rich_print_log()
         table_tv = Table(title="📺 [bold blue]Sorted TV Shows[/bold blue]", title_justify="left")
-        
+
         table_tv.add_column("Old", style="white", no_wrap=True, max_width=40, overflow="ellipsis")
         table_tv.add_column("New Path", style="green", no_wrap=True, max_width=70, overflow="ellipsis")
 
@@ -722,42 +827,39 @@ def display_sorted_files(paths):
         rich_print_log(table_tv)
         rich_print_log()
 
+
 def display_skipped_filenames(failed_files):
     if not failed_files:
         return
 
     if DAEMON_ENABLED:
         for fail in failed_files:
-            orig = str(fail.get('Original', 'Unknown'))
-            reason = str(fail.get('Reason', 'No reason provided'))
+            orig = str(fail.get("Original", "Unknown"))
+            reason = str(fail.get("Reason", "No reason provided"))
             log_error(f"Skipped file '{orig}': {reason}")
         return
 
     rich_print_log()
-    
-    table_skipped = Table(
-        title="❌ [bold red]Skipped Files[/bold red]", 
-        title_justify="left",
-        border_style="red"
-    )
-    
+
+    table_skipped = Table(title="❌ [bold red]Skipped Files[/bold red]", title_justify="left", border_style="red")
+
     table_skipped.add_column("Original Filename", style="white", no_wrap=True, max_width=100, overflow="ellipsis")
     table_skipped.add_column("Reason for Failure", style="yellow")
 
     for fail in failed_files:
-        table_skipped.add_row(
-            str(fail.get('Original', 'Unknown')), 
-            str(fail.get('Reason', 'No reason provided'))
-        )
+        table_skipped.add_row(str(fail.get("Original", "Unknown")), str(fail.get("Reason", "No reason provided")))
 
     rich_print_log(table_skipped)
     rich_print_log()
 
+
 def user_confirmation(message):
-    if not(BYPASS_ENABLED):
+    if not (BYPASS_ENABLED):
         console = Console()
         try:
-            console.print(f"\n➡️  Press [green][Entrer][/green] to {message}, or [red][Ctrl+C][/red] to cancel...", end="")
+            console.print(
+                f"\n➡️  Press [green][Entrer][/green] to {message}, or [red][Ctrl+C][/red] to cancel...", end=""
+            )
             input()
         except KeyboardInterrupt:
             console.print("\n\n[red] ❌ Operation cancelled by the user. [/red]")

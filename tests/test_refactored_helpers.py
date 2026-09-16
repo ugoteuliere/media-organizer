@@ -1,9 +1,7 @@
-import os
-import sys
 import pytest
 import pandas as pd
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import src.files as files
 import src.utils as utils
@@ -13,6 +11,7 @@ import src.ui as ui
 # =========================================================================
 # Tests for src/utils.py refactored helpers
 # =========================================================================
+
 
 def test_check_folder_read_permission(tmp_path):
     # Success case
@@ -106,6 +105,7 @@ def test_validate_folder_existence_and_permissions(tmp_path):
 # Tests for src/files.py refactored helpers
 # =========================================================================
 
+
 def test_resolve_search_directory(tmp_path, monkeypatch):
     # Valid custom path
     res = files.resolve_search_directory(str(tmp_path))
@@ -173,7 +173,9 @@ def test_append_resolution_quality_tags(tmp_path):
     # When enabled and metadata detected
     with patch.object(utils, "RESOLUTION", True), patch.object(utils, "QUALITY", True):
         with patch("src.utils.parse_resolution_quality", return_value=("1080p", "BluRay")):
-            res = files.append_resolution_quality_tags(file_path, "Movie (2020)", ("title", 2020, "1080p", "BluRay"), "movie", True)
+            res = files.append_resolution_quality_tags(
+                file_path, "Movie (2020)", ("title", 2020, "1080p", "BluRay"), "movie", True
+            )
             assert res == "Movie (2020) [BluRay 1080p]"
 
 
@@ -220,12 +222,21 @@ def test_build_search_result_tables():
     assert c_df.empty
 
     # Populated tables
-    messy_data = [{'File': 'bad.mkv', 'Folder': 'f', 'Path': '/bad.mkv', 'Clean': 'b', 'Parse': (), 'Media': 'movie'}]
-    clean_data = [{'Original': 'Good', 'Corrected': 'Good (2020)', 'Path': '/Good.mkv', 'Media': 'movie', 'Season': None, 'Episode': None}]
+    messy_data = [{"File": "bad.mkv", "Folder": "f", "Path": "/bad.mkv", "Clean": "b", "Parse": (), "Media": "movie"}]
+    clean_data = [
+        {
+            "Original": "Good",
+            "Corrected": "Good (2020)",
+            "Path": "/Good.mkv",
+            "Media": "movie",
+            "Season": None,
+            "Episode": None,
+        }
+    ]
     m_df, c_df = files.build_search_result_tables(messy_data, clean_data, exit_if_empty=False)
     assert len(m_df) == 1
     assert len(c_df) == 1
-    assert c_df.iloc[0]['Corrected'] == 'Good (2020)'
+    assert c_df.iloc[0]["Corrected"] == "Good (2020)"
 
 
 def test_build_destination_lookup():
@@ -234,11 +245,9 @@ def test_build_destination_lookup():
     assert files.build_destination_lookup(pd.DataFrame()) == {}
 
     # Populated DataFrame
-    df = pd.DataFrame([
-        {'Corrected': 'Movie (2020)', 'Original': 'movie.raw', 'Media': 'movie'}
-    ])
+    df = pd.DataFrame([{"Corrected": "Movie (2020)", "Original": "movie.raw", "Media": "movie"}])
     lookup = files.build_destination_lookup(df)
-    assert lookup.get('Movie (2020)') == ('movie.raw', 'movie')
+    assert lookup.get("Movie (2020)") == ("movie.raw", "movie")
 
 
 def test_infer_media_type_from_destination(tmp_path):
@@ -272,7 +281,10 @@ def test_execute_single_file_move(tmp_path):
         mock_mail.assert_called_once()
 
     # Error case (RuntimeError)
-    with patch("src.files.move_file", side_effect=RuntimeError("Disk full")), patch("src.mail.send_error_email") as mock_err_mail:
+    with (
+        patch("src.files.move_file", side_effect=RuntimeError("Disk full")),
+        patch("src.mail.send_error_email") as mock_err_mail,
+    ):
         success, failed = files.execute_single_file_move(old_file, new_file, lookup)
         assert success is False
         assert failed == old_file.name
@@ -288,9 +300,11 @@ def test_execute_single_file_move_daemon_mode(tmp_path, monkeypatch):
     monkeypatch.setattr(ui, "DAEMON_ENABLED", True)
 
     # 1. Success in daemon mode -> ui.log_success called
-    with patch("src.files.move_file") as mock_move, \
-         patch("src.mail.send_media_success_email") as mock_mail, \
-         patch("src.ui.log_success") as mock_log_succ:
+    with (
+        patch("src.files.move_file") as mock_move,
+        patch("src.mail.send_media_success_email") as mock_mail,
+        patch("src.ui.log_success") as mock_log_succ,
+    ):
         success, failed = files.execute_single_file_move(old_file, new_file, lookup)
         assert success is True
         assert failed is None
@@ -299,18 +313,22 @@ def test_execute_single_file_move_daemon_mode(tmp_path, monkeypatch):
         mock_log_succ.assert_called_once_with("old.mkv", "new.mkv", str(new_file))
 
     # 2. Move failure in daemon mode -> ui.log_error called
-    with patch("src.files.move_file", side_effect=RuntimeError("Disk full")), \
-         patch("src.mail.send_error_email"), \
-         patch("src.ui.log_error") as mock_log_err:
+    with (
+        patch("src.files.move_file", side_effect=RuntimeError("Disk full")),
+        patch("src.mail.send_error_email"),
+        patch("src.ui.log_error") as mock_log_err,
+    ):
         success, failed = files.execute_single_file_move(old_file, new_file, lookup)
         assert success is False
         assert failed == old_file.name
         mock_log_err.assert_called_once_with("Failed to move 'old.mkv': Disk full")
 
     # 3. Mail error in daemon mode -> second ui.log_error called
-    with patch("src.files.move_file", side_effect=RuntimeError("Disk full")), \
-         patch("src.mail.send_error_email", side_effect=RuntimeError("SMTP down")), \
-         patch("src.ui.log_error") as mock_log_err:
+    with (
+        patch("src.files.move_file", side_effect=RuntimeError("Disk full")),
+        patch("src.mail.send_error_email", side_effect=RuntimeError("SMTP down")),
+        patch("src.ui.log_error") as mock_log_err,
+    ):
         success, failed = files.execute_single_file_move(old_file, new_file, lookup)
         assert success is False
         assert failed == old_file.name
@@ -400,17 +418,12 @@ def test_build_clean_media_entry(tmp_path):
     assert entry_movie["Corrected"] == "Inception (2010)"
 
     # TV entry
-    entry_tv = files.build_clean_media_entry(
-        tv_file, "Show - S01E01", (), "tv", is_movie=False, is_series=True
-    )
+    entry_tv = files.build_clean_media_entry(tv_file, "Show - S01E01", (), "tv", is_movie=False, is_series=True)
     assert entry_tv is not None
     assert entry_tv["Media"] == "tv"
     assert entry_tv["Season"] == "1"
     assert entry_tv["Episode"] == "1"
 
     # Unknown / Neither entry
-    entry_none = files.build_clean_media_entry(
-        other_file, "clip", (), "unknown", is_movie=False, is_series=False
-    )
+    entry_none = files.build_clean_media_entry(other_file, "clip", (), "unknown", is_movie=False, is_series=False)
     assert entry_none is None
-

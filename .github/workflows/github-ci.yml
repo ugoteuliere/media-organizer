@@ -47,7 +47,7 @@ jobs:
         cloudflare_api_token = ${{ secrets.CLOUDFLARE_API_TOKEN }}
         cloudflare_account_id = ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-        [email]
+        [mail]
         mail = ${{ secrets.MAIL }}
         mail_pswd = ${{ secrets.MAIL_PSWD }}
 
@@ -60,6 +60,10 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+
+    - name: Lint and Code Quality (Ruff)
+      run: |
+        ruff check src/ tests/
 
     - name: Run Tests and Generate Coverage
       shell: bash

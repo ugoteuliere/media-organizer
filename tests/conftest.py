@@ -18,12 +18,12 @@ _source_ini = None
 if Path("config.ini").is_file():
     _source_ini = Path("config.ini").resolve()
 else:
-    if os.name == 'nt':
-        _appdata = os.environ.get('APPDATA')
+    if os.name == "nt":
+        _appdata = os.environ.get("APPDATA")
         if _appdata and (Path(_appdata) / "rename" / "config.ini").is_file():
             _source_ini = Path(_appdata) / "rename" / "config.ini"
     else:
-        _xdg = os.environ.get('XDG_CONFIG_HOME')
+        _xdg = os.environ.get("XDG_CONFIG_HOME")
         if _xdg and (Path(_xdg) / "rename" / "config.ini").is_file():
             _source_ini = Path(_xdg) / "rename" / "config.ini"
         elif (Path.home() / ".config" / "rename" / "config.ini").is_file():
@@ -92,6 +92,7 @@ def isolate_user_config(tmp_path, monkeypatch):
 
     # 4. Reset runtime CLI flags and email credentials
     from src import ui
+
     ui.NOTIFY_SUCCESS_ENABLED = False
     ui.NOTIFY_ERROR_ENABLED = False
     ui.RESOLUTION_ENABLED = False
@@ -143,4 +144,3 @@ def mock_smtp_network_guard(monkeypatch):
     if "src.mail" in sys.modules:
         monkeypatch.setattr(sys.modules["src.mail"].smtplib, "SMTP_SSL", mock_cls)
         monkeypatch.setattr(sys.modules["src.mail"].smtplib, "SMTP", mock_cls)
-

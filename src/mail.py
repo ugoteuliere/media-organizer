@@ -1,4 +1,5 @@
 import html
+import re
 import smtplib
 import ssl
 from datetime import datetime
@@ -7,14 +8,19 @@ from src import ui
 from src.config import config
 
 # Module-level references for test mocking compatibility
-MAIL_PSWD = getattr(config, 'MAIL_PSWD', None)
-MAIL = getattr(config, 'MAIL', None)
+MAIL_PSWD = getattr(config, "MAIL_PSWD", None)
+MAIL = getattr(config, "MAIL", None)
+
+
+def _safe_header(text: str) -> str:
+    """Sanitizes text for email header fields, stripping newlines to prevent header injection crashes."""
+    return re.sub(r"[\r\n]+", " ", str(text)).strip()
 
 
 def _get_credentials():
     """Retrieve current email and app password dynamically."""
-    sender_email = MAIL or getattr(config, 'MAIL', None)
-    password = MAIL_PSWD or getattr(config, 'MAIL_PSWD', None)
+    sender_email = MAIL or getattr(config, "MAIL", None)
+    password = MAIL_PSWD or getattr(config, "MAIL_PSWD", None)
     return sender_email, password
 
 
@@ -29,9 +35,10 @@ def is_success_mail_enabled() -> bool:
     if not is_mail_configured():
         return False
     from src import ui
-    if getattr(ui, 'NOTIFY_SUCCESS_ENABLED', False):
+
+    if getattr(ui, "NOTIFY_SUCCESS_ENABLED", False):
         return True
-    return bool(getattr(config, 'NOTIFY_ON_SUCCESS', False))
+    return bool(getattr(config, "NOTIFY_ON_SUCCESS", False))
 
 
 def is_error_mail_enabled() -> bool:
@@ -39,9 +46,10 @@ def is_error_mail_enabled() -> bool:
     if not is_mail_configured():
         return False
     from src import ui
-    if getattr(ui, 'NOTIFY_ERROR_ENABLED', False):
+
+    if getattr(ui, "NOTIFY_ERROR_ENABLED", False):
         return True
-    return bool(getattr(config, 'NOTIFY_ON_ERROR', True))
+    return bool(getattr(config, "NOTIFY_ON_ERROR", True))
 
 
 def is_tag_mail_enabled() -> bool:
@@ -49,9 +57,10 @@ def is_tag_mail_enabled() -> bool:
     if not is_mail_configured():
         return False
     from src import ui
-    if getattr(ui, 'NOTIFY_TAG_ENABLED', False):
+
+    if getattr(ui, "NOTIFY_TAG_ENABLED", False):
         return True
-    return bool(getattr(config, 'NOTIFY_ON_TAG', False))
+    return bool(getattr(config, "NOTIFY_ON_TAG", False))
 
 
 def _build_html_email(title: str, badge_text: str, badge_bg: str, rows: list, error_details: str = None) -> str:
@@ -69,7 +78,7 @@ def _build_html_email(title: str, badge_text: str, badge_bg: str, rows: list, er
         elif is_code:
             val_content = f'<span style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; background-color: #f1f5f9; padding: 4px 8px; border-radius: 4px; font-size: 13px; color: #334155; word-break: break-all;">{escaped_val}</span>'
         else:
-            val_content = f'<span>{escaped_val}</span>'
+            val_content = f"<span>{escaped_val}</span>"
 
         rows_html += f"""
         <tr>
@@ -129,28 +138,27 @@ def _build_html_email(title: str, badge_text: str, badge_bg: str, rows: list, er
 def _build_text_email(title: str, badge_text: str, rows: list, error_details: str = None) -> str:
     """Generate a clean, structured plaintext email."""
     lines = [
-        f"==================================================",
+        "==================================================",
         f"  🎬 media-organizer - [{badge_text}]",
         f"  {title}",
-        f"==================================================",
-        ""
+        "==================================================",
+        "",
     ]
     for label, val, _, _ in rows:
         lines.append(f"{label.ljust(18)}: {val}")
 
     if error_details:
-        lines.extend([
-            "",
-            "----------------- ERROR DETAILS -----------------",
-            error_details.strip(),
-            "-------------------------------------------------"
-        ])
+        lines.extend(
+            [
+                "",
+                "----------------- ERROR DETAILS -----------------",
+                error_details.strip(),
+                "-------------------------------------------------",
+            ]
+        )
 
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    lines.extend([
-        "",
-        f"Generated automatically at {current_time}"
-    ])
+    lines.extend(["", f"Generated automatically at {current_time}"])
     return "\n".join(lines)
 
 
@@ -181,7 +189,7 @@ def send_media_success_email(
     media_type: str,
     destination_path: str,
     resolution: str = None,
-    quality: str = None
+    quality: str = None,
 ):
     """
     Send a beautifully formatted notification when a media file is successfully processed.
@@ -211,23 +219,16 @@ def send_media_success_email(
         rows.append(("Detected Tags", tags_display, True, False))
 
     html_content = _build_html_email(
-        title=f"Successfully Processed: {media_name}",
-        badge_text="SUCCESS",
-        badge_bg="#10b981",
-        rows=rows
+        title=f"Successfully Processed: {media_name}", badge_text="SUCCESS", badge_bg="#10b981", rows=rows
     )
-    text_content = _build_text_email(
-        title=f"Successfully Processed: {media_name}",
-        badge_text="SUCCESS",
-        rows=rows
-    )
+    text_content = _build_text_email(title=f"Successfully Processed: {media_name}", badge_text="SUCCESS", rows=rows)
 
     msg = EmailMessage()
-    msg['Subject'] = subject
-    msg['From'] = sender_email
-    msg['To'] = sender_email
+    msg["Subject"] = _safe_header(subject)
+    msg["From"] = sender_email
+    msg["To"] = sender_email
     msg.set_content(text_content)
-    msg.add_alternative(html_content, subtype='html')
+    msg.add_alternative(html_content, subtype="html")
 
     try:
         _dispatch_email(msg)
@@ -260,25 +261,16 @@ def send_email(message: str, affected_file: str = None, exception: Exception = N
         details += f"\n\nException details: {exception}"
 
     html_content = _build_html_email(
-        title=title,
-        badge_text="ERROR",
-        badge_bg="#ef4444",
-        rows=rows,
-        error_details=details
+        title=title, badge_text="ERROR", badge_bg="#ef4444", rows=rows, error_details=details
     )
-    text_content = _build_text_email(
-        title=title,
-        badge_text="ERROR",
-        rows=rows,
-        error_details=details
-    )
+    text_content = _build_text_email(title=title, badge_text="ERROR", rows=rows, error_details=details)
 
     msg = EmailMessage()
-    msg['Subject'] = subject
-    msg['From'] = sender_email
-    msg['To'] = sender_email
+    msg["Subject"] = _safe_header(subject)
+    msg["From"] = sender_email
+    msg["To"] = sender_email
     msg.set_content(text_content)
-    msg.add_alternative(html_content, subtype='html')
+    msg.add_alternative(html_content, subtype="html")
 
     _dispatch_email(msg)
 
@@ -291,12 +283,7 @@ def send_error_email(error_message: str, affected_file: str = None, exception: E
         ui.print_log(f"⚠️ Warning: Failed to send error email: {e}")
 
 
-def send_tag_learned_email(
-    tags: list[str],
-    filename: str,
-    media_title: str = None,
-    file_path: str = None
-):
+def send_tag_learned_email(tags: list[str], filename: str, media_title: str = None, file_path: str = None):
     """
     Send a beautifully formatted notification when new AI keyword tags are learned and saved to gemini_tags.json.
     """
@@ -318,24 +305,15 @@ def send_tag_learned_email(
         rows.append(("File Path", str(file_path), True, False))
     rows.append(("Saved Location", "gemini_tags.json", True, False))
 
-    html_content = _build_html_email(
-        title=title,
-        badge_text="AI TAG LEARNED",
-        badge_bg="#8b5cf6",
-        rows=rows
-    )
-    text_content = _build_text_email(
-        title=title,
-        badge_text="AI TAG LEARNED",
-        rows=rows
-    )
+    html_content = _build_html_email(title=title, badge_text="AI TAG LEARNED", badge_bg="#8b5cf6", rows=rows)
+    text_content = _build_text_email(title=title, badge_text="AI TAG LEARNED", rows=rows)
 
     msg = EmailMessage()
-    msg['Subject'] = subject
-    msg['From'] = sender_email
-    msg['To'] = sender_email
+    msg["Subject"] = _safe_header(subject)
+    msg["From"] = sender_email
+    msg["To"] = sender_email
     msg.set_content(text_content)
-    msg.add_alternative(html_content, subtype='html')
+    msg.add_alternative(html_content, subtype="html")
 
     try:
         _dispatch_email(msg)

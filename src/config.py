@@ -5,7 +5,6 @@ import shutil
 import tempfile
 import configparser
 from pathlib import Path
-from typing import Optional, Any, Dict, List
 
 # Configuration Key Constants
 KEY_MOVIES_FOLDER = "paths.movies_folder"
@@ -43,15 +42,31 @@ class ConfigManager:
     SCHEMA = {
         "paths": ["movies_folder", "tv_shows_folder", "not_sorted_media_files_folder"],
         "api": [
-            "tmdb_api_key", "gemini_api_key", "groq_api_key",
-            "openrouter_api_key", "cloudflare_api_token", "cloudflare_account_id"
+            "tmdb_api_key",
+            "gemini_api_key",
+            "groq_api_key",
+            "openrouter_api_key",
+            "cloudflare_api_token",
+            "cloudflare_account_id",
         ],
         "mail": ["mail", "mail_pswd"],
         "options": [
-            "bypass", "ai", "log", "verbose", "resolution", "quality",
-            "notify_on_success", "notify_on_error", "notify_on_tag", "daemon", "polling_interval", "learn",
-            "ai_provider", "tmdb_min_confidence", "ai_min_confidence"
-        ]
+            "bypass",
+            "ai",
+            "log",
+            "verbose",
+            "resolution",
+            "quality",
+            "notify_on_success",
+            "notify_on_error",
+            "notify_on_tag",
+            "daemon",
+            "polling_interval",
+            "learn",
+            "ai_provider",
+            "tmdb_min_confidence",
+            "ai_min_confidence",
+        ],
     }
 
     ENV_MAPPING = {
@@ -125,13 +140,17 @@ class ConfigManager:
         KEY_NOTIFY_ON_SUCCESS,
         KEY_NOTIFY_ON_ERROR,
         KEY_NOTIFY_ON_TAG,
-        KEY_DAEMON
+        KEY_DAEMON,
     }
 
     SECRET_KEYS = {
-        KEY_TMDB_API_KEY, KEY_GEMINI_API_KEY, KEY_MAIL_PSWD,
-        KEY_GROQ_API_KEY, KEY_OPENROUTER_API_KEY,
-        KEY_CLOUDFLARE_API_TOKEN, KEY_CLOUDFLARE_ACCOUNT_ID
+        KEY_TMDB_API_KEY,
+        KEY_GEMINI_API_KEY,
+        KEY_MAIL_PSWD,
+        KEY_GROQ_API_KEY,
+        KEY_OPENROUTER_API_KEY,
+        KEY_CLOUDFLARE_API_TOKEN,
+        KEY_CLOUDFLARE_ACCOUNT_ID,
     }
 
     def __init__(self, custom_path=None):
@@ -164,9 +183,7 @@ class ConfigManager:
         # Quarantine safeguard: Never touch real user configuration during automated pytest runs or scratch scripts
         script_name = str(sys.argv[0]).lower() if sys.argv else ""
         in_quarantine_mode = (
-            "PYTEST_CURRENT_TEST" in os.environ
-            or "PYTEST_VERSION" in os.environ
-            or "scratch" in script_name
+            "PYTEST_CURRENT_TEST" in os.environ or "PYTEST_VERSION" in os.environ or "scratch" in script_name
         )
         if in_quarantine_mode and not os.environ.get("RENAME_TEST_ALLOW_REAL_PATH"):
             base_dir = Path(tempfile.gettempdir()) / "pytest_rename_quarantine"
@@ -184,12 +201,12 @@ class ConfigManager:
 
     @staticmethod
     def _get_default_user_dir() -> Path:
-        if os.name == 'nt':
-            appdata = os.environ.get('APPDATA')
+        if os.name == "nt":
+            appdata = os.environ.get("APPDATA")
             if appdata:
                 return Path(appdata) / "rename"
             return Path.home() / ".config" / "rename"
-        xdg = os.environ.get('XDG_CONFIG_HOME')
+        xdg = os.environ.get("XDG_CONFIG_HOME")
         if xdg:
             return Path(xdg) / "rename"
         return Path.home() / ".config" / "rename"
@@ -251,13 +268,13 @@ class ConfigManager:
 
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
         dir_to_use = self.config_path.parent
-        
+
         with tempfile.NamedTemporaryFile("w", dir=dir_to_use, delete=False, encoding="utf-8") as tf:
             self.parser.write(tf)
             temp_path = tf.name
 
         shutil.move(temp_path, str(self.config_path))
-        if os.name != 'nt':
+        if os.name != "nt":
             try:
                 os.chmod(self.config_path, 0o600)
             except OSError:
@@ -324,7 +341,9 @@ class ConfigManager:
         if section not in self.SCHEMA:
             raise ValueError(f"Unknown section '{section}'. Valid sections: {', '.join(self.SCHEMA.keys())}")
         if key not in self.SCHEMA[section]:
-            raise ValueError(f"Unknown key '{key}' in section '{section}'. Valid keys: {', '.join(self.SCHEMA[section])}")
+            raise ValueError(
+                f"Unknown key '{key}' in section '{section}'. Valid keys: {', '.join(self.SCHEMA[section])}"
+            )
 
         if not self.parser.has_section(section):
             self.parser.add_section(section)
@@ -391,30 +410,36 @@ class ConfigManager:
                     else:
                         display_val = "****"
 
-                items.append({
-                    "section": section,
-                    "key": key,
-                    "full_key": full_key,
-                    "value": val,
-                    "display_value": display_val if display_val is not None else "(not configured)",
-                    "source": source,
-                    "is_secret": is_secret
-                })
+                items.append(
+                    {
+                        "section": section,
+                        "key": key,
+                        "full_key": full_key,
+                        "value": val,
+                        "display_value": display_val if display_val is not None else "(not configured)",
+                        "source": source,
+                        "is_secret": is_secret,
+                    }
+                )
         return items
 
     def run_gui(self) -> bool:
         """Launches the graphical configuration interface."""
         from src.gui import launch_config_gui
+
         return launch_config_gui(self)
 
     def wizard_paths(self, console=None):
         """Interactive setup for media storage folders."""
         from rich.console import Console
         from rich.prompt import Prompt
+
         console = console or Console()
 
         console.print("\n[bold magenta]📂 Folder Paths Configuration[/bold magenta]")
-        console.print("[dim]Best Practice: Keep incoming downloads in an unsorted folder, separate from your Movies and TV Shows libraries. Folders can be local drives, USB disks, or NAS network shares.[/dim]")
+        console.print(
+            "[dim]Best Practice: Keep incoming downloads in an unsorted folder, separate from your Movies and TV Shows libraries. Folders can be local drives, USB disks, or NAS network shares.[/dim]"
+        )
 
         def _prompt_and_validate_folder(label, key):
             current = self.get(key) or ""
@@ -422,7 +447,9 @@ class ConfigManager:
             folder_clean = folder_input.strip()
             if folder_clean:
                 if not os.path.isdir(folder_clean):
-                    console.print(f"[bold red]❌ Error: The directory '{folder_clean}' does not exist on disk or is not reachable.[/bold red]")
+                    console.print(
+                        f"[bold red]❌ Error: The directory '{folder_clean}' does not exist on disk or is not reachable.[/bold red]"
+                    )
                 self.set(key, folder_clean)
 
         _prompt_and_validate_folder("Movies Folder", KEY_MOVIES_FOLDER)
@@ -433,10 +460,13 @@ class ConfigManager:
         """Interactive setup for TMDB and Cloud AI providers."""
         from rich.console import Console
         from rich.prompt import Prompt
+
         console = console or Console()
 
         console.print("\n[bold magenta]🔑 API Keys Configuration[/bold magenta]")
-        console.print("[dim]Best Practice: TMDB API key is required to query official movie/series metadata. Cloud AI providers act as optional fallbacks for highly cryptic filenames.[/dim]")
+        console.print(
+            "[dim]Best Practice: TMDB API key is required to query official movie/series metadata. Cloud AI providers act as optional fallbacks for highly cryptic filenames.[/dim]"
+        )
 
         current_tmdb = self.get(KEY_TMDB_API_KEY) or ""
         tmdb_masked = f"{current_tmdb[:4]}...{current_tmdb[-4:]}" if len(current_tmdb) > 8 else current_tmdb
@@ -457,7 +487,11 @@ class ConfigManager:
             self.set(KEY_GROQ_API_KEY, groq_input)
 
         current_openrouter = self.get(KEY_OPENROUTER_API_KEY) or ""
-        openrouter_masked = f"{current_openrouter[:4]}...{current_openrouter[-4:]}" if len(current_openrouter) > 8 else current_openrouter
+        openrouter_masked = (
+            f"{current_openrouter[:4]}...{current_openrouter[-4:]}"
+            if len(current_openrouter) > 8
+            else current_openrouter
+        )
         openrouter_input = Prompt.ask("OpenRouter API Key (Optional AI Fallback)", default=openrouter_masked)
         if openrouter_input.strip() and openrouter_input != openrouter_masked:
             self.set(KEY_OPENROUTER_API_KEY, openrouter_input)
@@ -478,10 +512,13 @@ class ConfigManager:
         """Interactive setup for email alerts."""
         from rich.console import Console
         from rich.prompt import Prompt
+
         console = console or Console()
 
         console.print("\n[bold magenta]📧 Email Alerts Configuration (Optional)[/bold magenta]")
-        console.print("[dim]Best Practice: Useful for headless/server cron jobs. Requires a 16-letter Gmail App Password created via Google Account Security.[/dim]")
+        console.print(
+            "[dim]Best Practice: Useful for headless/server cron jobs. Requires a 16-letter Gmail App Password created via Google Account Security.[/dim]"
+        )
         current_mail = self.get(KEY_MAIL) or ""
         mail_input = Prompt.ask("Gmail Address", default=current_mail)
         if mail_input.strip():
@@ -497,10 +534,13 @@ class ConfigManager:
         """Interactive setup for automation and runtime options."""
         from rich.console import Console
         from rich.prompt import Prompt, Confirm
+
         console = console or Console()
 
         console.print("\n[bold magenta]⚙️ Automation & Runtime Options[/bold magenta]")
-        console.print("[dim]Best Practice: Set default execution behaviors so you do not need to specify flags on every run. CLI flags (-b, -i, -L, -l, -v, -t) will always override these defaults.[/dim]")
+        console.print(
+            "[dim]Best Practice: Set default execution behaviors so you do not need to specify flags on every run. CLI flags (-b, -i, -L, -l, -v, -t) will always override these defaults.[/dim]"
+        )
         cur_bypass = bool(self.get(KEY_BYPASS, False))
         bypass_input = Confirm.ask("Bypass confirmation prompts and run non-interactively (-b)?", default=cur_bypass)
         self.set(KEY_BYPASS, "true" if bypass_input else "false")
@@ -525,7 +565,9 @@ class ConfigManager:
         self.set(KEY_AI, "true" if ai_input else "false")
 
         cur_learn = bool(self.get(KEY_LEARN, False))
-        learn_input = Confirm.ask("Enable AI keyword learning by default (save missing tags discovered by AI) (-L)?", default=cur_learn)
+        learn_input = Confirm.ask(
+            "Enable AI keyword learning by default (save missing tags discovered by AI) (-L)?", default=cur_learn
+        )
         self.set(KEY_LEARN, "true" if learn_input else "false")
 
         cur_prov = str(self.get(KEY_AI_PROVIDER) or "auto")
@@ -550,17 +592,22 @@ class ConfigManager:
         self.set(KEY_NOTIFY_ON_ERROR, "true" if notify_err_input else "false")
 
         cur_tag = bool(self.get(KEY_NOTIFY_ON_TAG, False))
-        notify_tag_input = Confirm.ask("Send an email notification when a new AI keyword tag is learned (-t)?", default=cur_tag)
+        notify_tag_input = Confirm.ask(
+            "Send an email notification when a new AI keyword tag is learned (-t)?", default=cur_tag
+        )
         self.set(KEY_NOTIFY_ON_TAG, "true" if notify_tag_input else "false")
 
     def wizard_video(self, console=None):
         """Interactive setup for video stream FFmpeg tags."""
         from rich.console import Console
         from rich.prompt import Confirm
+
         console = console or Console()
 
         console.print("\n[bold magenta]🎞️ Video Stream Options (Requires FFmpeg)[/bold magenta]")
-        console.print("[dim]Best Practice: Extracts video stream metadata to append clean tags (e.g. [4K] [1080p] [BluRay]). Requires 'ffprobe' installed in System PATH.[/dim]")
+        console.print(
+            "[dim]Best Practice: Extracts video stream metadata to append clean tags (e.g. [4K] [1080p] [BluRay]). Requires 'ffprobe' installed in System PATH.[/dim]"
+        )
         cur_res = bool(self.get(KEY_RESOLUTION, False))
         res_input = Confirm.ask("Detect and append resolution tags (e.g., [4K], [FullHD])?", default=cur_res)
         self.set(KEY_RESOLUTION, "true" if res_input else "false")
@@ -571,10 +618,12 @@ class ConfigManager:
 
         if (res_input or qual_input) and not shutil.which("ffprobe"):
             console.print("\n[bold red]❌ Error: 'ffprobe' (FFmpeg) was not found in your System PATH.[/bold red]")
-            console.print("[yellow]Resolution and quality tags will fail to be detected until FFmpeg is installed.[/yellow]")
+            console.print(
+                "[yellow]Resolution and quality tags will fail to be detected until FFmpeg is installed.[/yellow]"
+            )
             console.print("[dim]Installation guide: docs/documentation.md#ffmpeg-setup[/dim]")
 
-    def run_wizard(self, section: Optional[str] = None, interactive_menu: bool = False):
+    def run_wizard(self, section: str | None = None, interactive_menu: bool = False):
         """Interactive terminal configuration wizard that guides the user through setup steps."""
         from rich.console import Console
 
@@ -602,7 +651,9 @@ class ConfigManager:
             self.wizard_options(console)
             self.wizard_video(console)
 
-        console.print(f"\n[bold green]✅ Configuration successfully saved to:[/bold green] [yellow]{self.config_path}[/yellow]\n")
+        console.print(
+            f"\n[bold green]✅ Configuration successfully saved to:[/bold green] [yellow]{self.config_path}[/yellow]\n"
+        )
 
     # Module-level property accessors
     @property

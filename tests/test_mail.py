@@ -1,5 +1,4 @@
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from src import mail, ui
 from src.config import config
 
@@ -11,16 +10,9 @@ def test_build_html_and_text_email_formatting():
         ("Original Filename", "inception.2010.mkv", True, False),
     ]
     html = mail._build_html_email(
-        title="Successfully Processed: Inception (2010).mkv",
-        badge_text="SUCCESS",
-        badge_bg="#10b981",
-        rows=rows
+        title="Successfully Processed: Inception (2010).mkv", badge_text="SUCCESS", badge_bg="#10b981", rows=rows
     )
-    text = mail._build_text_email(
-        title="Successfully Processed: Inception (2010).mkv",
-        badge_text="SUCCESS",
-        rows=rows
-    )
+    text = mail._build_text_email(title="Successfully Processed: Inception (2010).mkv", badge_text="SUCCESS", rows=rows)
 
     # HTML assertions
     assert "<!DOCTYPE html>" in html
@@ -50,7 +42,7 @@ def test_send_media_success_email_movie(monkeypatch):
             media_type="movie",
             destination_path="//nas/Movies/Dune Part Two (2024).mkv",
             resolution="1080p",
-            quality="BluRay"
+            quality="BluRay",
         )
         mock_dispatch.assert_called_once()
         sent_msg = mock_dispatch.call_args[0][0]
@@ -76,7 +68,7 @@ def test_send_media_success_email_tv(monkeypatch):
             media_name="Severance - S01E01.mkv",
             original_name="severance.s01e01.web.mkv",
             media_type="tv",
-            destination_path="//nas/TV/Severance/Season 01/Severance - S01E01.mkv"
+            destination_path="//nas/TV/Severance/Season 01/Severance - S01E01.mkv",
         )
         mock_dispatch.assert_called_once()
         sent_msg = mock_dispatch.call_args[0][0]
@@ -91,10 +83,7 @@ def test_send_media_success_email_disabled_when_flag_false(monkeypatch):
 
     with patch("src.mail._dispatch_email") as mock_dispatch:
         mail.send_media_success_email(
-            media_name="Test.mkv",
-            original_name="test.mkv",
-            media_type="movie",
-            destination_path="/test"
+            media_name="Test.mkv", original_name="test.mkv", media_type="movie", destination_path="/test"
         )
         mock_dispatch.assert_not_called()
 
@@ -107,8 +96,7 @@ def test_send_error_email_formatted(monkeypatch):
 
     with patch("src.mail._dispatch_email") as mock_dispatch:
         mail.send_error_email(
-            error_message="Network connection to TMDB timed out",
-            affected_file="Difficult.Movie.2024.mkv"
+            error_message="Network connection to TMDB timed out", affected_file="Difficult.Movie.2024.mkv"
         )
         mock_dispatch.assert_called_once()
         sent_msg = mock_dispatch.call_args[0][0]
@@ -123,10 +111,7 @@ def test_send_error_email_disabled_when_flag_false(monkeypatch):
     monkeypatch.setattr(config, "NOTIFY_ON_ERROR", False)
 
     with patch("src.mail._dispatch_email") as mock_dispatch:
-        mail.send_error_email(
-            error_message="Crash",
-            affected_file="Faulty.mkv"
-        )
+        mail.send_error_email(error_message="Crash", affected_file="Faulty.mkv")
         mock_dispatch.assert_not_called()
 
 
@@ -164,7 +149,7 @@ def test_send_tag_learned_email_formatted(monkeypatch):
             tags=["CustomGroup", "x265"],
             filename="Cryptic.Movie.2024.mkv",
             media_title="Cryptic Movie",
-            file_path="/downloads/Cryptic.Movie.2024.mkv"
+            file_path="/downloads/Cryptic.Movie.2024.mkv",
         )
         mock_dispatch.assert_called_once()
         sent_msg = mock_dispatch.call_args[0][0]
@@ -186,10 +171,7 @@ def test_send_tag_learned_email_disabled_when_flag_false(monkeypatch):
     monkeypatch.setattr(ui, "NOTIFY_TAG_ENABLED", False)
 
     with patch("src.mail._dispatch_email") as mock_dispatch:
-        mail.send_tag_learned_email(
-            tags=["CustomGroup"],
-            filename="Movie.mkv"
-        )
+        mail.send_tag_learned_email(tags=["CustomGroup"], filename="Movie.mkv")
         mock_dispatch.assert_not_called()
 
 
@@ -199,12 +181,11 @@ def test_send_tag_learned_email_dispatch_exception(monkeypatch):
     monkeypatch.setattr(mail, "MAIL_PSWD", "test_app_pass_12")
     monkeypatch.setattr(config, "NOTIFY_ON_TAG", True)
 
-    with patch("src.mail._dispatch_email", side_effect=RuntimeError("SMTP failed")), \
-         patch("src.ui.print_log") as mock_log:
-        mail.send_tag_learned_email(
-            tags=["CustomGroup"],
-            filename="Movie.mkv"
-        )
+    with (
+        patch("src.mail._dispatch_email", side_effect=RuntimeError("SMTP failed")),
+        patch("src.ui.print_log") as mock_log,
+    ):
+        mail.send_tag_learned_email(tags=["CustomGroup"], filename="Movie.mkv")
         logged = " ".join([str(c[0][0]) for c in mock_log.call_args_list if c[0]])
         assert "Failed to send tag learned email" in logged
 
@@ -215,8 +196,10 @@ def test_send_error_email_dispatch_exception(monkeypatch):
     monkeypatch.setattr(mail, "MAIL_PSWD", "test_app_pass_12")
     monkeypatch.setattr(config, "NOTIFY_ON_ERROR", True)
 
-    with patch("src.mail._dispatch_email", side_effect=RuntimeError("SMTP failed")), \
-         patch("src.ui.print_log") as mock_log:
+    with (
+        patch("src.mail._dispatch_email", side_effect=RuntimeError("SMTP failed")),
+        patch("src.ui.print_log") as mock_log,
+    ):
         mail.send_error_email(error_message="Something failed")
         logged = " ".join([str(c[0][0]) for c in mock_log.call_args_list if c[0]])
         assert "Failed to send error email" in logged

@@ -1,6 +1,5 @@
 import re
 from unittest.mock import patch, MagicMock
-import pytest
 import pandas as pd
 
 from src import ui
@@ -57,7 +56,9 @@ def test_log_error_stderr(capsys, monkeypatch):
 
     assert captured.out == ""
     assert "[ERROR] Target directory is not reachable" in captured.err
-    assert re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \[ERROR\] Target directory is not reachable\n$", captured.err)
+    assert re.match(
+        r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \[ERROR\] Target directory is not reachable\n$", captured.err
+    )
 
 
 def test_print_log_daemon_auto_detection(capsys, monkeypatch):
@@ -91,6 +92,7 @@ def test_rich_print_log_in_daemon_mode(capsys, monkeypatch):
     monkeypatch.setattr(ui, "LOG_MODE", "console")
 
     from rich.table import Table
+
     table = Table(title="Test Table")
     table.add_column("Col 1")
     table.add_row("Value 1")
@@ -170,7 +172,9 @@ def test_non_daemon_mode_preserved(tmp_path, capsys, monkeypatch):
     log_files = list(tmp_path.glob("*.txt"))
     assert len(log_files) == 1
     content = log_files[0].read_text(encoding="utf-8")
-    assert re.match(r"^\[\d{2}:\d{2}:\d{2}\] Classic console message", content) or re.match(r"^\[\d{2}:\d{2}:\d{2}\] File only classic message", content)
+    assert re.match(r"^\[\d{2}:\d{2}:\d{2}\] Classic console message", content) or re.match(
+        r"^\[\d{2}:\d{2}:\d{2}\] File only classic message", content
+    )
 
 
 def test_display_skipped_filenames_in_daemon_mode(capsys, monkeypatch):
@@ -180,7 +184,7 @@ def test_display_skipped_filenames_in_daemon_mode(capsys, monkeypatch):
 
     failed = [
         {"Original": "Unknown.File.2024.mkv", "Reason": "TMDB lookup returned no results"},
-        {"Original": "Bad.File.mkv", "Reason": "File corrupted"}
+        {"Original": "Bad.File.mkv", "Reason": "File corrupted"},
     ]
 
     ui.display_skipped_filenames(failed)
@@ -206,22 +210,31 @@ def test_process_media_daemon_single_line_flow(tmp_path, capsys, monkeypatch):
     args.only_rename = False
     args.simulate = False
 
-    clean_df = pd.DataFrame([{
-        'Original': 'Movie.2024.mkv',
-        'Corrected': 'Movie (2024)',
-        'Path': str(media_file),
-        'Media': 'movie',
-        'Season': None,
-        'Episode': None
-    }])
+    clean_df = pd.DataFrame(
+        [
+            {
+                "Original": "Movie.2024.mkv",
+                "Corrected": "Movie (2024)",
+                "Path": str(media_file),
+                "Media": "movie",
+                "Season": None,
+                "Episode": None,
+            }
+        ]
+    )
 
     sorted_paths = [(str(media_file), str(tmp_path / "Movies" / "Movie (2024)" / "Movie (2024).mkv"))]
 
-    with patch("src.files.search_media_files", return_value=(clean_df, pd.DataFrame())), \
-         patch("src.utils.get_corrected_media_filenames", return_value=clean_df), \
-         patch("src.files.rename_media_files", return_value=clean_df), \
-         patch("src.files.sort_media_files", return_value=sorted_paths), \
-         patch("src.files.move_media_files", side_effect=lambda paths, df, **kw: ui.log_success("Movie.2024.mkv", "Movie (2024).mkv", paths[0][1])):
+    with (
+        patch("src.files.search_media_files", return_value=(clean_df, pd.DataFrame())),
+        patch("src.utils.get_corrected_media_filenames", return_value=clean_df),
+        patch("src.files.rename_media_files", return_value=clean_df),
+        patch("src.files.sort_media_files", return_value=sorted_paths),
+        patch(
+            "src.files.move_media_files",
+            side_effect=lambda paths, df, **kw: ui.log_success("Movie.2024.mkv", "Movie (2024).mkv", paths[0][1]),
+        ),
+    ):
         ret = main.process_media(args, daemon=True, cycle=1)
         assert ret == 0
 
@@ -248,25 +261,33 @@ def test_process_media_only_rename_daemon(tmp_path, capsys, monkeypatch):
     args.only_rename = True
     args.simulate = False
 
-    clean_df = pd.DataFrame([{
-        'Original': 'Show.S01E01.mkv',
-        'Corrected': 'Show - S01E01',
-        'Path': str(media_file),
-        'Media': 'tv',
-        'Season': '1',
-        'Episode': '1'
-    }])
+    clean_df = pd.DataFrame(
+        [
+            {
+                "Original": "Show.S01E01.mkv",
+                "Corrected": "Show - S01E01",
+                "Path": str(media_file),
+                "Media": "tv",
+                "Season": "1",
+                "Episode": "1",
+            }
+        ]
+    )
 
-    with patch("src.files.search_media_files", return_value=(clean_df, pd.DataFrame())), \
-         patch("src.utils.get_corrected_media_filenames", return_value=clean_df), \
-         patch("src.files.rename_media_files", return_value=clean_df), \
-         patch("src.mail.send_media_success_email"):
+    with (
+        patch("src.files.search_media_files", return_value=(clean_df, pd.DataFrame())),
+        patch("src.utils.get_corrected_media_filenames", return_value=clean_df),
+        patch("src.files.rename_media_files", return_value=clean_df),
+        patch("src.mail.send_media_success_email"),
+    ):
         ret = main.process_media(args, daemon=True, cycle=2)
         assert ret == 0
 
     captured = capsys.readouterr()
     lines = captured.out.strip().splitlines()
-    assert any("[SUCCESS] 'Show.S01E01.mkv' -> 'Show.S01E01.mkv' (Destination: " in l and "(in-place)" in l for l in lines)
+    assert any(
+        "[SUCCESS] 'Show.S01E01.mkv' -> 'Show.S01E01.mkv' (Destination: " in l and "(in-place)" in l for l in lines
+    )
     assert any("[INFO] Check 2 : Successfully renamed 1 file(s)." in l for l in lines)
 
 
@@ -354,5 +375,3 @@ def test_docker_logging_colorization(capsys, monkeypatch):
     assert captured.out.startswith("\033[32m")
     assert captured.out.endswith("\033[0m\n")
     assert "[SUCCESS] 'source.mkv' -> 'dest.mkv'" in captured.out
-
-

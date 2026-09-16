@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import time
 import runpy
 import pytest
 from pathlib import Path
@@ -17,13 +18,15 @@ from src.config import ConfigManager
 # 1. Tests for main.py execution flows and error handling
 # =========================================================================
 
+
 def test_main_no_media_files_found(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["main.py"])
-    with patch("src.ui.parse_arguments") as mock_args, \
-         patch("src.utils.verify_folders"), \
-         patch("src.files.search_media_files", return_value=(pd.DataFrame(), pd.DataFrame())), \
-         patch("src.ui.print_log") as mock_log:
-
+    with (
+        patch("src.ui.parse_arguments") as mock_args,
+        patch("src.utils.verify_folders"),
+        patch("src.files.search_media_files", return_value=(pd.DataFrame(), pd.DataFrame())),
+        patch("src.ui.print_log") as mock_log,
+    ):
         mock_args.return_value = MagicMock(subcommand=None, path=None, only_rename=False, simulate=False)
         assert main.main() == 0
         logged = " ".join([str(c[0][0]) for c in mock_log.call_args_list if c[0]])
@@ -35,13 +38,14 @@ def test_main_no_media_files_to_rename(monkeypatch):
     df_messy = pd.DataFrame([{"File": "A.mkv"}])
     df_clean = pd.DataFrame([{"Original": "A.mkv", "Corrected": "A.mkv"}])
 
-    with patch("src.ui.parse_arguments") as mock_args, \
-         patch("src.utils.verify_folders"), \
-         patch("src.files.search_media_files", return_value=(df_messy, df_clean)), \
-         patch("src.utils.get_corrected_media_filenames", return_value=df_clean), \
-         patch("src.utils.has_files_to_rename", return_value=False), \
-         patch("src.ui.print_log") as mock_log:
-
+    with (
+        patch("src.ui.parse_arguments") as mock_args,
+        patch("src.utils.verify_folders"),
+        patch("src.files.search_media_files", return_value=(df_messy, df_clean)),
+        patch("src.utils.get_corrected_media_filenames", return_value=df_clean),
+        patch("src.utils.has_files_to_rename", return_value=False),
+        patch("src.ui.print_log") as mock_log,
+    ):
         mock_args.return_value = MagicMock(subcommand=None, path=None, only_rename=True, simulate=False)
         assert main.main() == 0
         logged = " ".join([str(c[0][0]) for c in mock_log.call_args_list if c[0]])
@@ -54,31 +58,36 @@ def test_main_only_rename_execution(monkeypatch, tmp_path):
     video_file.touch()
 
     df_messy = pd.DataFrame([{"File": "Movie.mkv"}])
-    df_clean = pd.DataFrame([{
-        "File": "Movie.mkv",
-        "Original": "Movie.mkv",
-        "Corrected": "Movie (2020)",
-        "Path": str(video_file),
-        "Media": "movie"
-    }])
+    df_clean = pd.DataFrame(
+        [
+            {
+                "File": "Movie.mkv",
+                "Original": "Movie.mkv",
+                "Corrected": "Movie (2020)",
+                "Path": str(video_file),
+                "Media": "movie",
+            }
+        ]
+    )
 
-    with patch("src.ui.parse_arguments") as mock_args, \
-         patch("src.utils.verify_folders"), \
-         patch("src.files.search_media_files", return_value=(df_messy, pd.DataFrame())), \
-         patch("src.utils.get_corrected_media_filenames", return_value=df_clean), \
-         patch("src.utils.has_files_to_rename", return_value=True), \
-         patch("src.ui.display_corrected_filenames"), \
-         patch("src.ui.user_confirmation"), \
-         patch("src.files.rename_media_files", return_value=df_clean), \
-         patch("src.mail.send_media_success_email") as mock_mail:
-
+    with (
+        patch("src.ui.parse_arguments") as mock_args,
+        patch("src.utils.verify_folders"),
+        patch("src.files.search_media_files", return_value=(df_messy, pd.DataFrame())),
+        patch("src.utils.get_corrected_media_filenames", return_value=df_clean),
+        patch("src.utils.has_files_to_rename", return_value=True),
+        patch("src.ui.display_corrected_filenames"),
+        patch("src.ui.user_confirmation"),
+        patch("src.files.rename_media_files", return_value=df_clean),
+        patch("src.mail.send_media_success_email") as mock_mail,
+    ):
         mock_args.return_value = MagicMock(subcommand=None, path=None, only_rename=True, simulate=False)
         assert main.main() == 0
         mock_mail.assert_called_once_with(
             media_name="Movie (2020).mkv",
             original_name="Movie.mkv",
             media_type="movie",
-            destination_path=str(video_file)
+            destination_path=str(video_file),
         )
 
 
@@ -88,20 +97,23 @@ def test_main_normal_flow_success(monkeypatch, tmp_path):
     new_f = tmp_path / "New.mkv"
 
     df_messy = pd.DataFrame([{"File": "Old.mkv"}])
-    df_clean = pd.DataFrame([{"File": "Old.mkv", "Original": "Old.mkv", "Corrected": "New", "Path": str(old_f), "Media": "movie"}])
+    df_clean = pd.DataFrame(
+        [{"File": "Old.mkv", "Original": "Old.mkv", "Corrected": "New", "Path": str(old_f), "Media": "movie"}]
+    )
 
-    with patch("src.ui.parse_arguments") as mock_args, \
-         patch("src.utils.verify_folders"), \
-         patch("src.files.search_media_files", return_value=(df_messy, pd.DataFrame())), \
-         patch("src.utils.get_corrected_media_filenames", return_value=df_clean), \
-         patch("src.utils.has_files_to_rename", return_value=True), \
-         patch("src.ui.display_corrected_filenames"), \
-         patch("src.ui.user_confirmation"), \
-         patch("src.files.rename_media_files", return_value=df_clean), \
-         patch("src.files.sort_media_files", return_value=[(old_f, new_f)]), \
-         patch("src.ui.display_sorted_files"), \
-         patch("src.files.move_media_files") as mock_move:
-
+    with (
+        patch("src.ui.parse_arguments") as mock_args,
+        patch("src.utils.verify_folders"),
+        patch("src.files.search_media_files", return_value=(df_messy, pd.DataFrame())),
+        patch("src.utils.get_corrected_media_filenames", return_value=df_clean),
+        patch("src.utils.has_files_to_rename", return_value=True),
+        patch("src.ui.display_corrected_filenames"),
+        patch("src.ui.user_confirmation"),
+        patch("src.files.rename_media_files", return_value=df_clean),
+        patch("src.files.sort_media_files", return_value=[(old_f, new_f)]),
+        patch("src.ui.display_sorted_files"),
+        patch("src.files.move_media_files") as mock_move,
+    ):
         mock_args.return_value = MagicMock(subcommand=None, path=None, only_rename=False, simulate=False)
         assert main.main() == 0
         mock_move.assert_called_once()
@@ -110,18 +122,21 @@ def test_main_normal_flow_success(monkeypatch, tmp_path):
 def test_main_normal_flow_empty_clean_after_rename(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["main.py"])
     df_messy = pd.DataFrame([{"File": "Old.mkv"}])
-    df_clean = pd.DataFrame([{"File": "Old.mkv", "Original": "Old.mkv", "Corrected": "New", "Path": "/tmp/old", "Media": "movie"}])
+    df_clean = pd.DataFrame(
+        [{"File": "Old.mkv", "Original": "Old.mkv", "Corrected": "New", "Path": "/tmp/old", "Media": "movie"}]
+    )
 
-    with patch("src.ui.parse_arguments") as mock_args, \
-         patch("src.utils.verify_folders"), \
-         patch("src.files.search_media_files", return_value=(df_messy, pd.DataFrame())), \
-         patch("src.utils.get_corrected_media_filenames", return_value=df_clean), \
-         patch("src.utils.has_files_to_rename", return_value=True), \
-         patch("src.ui.display_corrected_filenames"), \
-         patch("src.ui.user_confirmation"), \
-         patch("src.files.rename_media_files", return_value=pd.DataFrame()), \
-         patch("src.ui.print_log") as mock_log:
-
+    with (
+        patch("src.ui.parse_arguments") as mock_args,
+        patch("src.utils.verify_folders"),
+        patch("src.files.search_media_files", return_value=(df_messy, pd.DataFrame())),
+        patch("src.utils.get_corrected_media_filenames", return_value=df_clean),
+        patch("src.utils.has_files_to_rename", return_value=True),
+        patch("src.ui.display_corrected_filenames"),
+        patch("src.ui.user_confirmation"),
+        patch("src.files.rename_media_files", return_value=pd.DataFrame()),
+        patch("src.ui.print_log") as mock_log,
+    ):
         mock_args.return_value = MagicMock(subcommand=None, path=None, only_rename=False, simulate=False)
         assert main.main() == 0
         logged = " ".join([str(c[0][0]) for c in mock_log.call_args_list if c[0]])
@@ -130,10 +145,11 @@ def test_main_normal_flow_empty_clean_after_rename(monkeypatch):
 
 def test_main_runtime_error_handled(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["main.py"])
-    with patch("src.ui.parse_arguments", side_effect=RuntimeError("Fatal runtime err")), \
-         patch("src.ui.print_log") as mock_log, \
-         patch("src.mail.send_error_email") as mock_mail:
-
+    with (
+        patch("src.ui.parse_arguments", side_effect=RuntimeError("Fatal runtime err")),
+        patch("src.ui.print_log"),
+        patch("src.mail.send_error_email") as mock_mail,
+    ):
         with pytest.raises(SystemExit) as exc_info:
             main.main()
         assert exc_info.value.code == 1
@@ -142,10 +158,11 @@ def test_main_runtime_error_handled(monkeypatch):
 
 def test_main_generic_exception_handled(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["main.py"])
-    with patch("src.ui.parse_arguments", side_effect=ZeroDivisionError("division by zero")), \
-         patch("src.ui.print_log") as mock_log, \
-         patch("src.mail.send_error_email") as mock_mail:
-
+    with (
+        patch("src.ui.parse_arguments", side_effect=ZeroDivisionError("division by zero")),
+        patch("src.ui.print_log"),
+        patch("src.mail.send_error_email") as mock_mail,
+    ):
         with pytest.raises(SystemExit) as exc_info:
             main.main()
         assert exc_info.value.code == 1
@@ -161,9 +178,12 @@ def test_main_dunder_main(monkeypatch):
 
 def test_main_with_gui_flag(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["main.py", "--gui"])
-    with patch("src.config.config.run_gui", return_value=True) as mock_run_gui, \
-         patch("src.ui.hide_console_window") as mock_hide:
+    with (
+        patch("src.config.config.run_gui", return_value=True) as mock_run_gui,
+        patch("src.ui.hide_console_window") as mock_hide,
+    ):
         import main
+
         assert main.main() == 0
         mock_run_gui.assert_called_once()
         mock_hide.assert_called_once()
@@ -171,48 +191,54 @@ def test_main_with_gui_flag(monkeypatch):
 
 def test_main_double_click_launches_gui(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["main.py"])
-    with patch("src.ui.is_double_clicked", return_value=True), \
-         patch("src.ui.hide_console_window") as mock_hide, \
-         patch("src.config.config.run_gui", return_value=True) as mock_run_gui:
+    with (
+        patch("src.ui.is_double_clicked", return_value=True),
+        patch("src.ui.hide_console_window") as mock_hide,
+        patch("src.config.config.run_gui", return_value=True) as mock_run_gui,
+    ):
         import main
+
         assert main.main() == 0
         mock_hide.assert_called_once()
         mock_run_gui.assert_called_once()
-
 
 
 # =========================================================================
 # 2. Tests for src/api.py (Gemini response parsing & error handling)
 # =========================================================================
 
+
 def test_gemini_api_call_success_with_missing_tags(monkeypatch):
     media_info = {
-        'File': "Blade.Runner.mkv",
-        'Folder': "test",
-        'Path': "/test/Blade.Runner.mkv",
-        'Clean': "Blade Runner",
-        'Parse': None,
-        'Media': "movie"
+        "File": "Blade.Runner.mkv",
+        "Folder": "test",
+        "Path": "/test/Blade.Runner.mkv",
+        "Clean": "Blade Runner",
+        "Parse": None,
+        "Media": "movie",
     }
 
     mock_client = MagicMock()
     mock_response = MagicMock()
-    mock_response.text = json.dumps({
-        "success": 1,
-        "name": "Blade Runner",
-        "year": "1982",
-        "original_language": "en",
-        "missing_tags": ["remux", "1080p"]
-    })
+    mock_response.text = json.dumps(
+        {
+            "success": 1,
+            "name": "Blade Runner",
+            "year": "1982",
+            "original_language": "en",
+            "missing_tags": ["remux", "1080p"],
+        }
+    )
     mock_client.models.generate_content.return_value = mock_response
 
-    with patch("google.genai.Client", return_value=mock_client), \
-         patch("src.mail.send_tag_learned_email") as mock_send_tag_email, \
-         patch("src.api.print_log") as mock_print_log, \
-         patch("src.ui.VERBOSE_ENABLED", True), \
-         patch("src.ui.LEARN_ENABLED", True), \
-         patch("src.api.tag_manager.add_gemini_tags", return_value=["remux", "1080p"]) as mock_add_tags:
-
+    with (
+        patch("google.genai.Client", return_value=mock_client),
+        patch("src.mail.send_tag_learned_email") as mock_send_tag_email,
+        patch("src.api.print_log") as mock_print_log,
+        patch("src.ui.VERBOSE_ENABLED", True),
+        patch("src.ui.LEARN_ENABLED", True),
+        patch("src.api.tag_manager.add_gemini_tags", return_value=["remux", "1080p"]) as mock_add_tags,
+    ):
         res = api.gemini_api_call(media_info)
         assert res[0] is True
         assert res[1] == "Blade Runner"
@@ -223,30 +249,32 @@ def test_gemini_api_call_success_with_missing_tags(monkeypatch):
             tags=["remux", "1080p"],
             filename="Blade.Runner.mkv",
             media_title="Blade Runner",
-            file_path="/test/Blade.Runner.mkv"
+            file_path="/test/Blade.Runner.mkv",
         )
         mock_add_tags.assert_called_once_with(["remux", "1080p"])
 
     # When LEARN_ENABLED is True but no tags were added (e.g. duplicates/rejected)
-    with patch("google.genai.Client", return_value=mock_client), \
-         patch("src.mail.send_tag_learned_email") as mock_send_tag_email, \
-         patch("src.api.print_log") as mock_print_log, \
-         patch("src.ui.VERBOSE_ENABLED", True), \
-         patch("src.ui.LEARN_ENABLED", True), \
-         patch("src.api.tag_manager.add_gemini_tags", return_value=[]) as mock_add_tags:
-
+    with (
+        patch("google.genai.Client", return_value=mock_client),
+        patch("src.mail.send_tag_learned_email") as mock_send_tag_email,
+        patch("src.api.print_log") as mock_print_log,
+        patch("src.ui.VERBOSE_ENABLED", True),
+        patch("src.ui.LEARN_ENABLED", True),
+        patch("src.api.tag_manager.add_gemini_tags", return_value=[]) as mock_add_tags,
+    ):
         res = api.gemini_api_call(media_info)
         assert res[0] is True
         mock_send_tag_email.assert_not_called()
 
     # When LEARN_ENABLED is False
-    with patch("google.genai.Client", return_value=mock_client), \
-         patch("src.mail.send_tag_learned_email") as mock_send_tag_email, \
-         patch("src.api.print_log") as mock_print_log, \
-         patch("src.ui.VERBOSE_ENABLED", True), \
-         patch("src.ui.LEARN_ENABLED", False), \
-         patch("src.api.tag_manager.add_gemini_tags") as mock_add_tags:
-
+    with (
+        patch("google.genai.Client", return_value=mock_client),
+        patch("src.mail.send_tag_learned_email") as mock_send_tag_email,
+        patch("src.api.print_log") as mock_print_log,
+        patch("src.ui.VERBOSE_ENABLED", True),
+        patch("src.ui.LEARN_ENABLED", False),
+        patch("src.api.tag_manager.add_gemini_tags") as mock_add_tags,
+    ):
         res = api.gemini_api_call(media_info)
         assert res[0] is True
         mock_send_tag_email.assert_not_called()
@@ -256,15 +284,20 @@ def test_gemini_api_call_success_with_missing_tags(monkeypatch):
 
 
 def test_gemini_api_call_success_equals_zero(monkeypatch):
-    media_info = {'File': "unrecognized.mkv", 'Folder': "test", 'Path': "/test", 'Clean': "unknown", 'Parse': None, 'Media': "movie"}
+    media_info = {
+        "File": "unrecognized.mkv",
+        "Folder": "test",
+        "Path": "/test",
+        "Clean": "unknown",
+        "Parse": None,
+        "Media": "movie",
+    }
     mock_client = MagicMock()
     mock_response = MagicMock()
     mock_response.text = json.dumps({"success": 0})
     mock_client.models.generate_content.return_value = mock_response
 
-    with patch("google.genai.Client", return_value=mock_client), \
-         patch("src.api.print_log") as mock_print_log:
-
+    with patch("google.genai.Client", return_value=mock_client), patch("src.api.print_log") as mock_print_log:
         res = api.gemini_api_call(media_info)
         assert res == [False, None, None, None, None]
         logged = " ".join([str(c[0][0]) for c in mock_print_log.call_args_list if c[0]])
@@ -272,28 +305,42 @@ def test_gemini_api_call_success_equals_zero(monkeypatch):
 
 
 def test_gemini_api_call_json_decode_error(monkeypatch):
-    media_info = {'File': "corrupted.mkv", 'Folder': "test", 'Path': "/test", 'Clean': "corrupted", 'Parse': None, 'Media': "movie"}
+    media_info = {
+        "File": "corrupted.mkv",
+        "Folder": "test",
+        "Path": "/test",
+        "Clean": "corrupted",
+        "Parse": None,
+        "Media": "movie",
+    }
     mock_client = MagicMock()
     mock_response = MagicMock()
     mock_response.text = "NOT_JSON{{"
     mock_client.models.generate_content.return_value = mock_response
 
-    with patch("google.genai.Client", return_value=mock_client), \
-         patch("src.api.print_error") as mock_err:
-
+    with patch("google.genai.Client", return_value=mock_client), patch("src.api.print_error") as mock_err:
         res = api.gemini_api_call(media_info)
         assert res == [False, None, None, None, None]
         mock_err.assert_called_once()
 
 
 def test_gemini_api_call_exception():
-    media_info = {'File': "test.mkv", 'Folder': "test", 'Path': "/test", 'Clean': "test", 'Parse': None, 'Media': "movie"}
+    media_info = {
+        "File": "test.mkv",
+        "Folder": "test",
+        "Path": "/test",
+        "Clean": "test",
+        "Parse": None,
+        "Media": "movie",
+    }
     mock_client = MagicMock()
     mock_client.models.generate_content.side_effect = Exception("API connection dropped")
 
-    with patch("google.genai.Client", return_value=mock_client), \
-         patch("src.api.print_error") as mock_err, \
-         pytest.raises(RuntimeError):
+    with (
+        patch("google.genai.Client", return_value=mock_client),
+        patch("src.api.print_error") as mock_err,
+        pytest.raises(RuntimeError),
+    ):
         api.gemini_api_call(media_info)
         mock_err.assert_called_once()
 
@@ -301,6 +348,7 @@ def test_gemini_api_call_exception():
 # =========================================================================
 # 3. Tests for src/config.py (paths resolution and properties)
 # =========================================================================
+
 
 def test_resolve_config_path_variations(tmp_path, monkeypatch):
     cm = ConfigManager.__new__(ConfigManager)
@@ -492,6 +540,7 @@ def test_config_property_setters_and_string_getters(tmp_path):
 # 4. Tests for src/files.py coverage edges
 # =========================================================================
 
+
 def test_move_media_files_with_clean_data_table_and_fallback(tmp_path, monkeypatch):
     movies_dir = tmp_path / "Movies"
     tv_dir = tmp_path / "TV"
@@ -508,17 +557,13 @@ def test_move_media_files_with_clean_data_table_and_fallback(tmp_path, monkeypat
     dest1 = movies_dir / "f1_dest.mkv"
     dest2 = tv_dir / "f2_dest.mkv"
 
-    clean_df = pd.DataFrame([
-        {"File": "f1.mkv", "Corrected": "f1_dest", "Media": "movie"}
-    ])
+    clean_df = pd.DataFrame([{"File": "f1.mkv", "Corrected": "f1_dest", "Media": "movie"}])
 
     monkeypatch.setattr(files, "MOVIES_FOLDER", str(movies_dir))
     monkeypatch.setattr(files, "TV_SHOWS_FOLDER", str(tv_dir))
     monkeypatch.setattr(files, "NOT_SORTED_MEDIA_FILES_FOLDER", str(downloads_dir))
 
-    with patch("src.mail.send_media_success_email") as mock_success_mail, \
-         patch("src.files.remove_empty_folders"):
-
+    with patch("src.mail.send_media_success_email") as mock_success_mail, patch("src.files.remove_empty_folders"):
         files.move_media_files([(f1, dest1), (f2, dest2)], clean_data_table=clean_df)
         assert mock_success_mail.call_count == 2
         # First call has media from table
@@ -548,15 +593,16 @@ def test_move_media_files_fallback_movie_and_exception(tmp_path, monkeypatch):
     monkeypatch.setattr(files, "NOT_SORTED_MEDIA_FILES_FOLDER", str(downloads_dir))
 
     # Test movie fallback
-    with patch("src.mail.send_media_success_email") as mock_mail, \
-         patch("src.files.remove_empty_folders"):
+    with patch("src.mail.send_media_success_email") as mock_mail, patch("src.files.remove_empty_folders"):
         files.move_media_files([(f1, dest1)], clean_data_table=None)
         assert mock_mail.call_args[1]["media_type"] == "movie"
 
     # Test is_relative_to raising exception (lines 257-258)
-    with patch("src.mail.send_media_success_email") as mock_mail, \
-         patch.object(Path, "is_relative_to", side_effect=Exception("mock err")), \
-         patch("src.files.remove_empty_folders"):
+    with (
+        patch("src.mail.send_media_success_email") as mock_mail,
+        patch.object(Path, "is_relative_to", side_effect=Exception("mock err")),
+        patch("src.files.remove_empty_folders"),
+    ):
         files.move_media_files([(f2, dest2)], clean_data_table=None)
         assert mock_mail.call_args[1]["media_type"] == "unknown"
 
@@ -569,10 +615,11 @@ def test_move_media_files_error_email_failure_caught(tmp_path, monkeypatch):
 
     monkeypatch.setattr(files, "NOT_SORTED_MEDIA_FILES_FOLDER", str(downloads))
 
-    with patch("src.mail.send_error_email", side_effect=Exception("SMTP Connection dead")), \
-         patch("src.ui.print_log") as mock_log, \
-         patch("src.files.remove_empty_folders"):
-
+    with (
+        patch("src.mail.send_error_email", side_effect=Exception("SMTP Connection dead")),
+        patch("src.ui.print_log") as mock_log,
+        patch("src.files.remove_empty_folders"),
+    ):
         files.move_media_files([(bad_source, dest)])
         logged = " ".join([str(c[0][0]) for c in mock_log.call_args_list if c[0]])
         assert "Failed to send error email" in logged
@@ -582,31 +629,32 @@ def test_move_media_files_error_email_failure_caught(tmp_path, monkeypatch):
 # 5. Tests for src/mail.py coverage edges
 # =========================================================================
 
-def test_dispatch_email_missing_credentials():
-    with patch("src.mail._get_credentials", return_value=(None, None)), \
-         patch("src.mail.smtplib.SMTP_SSL") as mock_smtp:
 
+def test_dispatch_email_missing_credentials():
+    with patch("src.mail._get_credentials", return_value=(None, None)), patch("src.mail.smtplib.SMTP_SSL") as mock_smtp:
         msg = MagicMock()
         mail._dispatch_email(msg)
         mock_smtp.assert_not_called()
 
 
 def test_send_media_success_email_dispatch_error_logged():
-    with patch("src.mail.is_success_mail_enabled", return_value=True), \
-         patch("src.mail._get_credentials", return_value=("me@test.com", "pass")), \
-         patch("src.mail._dispatch_email", side_effect=Exception("Timeout")), \
-         patch("src.ui.print_log") as mock_log:
-
+    with (
+        patch("src.mail.is_success_mail_enabled", return_value=True),
+        patch("src.mail._get_credentials", return_value=("me@test.com", "pass")),
+        patch("src.mail._dispatch_email", side_effect=Exception("Timeout")),
+        patch("src.ui.print_log") as mock_log,
+    ):
         mail.send_media_success_email("Test", "Test.mkv", "movie", "/dest/path")
         logged = " ".join([str(c[0][0]) for c in mock_log.call_args_list if c[0]])
         assert "Failed to send success email: Timeout" in logged
 
 
 def test_send_email_with_exception_in_details():
-    with patch("src.mail.is_error_mail_enabled", return_value=True), \
-         patch("src.mail._get_credentials", return_value=("me@test.com", "pass")), \
-         patch("src.mail._dispatch_email"):
-
+    with (
+        patch("src.mail.is_error_mail_enabled", return_value=True),
+        patch("src.mail._get_credentials", return_value=("me@test.com", "pass")),
+        patch("src.mail._dispatch_email"),
+    ):
         # Exception string is not already in message
         exc = RuntimeError("Strange filesystem error")
         mail.send_email(message="A failure happened", exception=exc)
@@ -615,6 +663,7 @@ def test_send_email_with_exception_in_details():
 # =========================================================================
 # 6. Tests for Docker features and dual logging
 # =========================================================================
+
 
 def test_docker_environment_detection(monkeypatch):
     monkeypatch.delenv("DOCKER_CONTAINER", raising=False)
@@ -655,8 +704,10 @@ def test_docker_resolve_config_path(monkeypatch, tmp_path):
             mock_p.is_dir.return_value = False
         return mock_p
 
-    with patch.object(ConfigManager, "is_docker_environment", return_value=True), \
-         patch("src.config.Path", side_effect=mock_path_file_call):
+    with (
+        patch.object(ConfigManager, "is_docker_environment", return_value=True),
+        patch("src.config.Path", side_effect=mock_path_file_call),
+    ):
         res = cm._resolve_config_path()
         assert res == Path("/config/config.ini")
 
@@ -671,8 +722,10 @@ def test_docker_resolve_config_path(monkeypatch, tmp_path):
             mock_p.is_dir.return_value = True
         return mock_p
 
-    with patch.object(ConfigManager, "is_docker_environment", return_value=True), \
-         patch("src.config.Path", side_effect=mock_path_dir_call):
+    with (
+        patch.object(ConfigManager, "is_docker_environment", return_value=True),
+        patch("src.config.Path", side_effect=mock_path_dir_call),
+    ):
         res = cm._resolve_config_path()
         assert res == Path("/config/config.ini")
 
@@ -774,25 +827,31 @@ def test_parse_arguments_docker_and_logging(monkeypatch, tmp_path):
     # 1. Docker mode with --log and writable dir -> LOG_MODE == 'both'
     monkeypatch.setattr(sys, "argv", ["main.py", "--log"])
     monkeypatch.setenv("DOCKER_CONTAINER", "1")
-    with patch("src.ui.get_log_dir", return_value=tmp_path), \
-         patch("src.ui.check_log_dir_permissions", return_value=(True, "")):
+    with (
+        patch("src.ui.get_log_dir", return_value=tmp_path),
+        patch("src.ui.check_log_dir_permissions", return_value=(True, "")),
+    ):
         ui.parse_arguments()
         assert ui.LOG_MODE == "both"
         assert ui.LOG_ENABLED is True
 
     # 2. Classic mode with --log and writable dir -> LOG_MODE == 'file'
     monkeypatch.delenv("DOCKER_CONTAINER", raising=False)
-    with patch("os.path.exists", return_value=False), \
-         patch("src.ui.get_log_dir", return_value=tmp_path), \
-         patch("src.ui.check_log_dir_permissions", return_value=(True, "")):
+    with (
+        patch("os.path.exists", return_value=False),
+        patch("src.ui.get_log_dir", return_value=tmp_path),
+        patch("src.ui.check_log_dir_permissions", return_value=(True, "")),
+    ):
         ui.parse_arguments()
         assert ui.LOG_MODE == "file"
         assert ui.LOG_ENABLED is True
 
     # 3. Log directory not writable -> fallback to console with stderr warning
-    with patch("src.ui.get_log_dir", return_value=tmp_path), \
-         patch("src.ui.check_log_dir_permissions", return_value=(False, "Read-only file system")), \
-         patch("sys.stderr.write") as mock_stderr:
+    with (
+        patch("src.ui.get_log_dir", return_value=tmp_path),
+        patch("src.ui.check_log_dir_permissions", return_value=(False, "Read-only file system")),
+        patch("sys.stderr.write") as mock_stderr,
+    ):
         ui.parse_arguments()
         assert ui.LOG_MODE == "console"
         assert ui.LOG_ENABLED is False
@@ -895,6 +954,7 @@ def test_rich_print_log_modes(monkeypatch, tmp_path, capsys):
 
 def test_daemon_non_fatal_recovery_branches(monkeypatch, tmp_path):
     from src import api, files, utils
+
     monkeypatch.setattr(ui, "DAEMON_ENABLED", True)
 
     # 1. api_call missing TMDB key in daemon mode returns [False, None, None, None]
@@ -906,7 +966,9 @@ def test_daemon_non_fatal_recovery_branches(monkeypatch, tmp_path):
     # 2. gemini_api_call missing Gemini key in daemon mode returns [False, None, None, None, None]
     monkeypatch.setattr(api, "GEMINI_API_KEY", None)
     monkeypatch.setattr(api.config, "GEMINI_API_KEY", None)
-    res_gemini = api.gemini_api_call({'File': 't.mkv', 'Folder': 'd', 'Path': '/d/t.mkv', 'Clean': 't', 'Parse': 't', 'Media': 'movie'})
+    res_gemini = api.gemini_api_call(
+        {"File": "t.mkv", "Folder": "d", "Path": "/d/t.mkv", "Clean": "t", "Parse": "t", "Media": "movie"}
+    )
     assert res_gemini == [False, None, None, None, None]
 
     # 3. sort_media_files with empty paths in daemon mode returns []
@@ -952,8 +1014,10 @@ def test_folder_errors_dispatch_email(tmp_path, monkeypatch):
     exist_folder = tmp_path / "exist_dir"
     exist_folder.mkdir()
     req_perm = [("paths.movies_folder", exist_folder, "MOVIES_FOLDER", "Movies folder")]
-    with patch("src.utils.check_folder_permissions", return_value=(False, False, "Permission denied")), \
-         patch("src.mail.send_error_email") as mock_mail:
+    with (
+        patch("src.utils.check_folder_permissions", return_value=(False, False, "Permission denied")),
+        patch("src.mail.send_error_email") as mock_mail,
+    ):
         utils.validate_folder_existence_and_permissions(req_perm, exit_on_error=False)
         mock_mail.assert_called_once()
         assert "Permission error" in mock_mail.call_args[1]["error_message"]
@@ -981,21 +1045,18 @@ def test_api_keys_missing_dispatch_email(monkeypatch):
 
 def test_global_excepthook_handling():
     # 1. KeyboardInterrupt and SystemExit should pass through without sending email
-    with patch("sys.__excepthook__") as mock_sys_hook, \
-         patch("src.mail.send_error_email") as mock_mail:
+    with patch("sys.__excepthook__") as mock_sys_hook, patch("src.mail.send_error_email") as mock_mail:
         main._global_excepthook(KeyboardInterrupt, KeyboardInterrupt(), None)
         mock_sys_hook.assert_called_once()
         mock_mail.assert_not_called()
 
-    with patch("sys.__excepthook__") as mock_sys_hook, \
-         patch("src.mail.send_error_email") as mock_mail:
+    with patch("sys.__excepthook__") as mock_sys_hook, patch("src.mail.send_error_email") as mock_mail:
         main._global_excepthook(SystemExit, SystemExit(0), None)
         mock_sys_hook.assert_called_once()
         mock_mail.assert_not_called()
 
     # 2. Unhandled crash triggers error email and sys.__excepthook__
-    with patch("sys.__excepthook__") as mock_sys_hook, \
-         patch("src.mail.send_error_email") as mock_mail:
+    with patch("sys.__excepthook__") as mock_sys_hook, patch("src.mail.send_error_email") as mock_mail:
         val_err = ValueError("Crash in background thread")
         main._global_excepthook(ValueError, val_err, None)
         mock_sys_hook.assert_called_once()
@@ -1026,5 +1087,104 @@ def test_docker_notify_on_error_explicit(tmp_path):
         assert cm.get_with_source("options.notify_on_error") == (False, "INI")
 
 
+def test_determine_required_folders_daemon_only_rename(tmp_path):
+    # 1. Daemon mode with only_rename=True and custom_path
+    reqs = utils.determine_required_folders(daemon=True, custom_path="/custom/path", only_rename=True)
+    assert len(reqs) == 1
+    assert reqs[0][0] == "cli.path"
+    assert reqs[0][1] == "/custom/path"
+
+    # 2. Daemon mode with only_rename=True without custom_path
+    reqs_def = utils.determine_required_folders(daemon=True, custom_path=None, only_rename=True)
+    assert len(reqs_def) == 1
+    assert reqs_def[0][0] == "paths.not_sorted_media_files_folder"
 
 
+def test_is_file_locked_posix_and_stability(tmp_path, monkeypatch):
+    test_file = tmp_path / "test.mkv"
+    test_file.write_text("dummy video content")
+
+    # Non-existent file
+    assert files.is_file_locked(tmp_path / "nonexistent.mkv") is False
+
+    # Windows lock branches
+    with patch("os.rename", side_effect=OSError("File locked")):
+        monkeypatch.setattr(os, "name", "nt")
+        assert files.is_file_locked(test_file) is True
+
+    with patch("os.rename", return_value=None):
+        monkeypatch.setattr(os, "name", "nt")
+        assert files.is_file_locked(test_file) is False
+
+    # POSIX tests via _is_file_locked_posix directly
+    with patch("time.sleep"):
+        # Stable file (not locked)
+        assert files._is_file_locked_posix(test_file, wait_interval=0.01) is False
+
+        # File with OSError on stat
+        with patch.object(Path, "stat", side_effect=OSError("Read error")):
+            assert files._is_file_locked_posix(test_file, wait_interval=0.01) is True
+
+        # File actively changing size
+        mock_stat1 = MagicMock(st_mtime=time.time(), st_size=100)
+        mock_stat2 = MagicMock(st_mtime=time.time(), st_size=200)
+        with patch.object(Path, "stat", side_effect=[mock_stat1, mock_stat2]):
+            assert files._is_file_locked_posix(test_file, wait_interval=0.01) is True
+
+        # File with PermissionError on open
+        with patch("builtins.open", side_effect=PermissionError("Locked by process")):
+            assert files._is_file_locked_posix(test_file, wait_interval=0.01) is True
+
+        # Generic OSError on open (ignored gracefully)
+        with patch("builtins.open", side_effect=OSError("Generic error")):
+            assert files._is_file_locked_posix(test_file, wait_interval=0.01) is False
+
+        # POSIX fcntl flock branch
+        mock_fcntl = MagicMock()
+        with patch.dict(sys.modules, {"fcntl": mock_fcntl}):
+            assert files._is_file_locked_posix(test_file, wait_interval=0.01) is False
+            assert mock_fcntl.flock.call_count == 2
+
+        # POSIX fcntl flock raises BlockingIOError
+        mock_fcntl_locked = MagicMock()
+        mock_fcntl_locked.flock.side_effect = BlockingIOError("Flock locked")
+        with patch.dict(sys.modules, {"fcntl": mock_fcntl_locked}):
+            assert files._is_file_locked_posix(test_file, wait_interval=0.01) is True
+
+    # Test is_file_locked delegation when os.name != 'nt'
+    monkeypatch.setattr(os, "name", "posix")
+    with patch("src.files._is_file_locked_posix", return_value=False) as mock_posix:
+        assert files.is_file_locked(test_file) is False
+        mock_posix.assert_called_once()
+
+
+def test_email_safe_header_prevents_injection():
+    # Embedded newlines and carriage returns must be stripped
+    raw = "Malicious.File\r\nBcc: victim@example.com\n.mkv"
+    cleaned = mail._safe_header(raw)
+    assert "\r" not in cleaned
+    assert "\n" not in cleaned
+    assert cleaned == "Malicious.File Bcc: victim@example.com .mkv"
+
+    # Verify sending error email with multiline affected file succeeds without ValueError
+    with (
+        patch("src.mail._dispatch_email") as mock_dispatch,
+        patch("src.mail.is_error_mail_enabled", return_value=True),
+        patch("src.mail._get_credentials", return_value=("me@test.com", "pass")),
+    ):
+        mail.send_email("Error occurred", affected_file=raw)
+        mock_dispatch.assert_called_once()
+        msg = mock_dispatch.call_args[0][0]
+        assert "\n" not in msg["Subject"]
+        assert "\r" not in msg["Subject"]
+        assert "victim@example.com" in msg["Subject"]
+
+
+def test_ui_simulate_with_daemon_notice(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["main.py", "--simulate", "--daemon"])
+    with patch("src.ui.print_log") as mock_log:
+        args = ui.parse_arguments()
+        assert args.simulate is True
+        assert ui.DAEMON_ENABLED is False
+        logged = " ".join(str(call[0][0]) for call in mock_log.call_args_list if call[0])
+        assert "simulation mode" in logged.lower()

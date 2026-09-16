@@ -167,7 +167,7 @@ media-organizer --daemon --interval 15
 | `-s` | `--simulate` | — | `false` | Dry-run simulation preview. |
 | `-r` | `--only-rename` | — | `false` | Renames files in-place without moving them. |
 | `-d` | `--daemon` | `options.daemon` | `false` | Runs background watcher daemon. |
-| — | `--interval <min>` | `options.polling_interval` | `15` | Polling interval for daemon mode (minutes). |
+| — | `--interval <min>` | `options.polling_interval` | `15` | Polling interval in minutes (automatically enables daemon mode). |
 | `-b` | `--bypass` | `options.bypass` | `false` | Bypasses interactive confirmation prompts. |
 | `-a` | `--ai` | `options.ai` | `false` | Enables Cloud AI fallback for unrecognizable filenames. |
 | `-L` | `--learn` | `options.learn` | `false` | Enables keyword learning to save newly discovered tags. |
@@ -177,7 +177,7 @@ media-organizer --daemon --interval 15
 | `-l` | `--log` | `options.log` | `false` | Writes console output to `log/YYYY-MM-DD.txt` (auto-pruned after 14 days). |
 | `-v` | `--verbose` | `options.verbose` | `false` | Displays full error stack traces on failure. |
 | — | `--notify-success` | `options.notify_on_success` | `false` | Sends email notification on successful processing. |
-| — | `--notify-error` | `options.notify_on_error` | `true` | Sends email notification when an error occurs. |
+| — | `--notify-error` | `options.notify_on_error` | `true` (`false` in Docker) | Sends email notification when an error occurs. |
 | `-t` | `--notify-tag` | `options.notify_on_tag` | `false` | Sends email notification when a new keyword tag is learned. |
 | — | `--path="<dir>"` | — | Incoming dir | Targets a specific folder. |
 

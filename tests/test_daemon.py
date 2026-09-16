@@ -7,8 +7,8 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 import pandas as pd
 
-from src import ui, files, utils, mail
-from src.config import ConfigManager, config
+from src import ui, files, utils
+from src.config import ConfigManager
 import main
 
 
@@ -97,7 +97,7 @@ def test_ui_daemon_from_config(monkeypatch, tmp_path):
     monkeypatch.setattr("src.ui.config", cm)
     monkeypatch.setattr(sys, "argv", ["main.py"])
 
-    args = ui.parse_arguments()
+    ui.parse_arguments()
     assert ui.DAEMON_ENABLED is True
     assert ui.BYPASS_ENABLED is True
     assert ui.LOG_ENABLED is False
@@ -153,17 +153,40 @@ def test_config_wizard_daemon_flow(tmp_path):
     cm = ConfigManager(custom_path=str(test_ini))
 
     # Test daemon enabled with valid interval
-    with patch("rich.prompt.Prompt.ask", side_effect=[
-        "D:/Movies", "D:/TV", "D:/Downloads",
-        "tmdb", "gemini", "groq", "openrouter", "cf_tok", "cf_acc", "mail", "pass",
-        "30",  # polling interval
-        "auto" # ai provider
-    ]):
-        with patch("rich.prompt.Confirm.ask", side_effect=[
-            False,  # bypass = False
-            True,   # daemon = True
-            False, False, False, False, False, True, False, False, False  # ai, learn, log, verbose, notify_succ, notify_err, notify_tag, res, qual
-        ]):
+    with patch(
+        "rich.prompt.Prompt.ask",
+        side_effect=[
+            "D:/Movies",
+            "D:/TV",
+            "D:/Downloads",
+            "tmdb",
+            "gemini",
+            "groq",
+            "openrouter",
+            "cf_tok",
+            "cf_acc",
+            "mail",
+            "pass",
+            "30",  # polling interval
+            "auto",  # ai provider
+        ],
+    ):
+        with patch(
+            "rich.prompt.Confirm.ask",
+            side_effect=[
+                False,  # bypass = False
+                True,  # daemon = True
+                False,
+                False,
+                False,
+                False,
+                False,
+                True,
+                False,
+                False,
+                False,  # ai, learn, log, verbose, notify_succ, notify_err, notify_tag, res, qual
+            ],
+        ):
             cm.run_wizard()
 
     assert cm.get("options.daemon") is True
@@ -171,49 +194,118 @@ def test_config_wizard_daemon_flow(tmp_path):
     assert cm.get("options.polling_interval") == "30"
 
     # Test daemon enabled with invalid interval fallback
-    with patch("rich.prompt.Prompt.ask", side_effect=[
-        "D:/Movies", "D:/TV", "D:/Downloads",
-        "tmdb", "gemini", "", "", "", "", "mail", "pass",
-        "0",   # invalid interval -> fallback 15
-        "auto" # ai provider
-    ]):
-        with patch("rich.prompt.Confirm.ask", side_effect=[
-            False,  # bypass = False
-            True,   # daemon = True
-            False, False, False, False, False, True, False, False, False
-        ]):
+    with patch(
+        "rich.prompt.Prompt.ask",
+        side_effect=[
+            "D:/Movies",
+            "D:/TV",
+            "D:/Downloads",
+            "tmdb",
+            "gemini",
+            "",
+            "",
+            "",
+            "",
+            "mail",
+            "pass",
+            "0",  # invalid interval -> fallback 15
+            "auto",  # ai provider
+        ],
+    ):
+        with patch(
+            "rich.prompt.Confirm.ask",
+            side_effect=[
+                False,  # bypass = False
+                True,  # daemon = True
+                False,
+                False,
+                False,
+                False,
+                False,
+                True,
+                False,
+                False,
+                False,
+            ],
+        ):
             cm.run_wizard()
 
     assert cm.get("options.polling_interval") == "15"
 
     # Test daemon enabled with non-numeric interval fallback
-    with patch("rich.prompt.Prompt.ask", side_effect=[
-        "D:/Movies", "D:/TV", "D:/Downloads",
-        "tmdb", "gemini", "", "", "", "", "mail", "pass",
-        "invalid_text",  # invalid string -> fallback 15
-        "auto"           # ai provider
-    ]):
-        with patch("rich.prompt.Confirm.ask", side_effect=[
-            False,  # bypass = False
-            True,   # daemon = True
-            False, False, False, False, False, True, False, False, False
-        ]):
+    with patch(
+        "rich.prompt.Prompt.ask",
+        side_effect=[
+            "D:/Movies",
+            "D:/TV",
+            "D:/Downloads",
+            "tmdb",
+            "gemini",
+            "",
+            "",
+            "",
+            "",
+            "mail",
+            "pass",
+            "invalid_text",  # invalid string -> fallback 15
+            "auto",  # ai provider
+        ],
+    ):
+        with patch(
+            "rich.prompt.Confirm.ask",
+            side_effect=[
+                False,  # bypass = False
+                True,  # daemon = True
+                False,
+                False,
+                False,
+                False,
+                False,
+                True,
+                False,
+                False,
+                False,
+            ],
+        ):
             cm.run_wizard()
 
     assert cm.get("options.polling_interval") == "15"
 
     # Test daemon disabled, interval still configured
-    with patch("rich.prompt.Prompt.ask", side_effect=[
-        "D:/Movies", "D:/TV", "D:/Downloads",
-        "tmdb", "gemini", "", "", "", "", "mail", "pass",
-        "25",  # polling interval
-        "auto" # ai provider
-    ]):
-        with patch("rich.prompt.Confirm.ask", side_effect=[
-            False,  # bypass = False
-            False,  # daemon = False
-            False, False, False, False, False, True, False, False, False
-        ]):
+    with patch(
+        "rich.prompt.Prompt.ask",
+        side_effect=[
+            "D:/Movies",
+            "D:/TV",
+            "D:/Downloads",
+            "tmdb",
+            "gemini",
+            "",
+            "",
+            "",
+            "",
+            "mail",
+            "pass",
+            "25",  # polling interval
+            "auto",  # ai provider
+        ],
+    ):
+        with patch(
+            "rich.prompt.Confirm.ask",
+            side_effect=[
+                False,  # bypass = False
+                False,  # daemon = False
+                False,
+                False,
+                False,
+                False,
+                False,
+                True,
+                False,
+                False,
+                False,
+            ],
+        ):
             cm.run_wizard()
 
     assert cm.get("options.daemon") is False
@@ -239,6 +331,7 @@ def test_check_folder_permissions(tmp_path):
 
     # Write permission denied
     orig_touch = Path.touch
+
     def fake_touch(self, *args, **kwargs):
         if ".rename_perm_probe" in self.name:
             raise PermissionError("Touch denied")
@@ -252,6 +345,7 @@ def test_check_folder_permissions(tmp_path):
 
     # Probe unlink error handled gracefully
     orig_unlink = Path.unlink
+
     def fake_unlink(self, *args, **kwargs):
         if ".rename_perm_probe" in self.name:
             raise OSError("Unlink failed")
@@ -299,7 +393,9 @@ def test_verify_folders_daemon_and_permissions(tmp_path, monkeypatch):
 
     # Folder permission error (read or write denied) -> exits 1 with clean explanation
     monkeypatch.setattr(utils, "MOVIES_FOLDER", str(movies))
-    with patch("src.utils.check_folder_permissions", return_value=(True, False, "Write permission denied: Permission denied")):
+    with patch(
+        "src.utils.check_folder_permissions", return_value=(True, False, "Write permission denied: Permission denied")
+    ):
         with patch("src.ui.print_log") as mock_log:
             with pytest.raises(SystemExit) as exc:
                 utils.verify_folders(daemon=True)
@@ -315,7 +411,9 @@ def test_verify_folders_daemon_and_permissions(tmp_path, monkeypatch):
     assert utils.verify_folders(only_rename=True, custom_path=str(custom_dir)) == 0
 
     # Custom path with only_rename permission failure
-    with patch("src.utils.check_folder_permissions", return_value=(False, False, "Read permission denied: Permission denied")):
+    with patch(
+        "src.utils.check_folder_permissions", return_value=(False, False, "Read permission denied: Permission denied")
+    ):
         with patch("src.ui.print_log") as mock_log:
             with pytest.raises(SystemExit) as exc:
                 utils.verify_folders(only_rename=True, custom_path=str(custom_dir))
@@ -403,6 +501,7 @@ def test_files_locked_and_partial_extensions(tmp_path):
     ro_file = target_dir / "ReadOnly.Movie.2024.mp4"
     ro_file.touch()
     import stat
+
     os.chmod(str(ro_file), stat.S_IREAD)
 
     # Test is_file_locked
@@ -416,6 +515,7 @@ def test_files_locked_and_partial_extensions(tmp_path):
 
     # Mock os.rename raising PermissionError for locked_file
     orig_rename = os.rename
+
     def fake_rename(src, dst):
         if str(src) == str(locked_file):
             raise PermissionError("File locked by process")
@@ -484,8 +584,10 @@ def test_run_daemon_loop_cycle_exception(tmp_path):
     args.only_rename = False
     args.simulate = False
 
-    with patch("main.process_media", side_effect=RuntimeError("Transient API failure")), \
-         patch("src.mail.send_error_email") as mock_mail:
+    with (
+        patch("main.process_media", side_effect=RuntimeError("Transient API failure")),
+        patch("src.mail.send_error_email") as mock_mail,
+    ):
         ret = main.run_daemon_loop(args, max_cycles=1)
         assert ret == 0
         assert mock_mail.call_count == 1
@@ -511,8 +613,7 @@ def test_run_daemon_loop_sleep_execution(tmp_path):
     # 4. while check: 1070.0 - 1000.0 = 70.0 >= 60 -> exits sleep loop
     times = iter([1000.0, 1000.5, 1000.5, 1070.0, 1070.0, 1070.0, 1070.0])
 
-    with patch("main.process_media", side_effect=mock_proc), \
-         patch("time.time", side_effect=lambda: next(times)):
+    with patch("main.process_media", side_effect=mock_proc), patch("time.time", side_effect=lambda: next(times)):
         ret = main.run_daemon_loop(args, max_cycles=2)
         assert ret == 0
         assert call_count == 2
@@ -525,6 +626,7 @@ def test_run_daemon_loop_signals(tmp_path):
     args.simulate = False
 
     int_handler = None
+
     def mock_signal(sig, handler):
         nonlocal int_handler
         if sig == signal.SIGINT and int_handler is None:
@@ -560,6 +662,7 @@ def test_run_daemon_restore_signals_exception(tmp_path):
     args.simulate = False
 
     calls = 0
+
     def flaky_signal(sig, handler):
         nonlocal calls
         calls += 1
@@ -567,8 +670,7 @@ def test_run_daemon_restore_signals_exception(tmp_path):
             raise RuntimeError("Restore error")
         return MagicMock()
 
-    with patch("signal.signal", side_effect=flaky_signal), \
-         patch("main.process_media"):
+    with patch("signal.signal", side_effect=flaky_signal), patch("main.process_media"):
         ret = main.run_daemon_loop(args, max_cycles=1)
         assert ret == 0
 
@@ -617,32 +719,42 @@ def test_process_media_full_flow(tmp_path):
     args.only_rename = False
     args.simulate = False
 
-    messy_df = pd.DataFrame([{
-        'File': 'Movie.2024.mkv',
-        'Folder': 'downloads',
-        'Path': str(media_file),
-        'Clean': 'Movie 2024',
-        'Parse': ['Movie', '2024', None, None],
-        'Media': 'movie'
-    }])
-    clean_df = pd.DataFrame([{
-        'Original': 'Movie.2024.mkv',
-        'Corrected': 'Movie (2024)',
-        'Path': str(media_file),
-        'Media': 'movie',
-        'Season': None,
-        'Episode': None
-    }])
+    messy_df = pd.DataFrame(
+        [
+            {
+                "File": "Movie.2024.mkv",
+                "Folder": "downloads",
+                "Path": str(media_file),
+                "Clean": "Movie 2024",
+                "Parse": ["Movie", "2024", None, None],
+                "Media": "movie",
+            }
+        ]
+    )
+    clean_df = pd.DataFrame(
+        [
+            {
+                "Original": "Movie.2024.mkv",
+                "Corrected": "Movie (2024)",
+                "Path": str(media_file),
+                "Media": "movie",
+                "Season": None,
+                "Episode": None,
+            }
+        ]
+    )
 
     sorted_paths = [(str(media_file), "D:/Movies/Movie (2024)/Movie (2024).mkv")]
 
-    with patch("src.files.search_media_files", return_value=(messy_df, pd.DataFrame())), \
-         patch("src.utils.get_corrected_media_filenames", return_value=clean_df), \
-         patch("src.files.rename_media_files", return_value=clean_df) as mock_rename, \
-         patch("src.files.sort_media_files", return_value=sorted_paths), \
-         patch("src.ui.display_sorted_files"), \
-         patch("src.files.move_media_files") as mock_move, \
-         patch("src.ui.user_confirmation"):
+    with (
+        patch("src.files.search_media_files", return_value=(messy_df, pd.DataFrame())),
+        patch("src.utils.get_corrected_media_filenames", return_value=clean_df),
+        patch("src.files.rename_media_files", return_value=clean_df) as mock_rename,
+        patch("src.files.sort_media_files", return_value=sorted_paths),
+        patch("src.ui.display_sorted_files"),
+        patch("src.files.move_media_files") as mock_move,
+        patch("src.ui.user_confirmation"),
+    ):
         ret = main.process_media(args, daemon=True)
         assert ret == 0
         assert mock_rename.call_count == 1
@@ -658,36 +770,48 @@ def test_process_media_daemon_edge_cases(tmp_path):
     args.only_rename = True
     args.simulate = False
 
-    clean_df = pd.DataFrame([{
-        'Original': 'Movie.2024.mkv',
-        'Corrected': 'Movie (2024)',
-        'Path': str(media_file),
-        'Media': 'movie',
-        'Season': None,
-        'Episode': None
-    }])
+    clean_df = pd.DataFrame(
+        [
+            {
+                "Original": "Movie.2024.mkv",
+                "Corrected": "Movie (2024)",
+                "Path": str(media_file),
+                "Media": "movie",
+                "Season": None,
+                "Episode": None,
+            }
+        ]
+    )
 
     # 1. only_rename in daemon mode prints cycle completion message
-    with patch("src.files.search_media_files", return_value=(clean_df, pd.DataFrame())), \
-         patch("src.utils.get_corrected_media_filenames", return_value=clean_df), \
-         patch("src.files.rename_media_files", return_value=clean_df), \
-         patch("src.ui.user_confirmation"), \
-         patch("src.mail.send_media_success_email"):
+    with (
+        patch("src.files.search_media_files", return_value=(clean_df, pd.DataFrame())),
+        patch("src.utils.get_corrected_media_filenames", return_value=clean_df),
+        patch("src.files.rename_media_files", return_value=clean_df),
+        patch("src.ui.user_confirmation"),
+        patch("src.mail.send_media_success_email"),
+    ):
         ret = main.process_media(args, daemon=True)
         assert ret == 0
 
     # 2. clean_data_table has no files to rename
-    unrenamed_df = pd.DataFrame([{
-        'Original': 'Movie (2024)',
-        'Corrected': 'Movie (2024)',
-        'Path': str(media_file),
-        'Media': 'movie',
-        'Season': None,
-        'Episode': None
-    }])
-    with patch("src.files.search_media_files", return_value=(unrenamed_df, pd.DataFrame())), \
-         patch("src.utils.get_corrected_media_filenames", return_value=unrenamed_df), \
-         patch("src.utils.has_files_to_rename", return_value=False):
+    unrenamed_df = pd.DataFrame(
+        [
+            {
+                "Original": "Movie (2024)",
+                "Corrected": "Movie (2024)",
+                "Path": str(media_file),
+                "Media": "movie",
+                "Season": None,
+                "Episode": None,
+            }
+        ]
+    )
+    with (
+        patch("src.files.search_media_files", return_value=(unrenamed_df, pd.DataFrame())),
+        patch("src.utils.get_corrected_media_filenames", return_value=unrenamed_df),
+        patch("src.utils.has_files_to_rename", return_value=False),
+    ):
         ret = main.process_media(args, daemon=True)
         assert ret == 0
 
@@ -763,6 +887,7 @@ def test_cleanup_old_logs_edge_cases(tmp_path, monkeypatch):
     log_dir = tmp_path / "err_logs"
     log_dir.mkdir()
     orig_iterdir = Path.iterdir
+
     def fake_iterdir(self, *args, **kwargs):
         if self.name == "err_logs":
             raise OSError("Permission denied")
@@ -775,6 +900,7 @@ def test_cleanup_old_logs_edge_cases(tmp_path, monkeypatch):
     err_file = log_dir / "err_file.txt"
     err_file.write_text("err", encoding="utf-8")
     orig_is_file = Path.is_file
+
     def fake_is_file(self, *args, **kwargs):
         if self.name == "err_file.txt":
             raise OSError("is_file error")
@@ -787,13 +913,16 @@ def test_cleanup_old_logs_edge_cases(tmp_path, monkeypatch):
     bad_stat_file = log_dir / "unknown.log"
     bad_stat_file.write_text("bad stat", encoding="utf-8")
     orig_stat = Path.stat
+
     def fake_stat(self, *args, **kwargs):
         if self.name == "unknown.log":
             import inspect
+
             stack = [f.function for f in inspect.stack()]
             if "cleanup_old_logs" in stack and "is_file" not in stack and "is_dir" not in stack:
                 raise OSError("stat error")
         return orig_stat(self, *args, **kwargs)
+
     with patch.object(Path, "stat", fake_stat):
         # Should not crash, and should not delete
         ui.cleanup_old_logs(log_dir)
@@ -801,10 +930,12 @@ def test_cleanup_old_logs_edge_cases(tmp_path, monkeypatch):
 
     # 6. unlink raising OSError
     from datetime import datetime, timedelta
+
     old_date = (datetime.now() - timedelta(days=20)).strftime("%Y-%m-%d")
     old_file = log_dir / f"{old_date}.txt"
     old_file.write_text("old content", encoding="utf-8")
     orig_unlink = Path.unlink
+
     def fake_unlink(self, *args, **kwargs):
         if self.name == f"{old_date}.txt":
             raise OSError("unlink error")
@@ -822,6 +953,7 @@ def test_cleanup_old_logs_in_print_log(tmp_path, monkeypatch):
     monkeypatch.setattr("src.ui._last_log_cleanup_date", None)
 
     from datetime import datetime, timedelta
+
     old_date = (datetime.now() - timedelta(days=25)).strftime("%Y-%m-%d")
     old_file = tmp_path / f"{old_date}.txt"
     old_file.write_text("old log", encoding="utf-8")

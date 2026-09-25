@@ -251,8 +251,6 @@ services:
       - TMDB_API_KEY=your_tmdb_api_key_here
     volumes:
       - /mnt/storage/media:/data
-      # WARNING: Use a single parent mount point to ensure file moves are instantaneous.
-      # Avoid separate volumes for downloads and movies as it breaks file renaming on ZFS datasets.
 ```
 
 Start the container in the background:
@@ -265,14 +263,16 @@ docker compose up -d
 
 ### Volumes
 
-| Volume Mount | Type | Purpose | Description |
-| :--- | :--- | :--- | :--- |
-| `/data/Downloads` | **Required** | Source | Incoming / unsorted media directory to scan and organize. |
-| `/data` | **Recommended** | Parent | Single unified mount for instantaneous file moves (avoids ZFS permission errors). |
-| `/data/Movies` | **Required** | Destination | Destination folder for recognized and sorted movies. |
-| `/data/TV_Shows` | **Required** | Destination | Destination folder for recognized and sorted TV series. |
-| `/config` | *Optional* | Configuration | Persistent storage for custom `config.ini`, `custom_tags.json`, `gemini_tags.json`. |
-| `/app/log` | *Optional* | Logs | Persistent storage for daily rotated log files (`YYYY-MM-DD.txt`). |
+| Volume Mount | Purpose | Description |
+| :--- | :--- | :--- |
+| `/data` | Parent | Single unified mount for instantaneous file moves (avoids ZFS permission errors). |
+| `/data/Downloads` | Source | Incoming / unsorted media directory to scan and organize. |
+| `/data/Movies` | Destination | Destination folder for recognized and sorted movies. |
+| `/data/TV_Shows` | Destination | Destination folder for recognized and sorted TV series. |
+| `/config` | Configuration | Persistent storage for custom `config.ini`, `custom_tags.json`, `gemini_tags.json`. |
+| `/app/log` | Logs | Persistent storage for daily rotated log files (`YYYY-MM-DD.txt`). |
+
+It is recommended to mount a unified parent folder for the downloads, movies and tv shows folders to avoid file system permission issues when moving files.
 
 ---
 
@@ -369,8 +369,4 @@ services:
       - /mnt/storage/media:/data
       - /mnt/storage/appdata/media-organizer/config:/config
       - /mnt/storage/appdata/media-organizer/logs:/app/log
-      # (Alternatively, you can use separate mounts if on standard ext4 filesystem)
-      # - /mnt/storage/downloads:/data/Downloads
-      # - /mnt/storage/movies:/data/Movies
-      # - /mnt/storage/series:/data/TV_Shows
 ```

@@ -45,8 +45,6 @@ services:
       - TMDB_API_KEY="<your_tmdb_api_key>"
     volumes:
       - /path/to/media:/data
-      # WARNING: Use a single parent mount point to ensure file moves are instantaneous.
-      # Avoid separate volumes for downloads and movies as it breaks file renaming on ZFS datasets.
 ```
 
 ```bash

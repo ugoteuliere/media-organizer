@@ -2516,13 +2516,19 @@ def test_daemon_summary_counts_on_success(monkeypatch):
 
 
 def test_docker_entrypoint_structure():
-    """Item 1: Verify docker-entrypoint.sh signal trapping and cooldown logic."""
+    """Verify docker-entrypoint.sh signal trapping, cooldown logic, and dynamic path diagnostics."""
     script_path = Path(__file__).resolve().parent.parent / "docker-entrypoint.sh"
     content = script_path.read_text(encoding="utf-8")
 
     assert "trap 'kill -TERM \"$CHILD_PID\" 2>/dev/null' TERM INT" in content
     assert 'wait "$CHILD_PID" 2>/dev/null || true' in content
     assert "Waiting 30s cooldown before container termination" in content
+    # Verify dynamic volume path resolution
+    assert "DIAG_PATHS=" in content
+    assert "not_sorted_media_files_folder" in content
+    assert "tv_shows_folder" in content
+    assert "movies_folder" in content
+    assert "for v in /data/Downloads /data/Movies /data/TV_Shows" not in content
 
 
 def test_move_file_cross_device_failure_cleans_up_incomplete_target(tmp_path):

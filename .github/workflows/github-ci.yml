@@ -179,6 +179,49 @@ jobs:
           # Verify log file was created in /app/log mount
           test -n "$(ls -A /tmp/docker_3vol/logs)"
 
+      - name: Verify Dynamic Volume Detection in Startup Diagnostics
+        run: |
+          mkdir -p /tmp/docker_diag/config /tmp/docker_diag/input /tmp/docker_diag/movies /tmp/docker_diag/tvshows
+          chmod -R 777 /tmp/docker_diag
+          cat << 'EOF' > /tmp/docker_diag/config/config.ini
+          [paths]
+          movies_folder = /data/CustomMovies
+          tv_shows_folder = /data/TVShows
+          not_sorted_media_files_folder = /data/CustomInput
+
+          [options]
+          bypass = true
+          EOF
+
+          # Run container with custom mounted paths and capture output
+          CONTAINER_LOGS=$(docker run --rm \
+            -e PUID=1000 \
+            -e PGID=1000 \
+            -v /tmp/docker_diag/config:/config \
+            -v /tmp/docker_diag/input:/data/CustomInput \
+            -v /tmp/docker_diag/movies:/data/CustomMovies \
+            -v /tmp/docker_diag/tvshows:/data/TVShows \
+            media-organizer:test --simulate --only-rename --bypass 2>&1 || true)
+
+          echo "Container startup output:"
+          echo "$CONTAINER_LOGS"
+
+          # Assert that startup diagnostics dynamically detected the custom paths from config.ini
+          echo "$CONTAINER_LOGS" | grep -q "Volumes:" || { echo "ERROR: Volumes header missing in logs"; exit 1; }
+          echo "$CONTAINER_LOGS" | grep -q "/data/CustomInput .. \[OK: rw\]" || { echo "ERROR: /data/CustomInput not detected as OK: rw"; exit 1; }
+          echo "$CONTAINER_LOGS" | grep -q "/data/CustomMovies .. \[OK: rw\]" || { echo "ERROR: /data/CustomMovies not detected as OK: rw"; exit 1; }
+          echo "$CONTAINER_LOGS" | grep -q "/data/TVShows .. \[OK: rw\]" || { echo "ERROR: /data/TVShows not detected as OK: rw"; exit 1; }
+          echo "$CONTAINER_LOGS" | grep -q "/config .. \[OK: rw\]" || { echo "ERROR: /config not detected as OK: rw"; exit 1; }
+
+          # Verify that old hardcoded defaults are NOT reported
+          if echo "$CONTAINER_LOGS" | grep -q "/data/TV_Shows .. \[Missing\]"; then
+            echo "ERROR: Found hardcoded /data/TV_Shows in output!"; exit 1;
+          fi
+          if echo "$CONTAINER_LOGS" | grep -q "/data/Downloads .. \[Missing\]"; then
+            echo "ERROR: Found hardcoded /data/Downloads in output!"; exit 1;
+          fi
+          echo "Dynamic volume detection test passed!"
+
   sonarqube:
     name: SonarQube Scan
     needs: [test, test-docker]

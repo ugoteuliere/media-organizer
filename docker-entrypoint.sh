@@ -35,7 +35,7 @@ if [ "$(id -u)" = "0" ]; then
     
     # T12: Startup Diagnostics
     echo "-------------------------------------"
-    echo "media-organizer v2.0.0"
+    echo "media-organizer v2.0.1"
     echo "-------------------------------------"
     echo "UID: $PUID  GID: $PGID  UMASK: ${UMASK:-002}"
     if [ -f /config/config.ini ]; then echo "Config: /config/config.ini [found]"; else echo "Config: /config/config.ini [missing]"; fi

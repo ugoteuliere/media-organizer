@@ -67,6 +67,13 @@ if not _q_parser.has_section("mail"):
 _q_parser.set("mail", "mail", "")
 _q_parser.set("mail", "mail_pswd", "")
 
+# Guarantee that dummy API keys are present so strict configuration enforcement doesn't crash tests on CI
+if not _q_parser.has_section("api"):
+    _q_parser.add_section("api")
+for _k in ["tmdb_api_key", "gemini_api_key", "groq_api_key", "openrouter_api_key", "cloudflare_api_token", "cloudflare_account_id"]:
+    if not _q_parser.has_option("api", _k) or not _q_parser.get("api", _k).strip():
+        _q_parser.set("api", _k, f"dummy_{_k}_for_tests")
+
 with open(_global_quarantine_file, "w", encoding="utf-8") as _f:
     _q_parser.write(_f)
 

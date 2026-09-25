@@ -162,4 +162,5 @@ def mock_smtp_network_guard(monkeypatch):
 
 
 import os
+
 os.environ["MIN_FILE_SIZE_MB"] = "-1"

@@ -582,6 +582,8 @@ def format_daemon_log(level: str, message: str, colorize: bool = False) -> str:
 
 
 _log_warning_emitted = False
+
+
 def _emit_daemon_log(level: str, message: str, stream=None):
     """Outputs a single-line formatted log in daemon mode."""
     global _last_log_cleanup_date, _log_warning_emitted

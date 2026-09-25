@@ -526,7 +526,10 @@ def test_move_file_raises_runtime_error(tmp_path):
     with patch("src.runtime_config.runtime.verbose_enabled", True):
         with patch("src.files.make_safe_path", side_effect=lambda x: str(x)):
             # We force shutil.move to crash with a fake PermissionError
-            with patch("os.rename", side_effect=PermissionError("Access denied")), patch("shutil.copy", side_effect=PermissionError("Access denied")):
+            with (
+                patch("os.rename", side_effect=PermissionError("Access denied")),
+                patch("shutil.copy", side_effect=PermissionError("Access denied")),
+            ):
                 # We catch your custom RuntimeError
                 with pytest.raises(RuntimeError) as exc_info:
                     files.move_file(old_path, new_path)

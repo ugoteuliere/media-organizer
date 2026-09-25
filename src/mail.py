@@ -165,6 +165,7 @@ def _build_text_email(title: str, badge_text: str, rows: list, error_details: st
 def _dispatch_email(msg: EmailMessage, purpose: str = "notification email"):
     """Deliver EmailMessage using Gmail SMTP over SSL."""
     from src.runtime_config import runtime
+
     sender_email, password = _get_credentials()
     if not sender_email or not password:
         return

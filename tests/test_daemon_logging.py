@@ -232,7 +232,10 @@ def test_process_media_daemon_single_line_flow(tmp_path, capsys, monkeypatch):
         patch("src.files.sort_media_files", return_value=sorted_paths),
         patch(
             "src.files.move_media_files",
-            side_effect=lambda paths, df, **kw: (ui.log_success("Movie.2024.mkv", "Movie (2024).mkv", paths[0][1]), (1, 0))[1],
+            side_effect=lambda paths, df, **kw: (
+                ui.log_success("Movie.2024.mkv", "Movie (2024).mkv", paths[0][1]),
+                (1, 0),
+            )[1],
         ),
     ):
         ret = main.process_media(args, daemon=True, cycle=1)

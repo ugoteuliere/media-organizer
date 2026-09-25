@@ -2422,17 +2422,89 @@ def test_move_file_cross_device_fallback(mock_unlink, mock_utime, mock_copy, moc
     old_path = tmp_path / "src.txt"
     old_path.write_text("")
     new_path = tmp_path / "dst.txt"
+    stat_info = old_path.stat()
 
     with patch("src.files.make_safe_path", side_effect=lambda x: str(x)):
         files.move_file(old_path, new_path)
 
     mock_rename.assert_called_once()
     mock_copy.assert_called_once_with(str(old_path), str(new_path))
-    mock_utime.assert_called_once()
+    mock_utime.assert_called_once_with(str(new_path), (stat_info.st_atime, stat_info.st_mtime))
     mock_unlink.assert_called_once_with(str(old_path))
 
 
-def test_simple_touch(tmp_path):
-    p = tmp_path / "hello.txt"
-    p.touch()
-    print("EXISTS:", p.exists())
+def test_collect_candidate_allows_zero_byte_files_by_default(tmp_path, monkeypatch):
+    """Zero-byte files are not filtered out by default when MIN_FILE_SIZE_MB is 0 or unset."""
+    from src import files
+
+    # Create a zero-byte .mkv file
+    zero_file = tmp_path / "empty.mkv"
+    zero_file.write_bytes(b"")
+
+    # Create a normal .mkv file (1 KB)
+    normal_file = tmp_path / "real.mkv"
+    normal_file.write_bytes(b"x" * 1024)
+
+    # Default MIN_FILE_SIZE_MB=0 — zero-byte should NOT be skipped
+    monkeypatch.delenv("MIN_FILE_SIZE_MB", raising=False)
+    files._failed_files_cooldown.clear()
+
+    candidates = files.collect_candidate_video_files(tmp_path)
+    assert normal_file in candidates
+    assert zero_file in candidates
+
+
+def test_collect_candidate_skips_undersized_files(tmp_path, monkeypatch):
+    """T17b: Files below MIN_FILE_SIZE_MB are skipped when threshold is set."""
+    from src import files
+
+    # Create a 100-byte .mp4 (below 1MB threshold)
+    small_file = tmp_path / "tiny.mp4"
+    small_file.write_bytes(b"x" * 100)
+
+    # Create a 2MB .mp4 (above threshold)
+    big_file = tmp_path / "big.mp4"
+    big_file.write_bytes(b"x" * (2 * 1024 * 1024))
+
+    monkeypatch.setenv("MIN_FILE_SIZE_MB", "1")
+    files._failed_files_cooldown.clear()
+
+    candidates = files.collect_candidate_video_files(tmp_path)
+    assert big_file in candidates
+    assert small_file not in candidates
+
+
+def test_daemon_summary_counts_on_failure(monkeypatch):
+    """T18: Verify daemon summary outputs correct success/failure counts on failure."""
+    import main
+
+    args = MagicMock(path=None, only_rename=False, simulate=False)
+    dummy_df = pd.DataFrame([{"File": "A.mkv", "Original": "A.mkv", "Corrected": "A.mkv", "Path": "/path/A.mkv"}])
+    with (
+        patch("src.files.search_media_files", return_value=(dummy_df, dummy_df)),
+        patch("src.utils.get_corrected_media_filenames", return_value=dummy_df),
+        patch("src.files.sort_media_files", return_value=[("/path/A.mkv", "/dest/A.mkv")]),
+        patch("src.files.move_media_files", return_value=(0, 1)),
+        patch("src.ui.log_error") as mock_log_error,
+    ):
+        res = main.process_media(args, daemon=True, cycle=1)
+        assert res == 0
+        mock_log_error.assert_called_once_with("Check 1 : 0/1 files processed (1 failed)")
+
+
+def test_daemon_summary_counts_on_success(monkeypatch):
+    """T18b: Verify daemon summary outputs correct counts on full success."""
+    import main
+
+    args = MagicMock(path=None, only_rename=False, simulate=False)
+    dummy_df = pd.DataFrame([{"File": "A.mkv", "Original": "A.mkv", "Corrected": "A.mkv", "Path": "/path/A.mkv"}])
+    with (
+        patch("src.files.search_media_files", return_value=(dummy_df, dummy_df)),
+        patch("src.utils.get_corrected_media_filenames", return_value=dummy_df),
+        patch("src.files.sort_media_files", return_value=[("/path/A.mkv", "/dest/A.mkv")]),
+        patch("src.files.move_media_files", return_value=(3, 0)),
+        patch("src.ui.print_log") as mock_print_log,
+    ):
+        res = main.process_media(args, daemon=True, cycle=1)
+        assert res == 0
+        mock_print_log.assert_any_call("Check 1 : Successfully processed 3/3 file(s).")

@@ -139,7 +139,7 @@ def collect_candidate_video_files(target_dir: Path) -> list[Path]:
     # Clean up old cooldowns (older than 24 hours)
     _failed_files_cooldown = {k: v for k, v in _failed_files_cooldown.items() if (now - v).total_seconds() < 86400}
 
-    # Check for minimum file size (defaults to 0, meaning only skip truly empty files)
+    # Check for minimum file size (defaults to 0, meaning disabled / no filtering)
     min_size_mb = float(os.environ.get("MIN_FILE_SIZE_MB", "0"))
     min_size_bytes = int(min_size_mb * 1024 * 1024)
     for file_path in target_dir.rglob("*"):
@@ -497,10 +497,12 @@ def sort_media_files(clean_data_table: pd.DataFrame) -> list[list[Path]]:
 def move_file(old_path: Path | str, new_path: Path | str) -> None:
     """Moves a single file from *old_path* to *new_path*.
 
+    Attempts an atomic ``os.rename()`` first.  On cross-device ``OSError``,
+    falls back to ``shutil.copy()`` + ``os.utime()`` + ``os.unlink()``
+    (no ``chmod``, safe for ZFS restricted-ACL datasets).
+
     Raises :exc:`FileExistsError` when the destination already exists.
     Raises :exc:`~src.exceptions.FileOperationError` on unexpected OS errors.
-
-    B2 fix: message is printed via ``ui.print_log`` before raising.
     """
     old_abs = Path(old_path).resolve()
     new_abs = Path(new_path).resolve()

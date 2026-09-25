@@ -37,7 +37,7 @@ if [ "$(id -u)" = "0" ]; then
     echo "-------------------------------------"
     echo "media-organizer v2.0.0"
     echo "-------------------------------------"
-    echo "UID: $CURRENT_UID  GID: $CURRENT_GID  UMASK: ${UMASK:-002}"
+    echo "UID: $PUID  GID: $PGID  UMASK: ${UMASK:-002}"
     if [ -f /config/config.ini ]; then echo "Config: /config/config.ini [found]"; else echo "Config: /config/config.ini [missing]"; fi
     echo "Volumes:"
     for v in /data/Downloads /data/Movies /data/TV_Shows /config /app/log; do

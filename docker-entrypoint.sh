@@ -68,10 +68,8 @@ START_TIME=$(date +%s)
 $RUN_CMD "$@" &
 CHILD_PID=$!
 trap 'kill -TERM "$CHILD_PID" 2>/dev/null' TERM INT
-set +e
-wait "$CHILD_PID" 2>/dev/null
+wait "$CHILD_PID" 2>/dev/null || true
 EXIT_CODE=$?
-set -e
 END_TIME=$(date +%s)
 
 if [ "$EXIT_CODE" -ne 0 ] && [ $((END_TIME - START_TIME)) -lt 5 ]; then

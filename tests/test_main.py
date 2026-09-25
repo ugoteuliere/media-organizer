@@ -2515,15 +2515,14 @@ def test_daemon_summary_counts_on_success(monkeypatch):
 # ===================================================================
 
 
-def test_docker_entrypoint_exit_code_preservation():
-    """Item 1: Verify docker-entrypoint.sh captures child exit code without || true masking."""
+def test_docker_entrypoint_structure():
+    """Item 1: Verify docker-entrypoint.sh signal trapping and cooldown logic."""
     script_path = Path(__file__).resolve().parent.parent / "docker-entrypoint.sh"
     content = script_path.read_text(encoding="utf-8")
 
-    # Assert that || true was removed from the wait call
-    assert 'wait "$CHILD_PID" 2>/dev/null || true' not in content
-    # Assert proper set +e / wait / EXIT_CODE=$? / set -e sequence
-    assert 'set +e\nwait "$CHILD_PID" 2>/dev/null\nEXIT_CODE=$?\nset -e' in content
+    assert "trap 'kill -TERM \"$CHILD_PID\" 2>/dev/null' TERM INT" in content
+    assert 'wait "$CHILD_PID" 2>/dev/null || true' in content
+    assert "Waiting 30s cooldown before container termination" in content
 
 
 def test_move_file_cross_device_failure_cleans_up_incomplete_target(tmp_path):

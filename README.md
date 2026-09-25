@@ -44,9 +44,7 @@ services:
       - PGID=1000
       - TMDB_API_KEY="<your_tmdb_api_key>"
     volumes:
-      - /path/to/downloads:/data/input
-      - /path/to/movies:/data/Movies
-      - /path/to/series:/data/TV_Shows
+      - /path/to/media:/data
 ```
 
 ```bash

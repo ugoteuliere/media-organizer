@@ -35,7 +35,7 @@ COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 # Set entrypoint permissions and create volume mount points
 RUN sed -i -e 's/\r$//' /usr/local/bin/docker-entrypoint.sh \
     && chmod +x /usr/local/bin/docker-entrypoint.sh \
-    && mkdir -p /config /app/log /data/Movies /data/TV_Shows /data/input \
+    && mkdir -p /config /app/log /data/Movies /data/TV_Shows /data/Downloads \
     && chown -R organizer:organizer /config /data /app /app/log
 
 COPY docker_sample_config /config/config.ini

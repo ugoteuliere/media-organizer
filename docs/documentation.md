@@ -26,10 +26,7 @@ Technical guide and reference for media-organizer.
    - [Volumes](#volumes)
    - [Configuration](#configuration)
    - [Environment Variables](#environment-variables)
-   - [Logging Behavior in Docker (Dual Logging)](#logging-behavior-in-docker-dual-logging)
    - [Advanced Docker Compose Example](#advanced-docker-compose-example)
-
-
 
 ## 1. Folder Structure & Plex Standards
 
@@ -162,6 +159,7 @@ media-organizer --daemon --interval 15
 
 | Flag | Long Option | Config Key | Default | Description |
 | :--- | :--- | :--- | :--- | :--- |
+| `-g` | `--gui` | — | `false` | Launches modern graphical configuration interface (GUI). |
 | `-s` | `--simulate` | — | `false` | Dry-run simulation preview. |
 | `-r` | `--only-rename` | — | `false` | Renames files in-place without moving them. |
 | `-d` | `--daemon` | `options.daemon` | `false` | Runs background watcher daemon. |
@@ -177,7 +175,7 @@ media-organizer --daemon --interval 15
 | — | `--notify-success` | `options.notify_on_success` | `false` | Sends email notification on successful processing. |
 | — | `--notify-error` | `options.notify_on_error` | `true` (`false` in Docker) | Sends email notification when an error occurs. |
 | `-t` | `--notify-tag` | `options.notify_on_tag` | `false` | Sends email notification when a new keyword tag is learned. |
-| — | `--path="<dir>"` | — | Incoming dir | Targets a specific folder. |
+| — | `--path <dir>` | — | Incoming dir | Targets a specific folder. |
 
 ## 5. Matching & Multi-Cloud AI Architecture
 
@@ -233,7 +231,7 @@ The container is designed to run out-of-the-box with zero manual configuration r
 
 ### Quick Start
 
-By default, the container starts in **daemon mode**, checking for new files in input folder every 15 minutes.
+By default, the container starts in **daemon mode**, checking for new files in the input folder every 15 minutes.
 
 #### Docker Compose
 
@@ -250,9 +248,7 @@ services:
       - PGID=1000
       - TMDB_API_KEY=your_tmdb_api_key_here
     volumes:
-      - /mnt/storage/downloads:/data/input
-      - /mnt/storage/movies:/data/Movies
-      - /mnt/storage/series:/data/TV_Shows
+      - /mnt/storage/media:/data
 ```
 
 Start the container in the background:
@@ -265,13 +261,16 @@ docker compose up -d
 
 ### Volumes
 
-| Volume Mount | Type | Purpose | Description |
-| :--- | :--- | :--- | :--- |
-| `/data/input` | **Required** | Source | Incoming / unsorted media directory to scan and organize. |
-| `/data/Movies` | **Required** | Destination | Destination folder for recognized and sorted movies. |
-| `/data/TV_Shows` | **Required** | Destination | Destination folder for recognized and sorted TV series. |
-| `/config` | *Optional* | Configuration | Persistent storage for custom `config.ini`, `custom_tags.json`, `gemini_tags.json`. |
-| `/app/log` | *Optional* | Logs | Persistent storage for daily rotated log files (`YYYY-MM-DD.txt`). |
+| Volume Mount | Purpose | Description |
+| :--- | :--- | :--- |
+| `/data` | Parent | Single unified mount for instantaneous file moves (avoids ZFS permission errors). |
+| `/data/Downloads` | Source | Incoming / unsorted media directory to scan and organize. |
+| `/data/Movies` | Destination | Destination folder for recognized and sorted movies. |
+| `/data/TV_Shows` | Destination | Destination folder for recognized and sorted TV series. |
+| `/config` | Configuration | Persistent storage for custom `config.ini`, `custom_tags.json`, `gemini_tags.json`. |
+| `/app/log` | Logs | Persistent storage for daily rotated log files (`YYYY-MM-DD.txt`). |
+
+**Important**: It is recommended to mount a unique parent folder containing the three directories (Downloads, Movies, TV_Shows) to avoid file system permission issues when moving files.
 
 ---
 
@@ -290,17 +289,25 @@ Each configuration setting is mapped to an environment variable:
 
 | Environment Variable | Config Key | Default in Docker | Description |
 | :--- | :--- | :--- | :--- |
-| `INPUT_FOLDER` | `paths.not_sorted_media_files_folder` | `/data/input` | Path to incoming media folder. |
+| `PUID` / `PGID` | *N/A* | `1000` | User ID and Group ID to run the container as. |
+| `UMASK` | *N/A* | `002` | Umask for newly created files and directories. |
+| `TZ` | *N/A* | `UTC` | Timezone for the container. |
+| `INPUT_FOLDER` | `paths.not_sorted_media_files_folder` | `/data/Downloads` | Path to incoming media folder. |
 | `MOVIES_FOLDER` | `paths.movies_folder` | `/data/Movies` | Path to destination movies folder. |
 | `TV_SHOWS_FOLDER` | `paths.tv_shows_folder` | `/data/TV_Shows` | Path to destination TV shows folder. |
 | `DAEMON` | `options.daemon` | `true` | Enables continuous polling background daemon. |
 | `POLLING_INTERVAL` | `options.polling_interval` | `15` | Polling interval in minutes. |
 | `BYPASS` | `options.bypass` | `true` | Automatically bypasses confirmation prompts. |
 | `VERBOSE` | `options.verbose` | `true` | Displays detailed error tracebacks on failure. |
+| `RESOLUTION` | `options.resolution` | `false` | Appends video resolution tags (`[1080p]`, `[4K]`). |
+| `QUALITY` | `options.quality` | `false` | Appends video quality tags (`[BluRay]`, `[WEB-DL]`). |
 | `LOG` | `options.log` | `false` | Enables file logging to `/app/log/` in addition to console. |
 | `TMDB_API_KEY` | `api.tmdb_api_key` | — | TheMovieDatabase v3 API key for online matching. |
+| `TMDB_MIN_CONFIDENCE` | `options.tmdb_min_confidence` | `0.75` | Minimum TMDB match score threshold before triggering AI fallback. |
 | `AI` | `options.ai` | `false` | Enables cloud AI fallback for unrecognizable titles. |
 | `AI_PROVIDER` | `options.ai_provider` | `auto` | AI provider (`auto`, `gemini`, `groq`, `openrouter`, `cloudflare`). |
+| `AI_MIN_CONFIDENCE` | `options.ai_min_confidence` | `0.70` | Minimum confidence score required to accept AI parsed metadata. |
+| `LEARN` | `options.learn` | `false` | Enables keyword learning to save newly discovered tags from AI. |
 | `GEMINI_API_KEY` | `api.gemini_api_key` | — | Google Gemini API key. |
 | `GROQ_API_KEY` | `api.groq_api_key` | — | Groq API key. |
 | `OPENROUTER_API_KEY` | `api.openrouter_api_key` | — | OpenRouter API key. |
@@ -311,17 +318,6 @@ Each configuration setting is mapped to an environment variable:
 | `NOTIFY_ON_SUCCESS` | `options.notify_on_success` | `false` | Send email notification on successful processing. |
 | `NOTIFY_ON_ERROR` | `options.notify_on_error` | `false` | Send email notification on processing errors. |
 | `NOTIFY_ON_TAG` | `options.notify_on_tag` | `false` | Send email notification when a new tag is discovered. |
-
----
-
-### Logging Behavior in Docker (Dual Logging)
-
-1. **Console Logging (Default)**:
-   All events stream live to `stdout`/`stderr` viewable with `docker logs -f media-organizer`.
-2. **Dual Logging (Console + File)**:
-   When `LOG=true` (or `options.log = true`), the container writes daily log files to `/app/log/YYYY-MM-DD.txt` (auto-pruned after 14 days) **WITHOUT silencing console output**.
-3. **Permission Safeguards**:
-   If `/app/log` does not exist or lacks write permissions for `PUID`/`PGID`, the container outputs a clear warning to `stderr` and automatically falls back to console-only logging without crashing.
 
 ---
 
@@ -340,6 +336,8 @@ services:
     environment:
       - PUID=1000
       - PGID=1000
+      - UMASK=002
+      - TZ=UTC
       - POLLING_INTERVAL=10
       - TMDB_API_KEY=your_tmdb_api_key
       # AI Fallback
@@ -349,9 +347,7 @@ services:
       # Enable Dual Logging (stdout + /app/log)
       - LOG=true
     volumes:
-      - /mnt/storage/downloads:/data/input
-      - /mnt/storage/movies:/data/Movies
-      - /mnt/storage/series:/data/TV_Shows
+      - /mnt/storage/media:/data
       - /mnt/storage/appdata/media-organizer/config:/config
       - /mnt/storage/appdata/media-organizer/logs:/app/log
 ```

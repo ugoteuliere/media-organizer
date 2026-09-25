@@ -132,9 +132,13 @@ def process_media(args, daemon: bool = False, cycle: int = 1) -> int:
         if not daemon:
             ui.display_sorted_files(paths)
             ui.user_confirmation("move the files to the correct folder")
-        files.move_media_files(paths, clean_data_table, source_path=args.path)
+        success_count, fail_count = files.move_media_files(paths, clean_data_table, source_path=args.path)
         if daemon:
-            ui.print_log(f"Check {cycle} : Successfully processed {len(clean_data_table)} file(s).")
+            total = success_count + fail_count
+            if fail_count > 0:
+                ui.log_error(f"Check {cycle} : {success_count}/{total} files processed ({fail_count} failed)")
+            else:
+                ui.print_log(f"Check {cycle} : Successfully processed {success_count}/{total} file(s).")
     else:
         if not daemon:
             ui.print_log("No media files to sort and move\n")

@@ -701,7 +701,7 @@ def test_integration_daemon_clean_file_with_tags_no_infinite_loop(media_env, mon
         dest_file = movies / "Inception (2010) [BluRay FullHD].mkv"
         assert dest_file.exists()
         assert not clean_movie.exists()
-        assert any("Successfully processed 1 file(s)" in l for l in logs)
+        assert any("Successfully processed 1/1 file(s)." in l for l in logs)
 
         # Cycle 2: Downloads folder is now empty, next cycle reports 'No media to process' without looping
         ret2 = main.process_media(args, daemon=True, cycle=2)

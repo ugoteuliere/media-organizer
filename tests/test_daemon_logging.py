@@ -11,11 +11,13 @@ def test_format_daemon_log():
     pattern = r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \[INFO\] Test message$"
     assert re.match(pattern, line)
 
-    # Multi-line strings must be flattened to a single line
+    # Multi-line strings must be formatted correctly
     multiline = "Line 1\nLine 2\n\nLine 3"
-    flattened = ui.format_daemon_log("ERROR", multiline)
-    assert "\n" not in flattened
-    assert re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \[ERROR\] Line 1 Line 2 Line 3$", flattened)
+    formatted = ui.format_daemon_log("ERROR", multiline)
+    lines = formatted.split("\n")
+    assert len(lines) == 3
+    for i, line in enumerate(lines):
+        assert re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \[ERROR\] Line " + str(i + 1) + "$", line)
 
 
 def test_log_info_stdout(capsys, monkeypatch):
@@ -232,7 +234,10 @@ def test_process_media_daemon_single_line_flow(tmp_path, capsys, monkeypatch):
         patch("src.files.sort_media_files", return_value=sorted_paths),
         patch(
             "src.files.move_media_files",
-            side_effect=lambda paths, df, **kw: ui.log_success("Movie.2024.mkv", "Movie (2024).mkv", paths[0][1]),
+            side_effect=lambda paths, df, **kw: (
+                ui.log_success("Movie.2024.mkv", "Movie (2024).mkv", paths[0][1]),
+                (1, 0),
+            )[1],
         ),
     ):
         ret = main.process_media(args, daemon=True, cycle=1)
@@ -242,7 +247,7 @@ def test_process_media_daemon_single_line_flow(tmp_path, capsys, monkeypatch):
     lines = captured.out.strip().splitlines()
     assert len(lines) >= 2
     assert any("[SUCCESS] 'Movie.2024.mkv' -> 'Movie (2024).mkv'" in l for l in lines)
-    assert any("[INFO] Check 1 : Successfully processed 1 file(s)." in l for l in lines)
+    assert any("Successfully processed 1/1 file(s)." in l for l in lines)
     # Zero Rich tables or empty lines
     for line in lines:
         assert re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \[(INFO|SUCCESS)\] ", line)
@@ -375,3 +380,39 @@ def test_docker_logging_colorization(capsys, monkeypatch):
     assert captured.out.startswith("\033[32m")
     assert captured.out.endswith("\033[0m\n")
     assert "[SUCCESS] 'source.mkv' -> 'dest.mkv'" in captured.out
+
+
+def test_dual_logging_in_daemon_mode_file_fallback(capsys, monkeypatch, tmp_path):
+    monkeypatch.setattr(ui.runtime, "daemon_enabled", True)
+    monkeypatch.setattr(ui.runtime, "log_enabled", True)
+    monkeypatch.setattr(ui.runtime, "log_mode", "file")
+
+    import builtins
+
+    original_open = builtins.open
+
+    written_files = {}
+
+    def mock_open(file, mode="r", *args, **kwargs):
+        if "log" in str(file) or ".txt" in str(file):
+            import io
+
+            class StringIOWrapper(io.StringIO):
+                def close(self):
+                    written_files[str(file)] = self.getvalue()
+                    super().close()
+
+            return StringIOWrapper()
+        return original_open(file, mode, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "open", mock_open)
+
+    # Emit log
+    ui._emit_daemon_log("INFO", "Testing dual logging")
+
+    # Check console
+    captured = capsys.readouterr()
+    assert "Testing dual logging" in captured.out
+
+    # Check file
+    assert any("Testing dual logging" in content for content in written_files.values())

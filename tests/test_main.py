@@ -523,10 +523,13 @@ def test_move_file_raises_runtime_error(tmp_path):
     new_path = tmp_path / "dest.txt"
 
     # 2. ACTION & VERIFY
-    with patch("src.ui.VERBOSE_ENABLED", True):
+    with patch("src.runtime_config.runtime.verbose_enabled", True):
         with patch("src.files.make_safe_path", side_effect=lambda x: str(x)):
             # We force shutil.move to crash with a fake PermissionError
-            with patch("shutil.move", side_effect=PermissionError("Access denied")):
+            with (
+                patch("os.rename", side_effect=PermissionError("Access denied")),
+                patch("shutil.copy", side_effect=PermissionError("Access denied")),
+            ):
                 # We catch your custom RuntimeError
                 with pytest.raises(RuntimeError) as exc_info:
                     files.move_file(old_path, new_path)
@@ -890,7 +893,7 @@ def test_send_email_success(mock_ssl_context, mock_smtp, mock_print):
     # Did it print the correct success logs?
     assert mock_print.call_count == 2
     mock_print.assert_any_call("Connecting to server...")
-    mock_print.assert_any_call("Success: Email sent successfully!")
+    mock_print.assert_any_call("Success: error alert sent successfully!")
 
 
 @patch_email_globals
@@ -2406,3 +2409,198 @@ def test_process_media_clean_data_empty_daemon_logging():
         assert res == 0
         logged = " ".join([str(c[0][0]) for c in mock_log.call_args_list if c[0]])
         assert "Check 3 : No media to process" in logged
+
+
+@patch("src.files.os.rename")
+@patch("src.files.shutil.copy")
+@patch("src.files.os.utime")
+@patch("src.files.os.unlink")
+def test_move_file_cross_device_fallback(mock_unlink, mock_utime, mock_copy, mock_rename, tmp_path):
+    # T16: Test happy-path fallback when os.rename fails with OSError
+    mock_rename.side_effect = OSError("Invalid cross-device link")
+
+    old_path = tmp_path / "src.txt"
+    old_path.write_text("")
+    new_path = tmp_path / "dst.txt"
+    stat_info = old_path.stat()
+
+    with patch("src.files.make_safe_path", side_effect=lambda x: str(x)):
+        files.move_file(old_path, new_path)
+
+    mock_rename.assert_called_once()
+    mock_copy.assert_called_once_with(str(old_path), str(new_path))
+    mock_utime.assert_called_once_with(str(new_path), (stat_info.st_atime, stat_info.st_mtime))
+    mock_unlink.assert_called_once_with(str(old_path))
+
+
+def test_collect_candidate_allows_zero_byte_files_by_default(tmp_path, monkeypatch):
+    """Zero-byte files are not filtered out by default when MIN_FILE_SIZE_MB is 0 or unset."""
+    from src import files
+
+    # Create a zero-byte .mkv file
+    zero_file = tmp_path / "empty.mkv"
+    zero_file.write_bytes(b"")
+
+    # Create a normal .mkv file (1 KB)
+    normal_file = tmp_path / "real.mkv"
+    normal_file.write_bytes(b"x" * 1024)
+
+    # Default MIN_FILE_SIZE_MB=0 — zero-byte should NOT be skipped
+    monkeypatch.delenv("MIN_FILE_SIZE_MB", raising=False)
+    files._failed_files_cooldown.clear()
+
+    candidates = files.collect_candidate_video_files(tmp_path)
+    assert normal_file in candidates
+    assert zero_file in candidates
+
+
+def test_collect_candidate_skips_undersized_files(tmp_path, monkeypatch):
+    """T17b: Files below MIN_FILE_SIZE_MB are skipped when threshold is set."""
+    from src import files
+
+    # Create a 100-byte .mp4 (below 1MB threshold)
+    small_file = tmp_path / "tiny.mp4"
+    small_file.write_bytes(b"x" * 100)
+
+    # Create a 2MB .mp4 (above threshold)
+    big_file = tmp_path / "big.mp4"
+    big_file.write_bytes(b"x" * (2 * 1024 * 1024))
+
+    monkeypatch.setenv("MIN_FILE_SIZE_MB", "1")
+    files._failed_files_cooldown.clear()
+
+    candidates = files.collect_candidate_video_files(tmp_path)
+    assert big_file in candidates
+    assert small_file not in candidates
+
+
+def test_daemon_summary_counts_on_failure(monkeypatch):
+    """T18: Verify daemon summary outputs correct success/failure counts on failure."""
+    import main
+
+    args = MagicMock(path=None, only_rename=False, simulate=False)
+    dummy_df = pd.DataFrame([{"File": "A.mkv", "Original": "A.mkv", "Corrected": "A.mkv", "Path": "/path/A.mkv"}])
+    with (
+        patch("src.files.search_media_files", return_value=(dummy_df, dummy_df)),
+        patch("src.utils.get_corrected_media_filenames", return_value=dummy_df),
+        patch("src.files.sort_media_files", return_value=[("/path/A.mkv", "/dest/A.mkv")]),
+        patch("src.files.move_media_files", return_value=(0, 1)),
+        patch("src.ui.log_error") as mock_log_error,
+    ):
+        res = main.process_media(args, daemon=True, cycle=1)
+        assert res == 0
+        mock_log_error.assert_called_once_with("Check 1 : 0/1 files processed (1 failed)")
+
+
+def test_daemon_summary_counts_on_success(monkeypatch):
+    """T18b: Verify daemon summary outputs correct counts on full success."""
+    import main
+
+    args = MagicMock(path=None, only_rename=False, simulate=False)
+    dummy_df = pd.DataFrame([{"File": "A.mkv", "Original": "A.mkv", "Corrected": "A.mkv", "Path": "/path/A.mkv"}])
+    with (
+        patch("src.files.search_media_files", return_value=(dummy_df, dummy_df)),
+        patch("src.utils.get_corrected_media_filenames", return_value=dummy_df),
+        patch("src.files.sort_media_files", return_value=[("/path/A.mkv", "/dest/A.mkv")]),
+        patch("src.files.move_media_files", return_value=(3, 0)),
+        patch("src.ui.print_log") as mock_print_log,
+    ):
+        res = main.process_media(args, daemon=True, cycle=1)
+        assert res == 0
+        mock_print_log.assert_any_call("Check 1 : Successfully processed 3/3 file(s).")
+
+
+# ===================================================================
+# AUDIT REGRESSION TESTS (ITEMS 1, 2, 3, 4)
+# ===================================================================
+
+
+def test_docker_entrypoint_structure():
+    """Item 1: Verify docker-entrypoint.sh signal trapping and cooldown logic."""
+    script_path = Path(__file__).resolve().parent.parent / "docker-entrypoint.sh"
+    content = script_path.read_text(encoding="utf-8")
+
+    assert "trap 'kill -TERM \"$CHILD_PID\" 2>/dev/null' TERM INT" in content
+    assert 'wait "$CHILD_PID" 2>/dev/null || true' in content
+    assert "Waiting 30s cooldown before container termination" in content
+
+
+def test_move_file_cross_device_failure_cleans_up_incomplete_target(tmp_path):
+    """Item 2: Verify move_file deletes incomplete safe_new on copy failure."""
+    src_file = tmp_path / "source.mkv"
+    dst_file = tmp_path / "dest.mkv"
+    src_file.write_text("source video content")
+
+    # Simulate cross-device move where os.rename fails with OSError,
+    # shutil.copy creates the destination file partially, but then raises an exception (e.g. disk full)
+    def fake_copy(src, dst):
+        Path(dst).write_text("partial corrupted content")
+        raise OSError("Disk full while copying")
+
+    with (
+        patch("os.rename", side_effect=OSError("Invalid cross-device link")),
+        patch("shutil.copy", side_effect=fake_copy),
+        patch("src.files.make_safe_path", side_effect=lambda p: str(p)),
+        pytest.raises(files.FileOperationError) as exc_info,
+    ):
+        files.move_file(src_file, dst_file)
+
+    assert "Impossible to move the file" in str(exc_info.value)
+    # Source file must remain intact
+    assert src_file.exists()
+    # Incomplete target file must be cleaned up / unlinked
+    assert not dst_file.exists()
+
+
+def test_gemini_api_call_json_decode_error_logged(monkeypatch):
+    """Item 3: Verify JSONDecodeError in gemini_api_call is printed to logs."""
+    from src import ai_api
+    from src.config import config
+
+    monkeypatch.setattr(config, "GEMINI_API_KEY", "fake_key")
+    monkeypatch.setattr(config, "AI_PROVIDER", "gemini")
+
+    dummy_info = {
+        "File": "broken.mkv",
+        "Folder": "downloads",
+        "Path": "/path/broken.mkv",
+        "Clean": "broken",
+        "Parse": "broken",
+        "Media": "movie",
+    }
+
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.text = "NOT_A_VALID_JSON_OBJECT"
+    mock_client.models.generate_content.return_value = mock_response
+
+    with (
+        patch("src.ai_api.genai.Client", return_value=mock_client),
+        patch("src.api.print_log") as mock_print_log,
+    ):
+        result = ai_api.gemini_api_call(dummy_info)
+
+    assert result == [False, None, None, None, None]
+    assert any("Failed to parse Gemini response as JSON" in str(call_arg) for call_arg in mock_print_log.call_args_list)
+
+
+def test_api_call_invalid_json_response(monkeypatch):
+    """Item 4: Verify api_call catches JSONDecodeError on HTTP 200 gracefully."""
+    import json
+    from src import tmdb_api
+    from src.config import config
+
+    monkeypatch.setattr(config, "TMDB_API_KEY", "fake_key")
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.side_effect = json.JSONDecodeError("Expecting value", "<html>502 Bad Gateway</html>", 0)
+
+    with (
+        patch("src.tmdb_api.requests.get", return_value=mock_resp),
+        patch("src.api.print_log") as mock_print_log,
+    ):
+        result = tmdb_api.api_call("Inception", "2010", "en-US", "movie")
+
+    assert result == [False, None, None, None]
+    assert any("TMDB API returned invalid JSON" in str(call_arg) for call_arg in mock_print_log.call_args_list)

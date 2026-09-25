@@ -24,6 +24,7 @@ Key improvements over the original implementation:
 from __future__ import annotations
 
 import json
+from datetime import datetime
 import os
 import re
 import shutil
@@ -42,6 +43,8 @@ from src.config import config
 from src.exceptions import FileOperationError, FolderNotFoundError
 from src.filename_processing import sanitize_filename
 from src.runtime_config import runtime
+
+_failed_files_cooldown = {}
 
 
 # ── Constants ────────────────────────────────────────────────────────────────
@@ -129,11 +132,32 @@ def resolve_search_directory(path: str | None = None) -> Path | None:
 
 def collect_candidate_video_files(target_dir: Path) -> list[Path]:
     """Recursively scans *target_dir* and returns non-locked video files."""
+    global _failed_files_cooldown
     candidates: list[Path] = []
+    now = datetime.now()
+
+    # Clean up old cooldowns (older than 24 hours)
+    _failed_files_cooldown = {k: v for k, v in _failed_files_cooldown.items() if (now - v).total_seconds() < 86400}
+
+    # Check for minimum file size (defaults to 0, meaning disabled / no filtering)
+    min_size_mb = float(os.environ.get("MIN_FILE_SIZE_MB", "0"))
+    min_size_bytes = int(min_size_mb * 1024 * 1024)
     for file_path in target_dir.rglob("*"):
+        if str(file_path.resolve()) in _failed_files_cooldown:
+            # Skip silently if in 24h cooldown
+            continue
+
         if file_path.suffix.lower() in PARTIAL_EXTENSIONS:
             continue
         if file_path.suffix.lower() in VIDEO_EXTENSIONS:
+            try:
+                st = file_path.stat()
+                if min_size_mb > 0 and st.st_size < min_size_bytes:
+                    ui.log_info(f"Skipping undersized file: {file_path.name}")
+                    continue
+            except OSError:
+                continue
+
             if is_file_locked(file_path):
                 ui.print_log(f"Skipping active/locked download: {file_path.name}")
                 continue
@@ -473,10 +497,12 @@ def sort_media_files(clean_data_table: pd.DataFrame) -> list[list[Path]]:
 def move_file(old_path: Path | str, new_path: Path | str) -> None:
     """Moves a single file from *old_path* to *new_path*.
 
+    Attempts an atomic ``os.rename()`` first.  On cross-device ``OSError``,
+    falls back to ``shutil.copy()`` + ``os.utime()`` + ``os.unlink()``
+    (no ``chmod``, safe for ZFS restricted-ACL datasets).
+
     Raises :exc:`FileExistsError` when the destination already exists.
     Raises :exc:`~src.exceptions.FileOperationError` on unexpected OS errors.
-
-    B2 fix: message is printed via ``ui.print_log`` before raising.
     """
     old_abs = Path(old_path).resolve()
     new_abs = Path(new_path).resolve()
@@ -492,11 +518,21 @@ def move_file(old_path: Path | str, new_path: Path | str) -> None:
     safe_new = make_safe_path(new_abs)
 
     try:
-        shutil.move(safe_old, safe_new)
-    except Exception as e:
-        msg = ui.print_error(f" Error: Impossible to move the file\n Old path {safe_old}\n New path {safe_new}", e)
-        ui.print_log(msg)
-        raise FileOperationError(msg) from e
+        os.rename(safe_old, safe_new)
+    except OSError:
+        try:
+            shutil.copy(safe_old, safe_new)
+            stat_info = os.stat(safe_old)
+            os.utime(safe_new, (stat_info.st_atime, stat_info.st_mtime))
+            os.unlink(safe_old)
+        except Exception as e:
+            if os.path.exists(safe_new) and os.path.exists(safe_old):
+                try:
+                    os.unlink(safe_new)
+                except OSError:
+                    pass
+            msg = ui.print_error(f" Error: Impossible to move the file\n Old path {safe_old}\n New path {safe_new}", e)
+            raise FileOperationError(msg) from e
 
 
 def remove_empty_folders(target_path: Path | str) -> None:
@@ -596,7 +632,7 @@ def move_media_files(
     paths: list,
     clean_data_table: pd.DataFrame | None = None,
     source_path: str | None = None,
-) -> None:
+) -> tuple[int, int]:
     """Moves all (old, new) path pairs returned by :func:`sort_media_files`.
 
     B3/P2 fix: reads ``NOT_SORTED_MEDIA_FILES_FOLDER`` live from ``config``
@@ -611,12 +647,18 @@ def move_media_files(
     tv_dir = Path(tv_folder) if tv_folder else None
     lookup = build_destination_lookup(clean_data_table)
 
+    global _failed_files_cooldown
     for old, new in paths:
         success, failed_file = execute_single_file_move(old, new, lookup, movies_dir, tv_dir)
         if success:
             success_count += 1
+            old_key = str(Path(old).resolve())
+            if old_key in _failed_files_cooldown:
+                del _failed_files_cooldown[old_key]
         else:
             failed_moves.append(failed_file)
+            old_key = str(Path(old).resolve())
+            _failed_files_cooldown[old_key] = datetime.now()
 
     if not runtime.daemon_enabled:
         if success_count > 0:
@@ -628,6 +670,8 @@ def move_media_files(
     cleanup_target = Path(source_path) if source_path else (Path(not_sorted_folder) if not_sorted_folder else None)
     if cleanup_target:
         remove_empty_folders(cleanup_target)
+
+    return success_count, len(failed_moves)
 
 
 # ── ffprobe metadata extraction ──────────────────────────────────────────────
@@ -714,12 +758,18 @@ def get_metadata_with_ffprobe(file_path: str | Path) -> dict | None:
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
     except subprocess.CalledProcessError as e:
-        msg = ui.print_error("Error: ffprobe exited with non-zero status", e)
-        ui.print_log(msg)
+        if runtime.daemon_enabled and not runtime.verbose_enabled:
+            ui.log_info(f"Warning: ffprobe failed for {Path(file_path).name}")
+        else:
+            msg = ui.print_error("Error: ffprobe exited with non-zero status", e)
+            ui.print_log(msg)
         return None
     except Exception as e:
-        msg = ui.print_error("Error: An error occurred while running ffprobe", e)
-        ui.print_log(msg)
+        if runtime.daemon_enabled and not runtime.verbose_enabled:
+            ui.log_info(f"Warning: ffprobe encountered an error for {Path(file_path).name}")
+        else:
+            msg = ui.print_error("Error: An error occurred while running ffprobe", e)
+            ui.print_log(msg)
         return None
 
     # P5 fix: handle non-JSON output separately

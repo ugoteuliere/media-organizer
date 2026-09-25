@@ -223,7 +223,7 @@ class ConfigManager:
             self.parser.add_section("paths")
         self.parser.set("paths", "movies_folder", "/data/Movies")
         self.parser.set("paths", "tv_shows_folder", "/data/TV_Shows")
-        self.parser.set("paths", "not_sorted_media_files_folder", "/data/input")
+        self.parser.set("paths", "not_sorted_media_files_folder", "/data/Downloads")
 
         if not self.parser.has_section("options"):
             self.parser.add_section("options")
@@ -306,7 +306,7 @@ class ConfigManager:
             if section_dot_key == KEY_TV_SHOWS_FOLDER:
                 return ("/data/TV_Shows", "DEFAULT")
             if section_dot_key == KEY_INPUT_FOLDER:
-                return ("/data/input", "DEFAULT")
+                return ("/data/Downloads", "DEFAULT")
             if section_dot_key in (KEY_DAEMON, KEY_BYPASS, KEY_VERBOSE):
                 return (True, "DEFAULT")
             if section_dot_key == KEY_NOTIFY_ON_ERROR:

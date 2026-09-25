@@ -1,7 +1,7 @@
 [paths]
 movies_folder = /data/Movies
 tv_shows_folder = /data/TV_Shows
-not_sorted_media_files_folder = /data/input
+not_sorted_media_files_folder = /data/Downloads
 
 [api]
 tmdb_api_key = 

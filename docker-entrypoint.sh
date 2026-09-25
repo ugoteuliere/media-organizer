@@ -5,6 +5,9 @@ set -e
 PUID=${PUID:-1000}
 PGID=${PGID:-1000}
 
+# Apply UMASK (default: 002 = group-writable)
+umask "${UMASK:-002}"
+
 if [ -d /config ] && [ ! -f /config/config.ini ]; then
     echo "No config file found in /config, copying sample one..." >&2
     cp /app/docker_sample_config /config/config.ini 2>/dev/null || true
@@ -28,6 +31,23 @@ if [ "$(id -u)" = "0" ]; then
     # Ensure /config and /app/log directories have proper ownership for organizer
     [ -d /config ] && chown -R organizer:organizer /config 2>/dev/null || true
     [ -d /app/log ] && chown -R organizer:organizer /app/log 2>/dev/null || true
+
+    
+    # T12: Startup Diagnostics
+    echo "-------------------------------------"
+    echo "media-organizer v2.0.0"
+    echo "-------------------------------------"
+    echo "UID: $PUID  GID: $PGID  UMASK: ${UMASK:-002}"
+    if [ -f /config/config.ini ]; then echo "Config: /config/config.ini [found]"; else echo "Config: /config/config.ini [missing]"; fi
+    echo "Volumes:"
+    for v in /data/Downloads /data/Movies /data/TV_Shows /config /app/log; do
+        if [ -d "$v" ]; then
+            if [ -w "$v" ]; then echo "  $v .. [OK: rw]"; else echo "  $v .. [ERROR: read-only]"; fi
+        else
+            echo "  $v .. [Missing]"
+        fi
+    done
+    echo "-------------------------------------"
 
     # If first argument is an existing command in PATH (like bash, sh, ffmpeg, ffprobe) and not a media-organizer subcommand
     if [ $# -gt 0 ] && command -v "$1" > /dev/null 2>&1 && [ "$1" != "config" ] && [ "$1" != "configure" ] && [ "$1" != "media-organizer" ]; then

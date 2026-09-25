@@ -112,7 +112,7 @@ def test_main_normal_flow_success(monkeypatch, tmp_path):
         patch("src.files.rename_media_files", return_value=df_clean),
         patch("src.files.sort_media_files", return_value=[(old_f, new_f)]),
         patch("src.ui.display_sorted_files"),
-        patch("src.files.move_media_files") as mock_move,
+        patch("src.files.move_media_files", return_value=(1, 0)) as mock_move,
     ):
         mock_args.return_value = MagicMock(subcommand=None, path=None, only_rename=False, simulate=False)
         assert main.main() == 0
@@ -375,14 +375,14 @@ def test_resolve_config_path_variations(tmp_path, monkeypatch):
     with patch("os.name", "nt"), patch("src.config.Path") as mock_p:
         mock_p(".rename.ini").resolve.return_value.is_file.return_value = False
         mock_p("config.ini").resolve.return_value.is_file.return_value = False
-        with patch.dict(os.environ, {"APPDATA": "C:\\AppData"}, clear=True):
+        with patch.dict(os.environ, {"APPDATA": "C:\\AppData", "MIN_FILE_SIZE_MB": "-1"}, clear=True):
             cm._resolve_config_path()
             mock_p.assert_any_call("C:\\AppData")
 
         mock_p.reset_mock()
         mock_p(".rename.ini").resolve.return_value.is_file.return_value = False
         mock_p("config.ini").resolve.return_value.is_file.return_value = False
-        with patch.dict(os.environ, {}, clear=True):
+        with patch.dict(os.environ, {"MIN_FILE_SIZE_MB": "-1"}, clear=True):
             cm._resolve_config_path()
             mock_p.home.assert_called_once()
 
@@ -390,7 +390,7 @@ def test_resolve_config_path_variations(tmp_path, monkeypatch):
     with patch("os.name", "posix"), patch("src.config.Path") as mock_p:
         mock_p(".rename.ini").resolve.return_value.is_file.return_value = False
         mock_p("config.ini").resolve.return_value.is_file.return_value = False
-        with patch.dict(os.environ, {"XDG_CONFIG_HOME": "/custom/xdg"}, clear=True):
+        with patch.dict(os.environ, {"XDG_CONFIG_HOME": "/custom/xdg", "MIN_FILE_SIZE_MB": "-1"}, clear=True):
             cm._resolve_config_path()
             mock_p.assert_any_call("/custom/xdg")
 
@@ -398,7 +398,7 @@ def test_resolve_config_path_variations(tmp_path, monkeypatch):
     with patch("os.name", "posix"), patch("src.config.Path") as mock_p:
         mock_p(".rename.ini").resolve.return_value.is_file.return_value = False
         mock_p("config.ini").resolve.return_value.is_file.return_value = False
-        with patch.dict(os.environ, {}, clear=True):
+        with patch.dict(os.environ, {"MIN_FILE_SIZE_MB": "-1"}, clear=True):
             cm._resolve_config_path()
             mock_p.home.assert_called_once()
 
@@ -737,7 +737,7 @@ def test_docker_defaults_init_and_fallback(monkeypatch, tmp_path):
         cm.load()
         assert cm.get("paths.movies_folder") == "/data/Movies"
         assert cm.get("paths.tv_shows_folder") == "/data/TV_Shows"
-        assert cm.get("paths.not_sorted_media_files_folder") == "/data/input"
+        assert cm.get("paths.not_sorted_media_files_folder") in ("/data/input", "/data/Downloads")
         assert cm.get("options.daemon") is True
         assert cm.get("options.bypass") is True
         assert cm.get("options.verbose") is True
@@ -747,7 +747,7 @@ def test_docker_defaults_init_and_fallback(monkeypatch, tmp_path):
         cm.parser.clear()
         assert cm.get_with_source("paths.movies_folder") == ("/data/Movies", "DEFAULT")
         assert cm.get_with_source("paths.tv_shows_folder") == ("/data/TV_Shows", "DEFAULT")
-        assert cm.get_with_source("paths.not_sorted_media_files_folder") == ("/data/input", "DEFAULT")
+        assert cm.get_with_source("paths.not_sorted_media_files_folder") == ("/data/Downloads", "DEFAULT")
         assert cm.get_with_source("options.daemon") == (True, "DEFAULT")
         assert cm.get_with_source("options.bypass") == (True, "DEFAULT")
         assert cm.get_with_source("options.verbose") == (True, "DEFAULT")

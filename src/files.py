@@ -142,7 +142,7 @@ def collect_candidate_video_files(target_dir: Path) -> list[Path]:
     # Check for minimum file size (defaults to 0, meaning only skip truly empty files)
     min_size_mb = float(os.environ.get("MIN_FILE_SIZE_MB", "0"))
     min_size_bytes = int(min_size_mb * 1024 * 1024)
-        for file_path in target_dir.rglob("*"):
+    for file_path in target_dir.rglob("*"):
         if str(file_path.resolve()) in _failed_files_cooldown:
             # Skip silently if in 24h cooldown
             continue

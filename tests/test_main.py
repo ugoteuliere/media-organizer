@@ -2418,18 +2418,18 @@ def test_process_media_clean_data_empty_daemon_logging():
 def test_move_file_cross_device_fallback(mock_unlink, mock_utime, mock_stat, mock_copy, mock_rename, tmp_path):
     # T16: Test happy-path fallback when os.rename fails with OSError
     mock_rename.side_effect = OSError("Invalid cross-device link")
-    
+
     class FakeStat:
         st_atime = 1000
         st_mtime = 2000
     mock_stat.return_value = FakeStat()
-    
+
     old_path = tmp_path / "src.txt"
     new_path = tmp_path / "dst.txt"
-    
+
     with patch("src.files.make_safe_path", side_effect=lambda x: str(x)):
         files.move_file(old_path, new_path)
-        
+
     mock_rename.assert_called_once()
     mock_copy.assert_called_once_with(str(old_path), str(new_path))
     mock_utime.assert_called_once_with(str(new_path), (1000, 2000))

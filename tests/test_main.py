@@ -2605,4 +2605,3 @@ def test_api_call_invalid_json_response(monkeypatch):
 
     assert result == [False, None, None, None]
     assert any("TMDB API returned invalid JSON" in str(call_arg) for call_arg in mock_print_log.call_args_list)
-

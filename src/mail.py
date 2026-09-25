@@ -162,8 +162,9 @@ def _build_text_email(title: str, badge_text: str, rows: list, error_details: st
     return "\n".join(lines)
 
 
-def _dispatch_email(msg: EmailMessage):
+def _dispatch_email(msg: EmailMessage, purpose: str = "notification email"):
     """Deliver EmailMessage using Gmail SMTP over SSL."""
+    from src.runtime_config import runtime
     sender_email, password = _get_credentials()
     if not sender_email or not password:
         return
@@ -171,12 +172,16 @@ def _dispatch_email(msg: EmailMessage):
     context = ssl.create_default_context()
     context.minimum_version = ssl.TLSVersion.TLSv1_2
 
-    ui.print_log("Connecting to server...")
+    if not runtime.daemon_enabled:
+        ui.print_log("Connecting to server...")
     try:
         with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
             server.login(sender_email, password)
             server.send_message(msg)
-            ui.print_log("Success: Email sent successfully!")
+            if runtime.daemon_enabled:
+                ui.log_info(f"Success: {purpose} sent successfully")
+            else:
+                ui.print_log(f"Success: {purpose} sent successfully!")
     except smtplib.SMTPAuthenticationError as e:
         raise RuntimeError(ui.print_error(" ❌ Error: Authentication failed. Check your email and password", e))
     except Exception as e:
@@ -231,7 +236,7 @@ def send_media_success_email(
     msg.add_alternative(html_content, subtype="html")
 
     try:
-        _dispatch_email(msg)
+        _dispatch_email(msg, purpose="success notification")
     except Exception as e:
         ui.print_log(f"⚠️ Warning: Failed to send success email: {e}")
 
@@ -272,7 +277,7 @@ def send_email(message: str, affected_file: str = None, exception: Exception = N
     msg.set_content(text_content)
     msg.add_alternative(html_content, subtype="html")
 
-    _dispatch_email(msg)
+    _dispatch_email(msg, purpose="error alert")
 
 
 def send_error_email(error_message: str, affected_file: str = None, exception: Exception = None):
@@ -316,6 +321,6 @@ def send_tag_learned_email(tags: list[str], filename: str, media_title: str = No
     msg.add_alternative(html_content, subtype="html")
 
     try:
-        _dispatch_email(msg)
+        _dispatch_email(msg, purpose="error alert")
     except Exception as e:
         ui.print_log(f"⚠️ Warning: Failed to send tag learned email: {e}")

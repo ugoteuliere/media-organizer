@@ -5,6 +5,9 @@ set -e
 PUID=${PUID:-1000}
 PGID=${PGID:-1000}
 
+# Apply UMASK (default: 002 = group-writable)
+umask "${UMASK:-002}"
+
 if [ -d /config ] && [ ! -f /config/config.ini ]; then
     echo "No config file found in /config, copying sample one..." >&2
     cp /app/docker_sample_config /config/config.ini 2>/dev/null || true

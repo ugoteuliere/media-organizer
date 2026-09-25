@@ -250,9 +250,9 @@ services:
       - PGID=1000
       - TMDB_API_KEY=your_tmdb_api_key_here
     volumes:
-      - /mnt/storage/downloads:/data/input
-      - /mnt/storage/movies:/data/Movies
-      - /mnt/storage/series:/data/TV_Shows
+      - /mnt/storage/media:/data
+      # WARNING: Use a single parent mount point to ensure file moves are instantaneous.
+      # Avoid separate volumes for downloads and movies as it breaks file renaming on ZFS datasets.
 ```
 
 Start the container in the background:
@@ -267,7 +267,8 @@ docker compose up -d
 
 | Volume Mount | Type | Purpose | Description |
 | :--- | :--- | :--- | :--- |
-| `/data/input` | **Required** | Source | Incoming / unsorted media directory to scan and organize. |
+| `/data/Downloads` | **Required** | Source | Incoming / unsorted media directory to scan and organize. |
+| `/data` | **Recommended** | Parent | Single unified mount for instantaneous file moves (avoids ZFS permission errors). |
 | `/data/Movies` | **Required** | Destination | Destination folder for recognized and sorted movies. |
 | `/data/TV_Shows` | **Required** | Destination | Destination folder for recognized and sorted TV series. |
 | `/config` | *Optional* | Configuration | Persistent storage for custom `config.ini`, `custom_tags.json`, `gemini_tags.json`. |
@@ -290,7 +291,10 @@ Each configuration setting is mapped to an environment variable:
 
 | Environment Variable | Config Key | Default in Docker | Description |
 | :--- | :--- | :--- | :--- |
-| `INPUT_FOLDER` | `paths.not_sorted_media_files_folder` | `/data/input` | Path to incoming media folder. |
+| `PUID` / `PGID` | *N/A* | `1000` | User ID and Group ID to run the container as. |
+| `UMASK` | *N/A* | `002` | Umask for newly created files and directories. |
+| `TZ` | *N/A* | `UTC` | Timezone for the container. |
+| `INPUT_FOLDER` | `paths.not_sorted_media_files_folder` | `/data/Downloads` | Path to incoming media folder. |
 | `MOVIES_FOLDER` | `paths.movies_folder` | `/data/Movies` | Path to destination movies folder. |
 | `TV_SHOWS_FOLDER` | `paths.tv_shows_folder` | `/data/TV_Shows` | Path to destination TV shows folder. |
 | `DAEMON` | `options.daemon` | `true` | Enables continuous polling background daemon. |
@@ -314,7 +318,18 @@ Each configuration setting is mapped to an environment variable:
 
 ---
 
-### Logging Behavior in Docker (Dual Logging)
+---
+
+### TrueNAS SCALE Deployment Guide
+
+When deploying on TrueNAS SCALE via custom Docker Compose apps (or TrueNAS Electric Eel), you **must** use the single-volume mount pattern to avoid `[Errno 1] Operation not permitted` failures during file moves.
+
+1. **Permissions Setup**:
+   - Ensure the dataset where your media resides uses the **`POSIX_OPEN`** or **`NFS4_OPEN`** ACL preset.
+   - The user configured via `PUID` (e.g. `950` for `truenas_admin`) and group `PGID` (e.g. `568` for `apps`) must have **Read/Write/Execute** permissions on the dataset.
+2. **Single Mount Point**:
+   - In TrueNAS SCALE, cross-dataset file moves trigger a fallback copy + `chmod` operation. TrueNAS ZFS datasets have `aclmode=restricted`, which blocks `chmod` operations by default.
+   - Mounting a single parent directory (e.g., `/mnt/pool/Media:/data`) ensures `media-organizer` uses atomic `rename` operations that skip `chmod` entirely.\n\n### Logging Behavior in Docker (Dual Logging)
 
 1. **Console Logging (Default)**:
    All events stream live to `stdout`/`stderr` viewable with `docker logs -f media-organizer`.
@@ -340,6 +355,8 @@ services:
     environment:
       - PUID=1000
       - PGID=1000
+      - UMASK=002
+      - TZ=UTC
       - POLLING_INTERVAL=10
       - TMDB_API_KEY=your_tmdb_api_key
       # AI Fallback
@@ -349,9 +366,11 @@ services:
       # Enable Dual Logging (stdout + /app/log)
       - LOG=true
     volumes:
-      - /mnt/storage/downloads:/data/input
-      - /mnt/storage/movies:/data/Movies
-      - /mnt/storage/series:/data/TV_Shows
+      - /mnt/storage/media:/data
       - /mnt/storage/appdata/media-organizer/config:/config
       - /mnt/storage/appdata/media-organizer/logs:/app/log
+      # (Alternatively, you can use separate mounts if on standard ext4 filesystem)
+      # - /mnt/storage/downloads:/data/Downloads
+      # - /mnt/storage/movies:/data/Movies
+      # - /mnt/storage/series:/data/TV_Shows
 ```

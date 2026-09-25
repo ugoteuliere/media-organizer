@@ -554,32 +554,43 @@ def _strip_emoji(text: str) -> str:
 
 
 def format_daemon_log(level: str, message: str, colorize: bool = False) -> str:
-    """Formats a message for daemon mode: strictly single-line with timestamp and level.
+    """Formats a message for daemon mode with timestamp and level.
 
-    Docker/daemon log lines are stripped of emoji characters so they appear
-    cleanly in structured log aggregators (e.g. Loki, Splunk, CloudWatch).
+    Docker/daemon log lines are stripped of emoji characters.
     """
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    clean_msg = re.sub(r"\s+", " ", str(message)).strip()
-    clean_msg = _strip_emoji(clean_msg)
-    raw = f"{timestamp} [{level}] {clean_msg}"
-    if colorize:
-        if level == "ERROR":
-            return f"\033[31m{raw}\033[0m"
-        if level == "SUCCESS":
-            return f"\033[32m{raw}\033[0m"
-    return raw
+    clean_msg = _strip_emoji(str(message))
+    
+    if level != "ERROR":
+        clean_msg = re.sub(r"\s+", " ", clean_msg).strip()
+    else:
+        # Strip /data/ prefix for cleaner relative paths
+        clean_msg = clean_msg.replace("/data/", "").strip()
+        
+    lines = []
+    for m in clean_msg.split("\n"):
+        if not m.strip():
+            continue
+        raw = f"{timestamp} [{level}] {m.strip()}"
+        if colorize:
+            if level == "ERROR":
+                raw = f"\033[31m{raw}\033[0m"
+            elif level == "SUCCESS":
+                raw = f"\033[32m{raw}\033[0m"
+        lines.append(raw)
+    return "\n".join(lines)
 
 
+_log_warning_emitted = False
 def _emit_daemon_log(level: str, message: str, stream=None):
     """Outputs a single-line formatted log in daemon mode."""
-    global _last_log_cleanup_date
+    global _last_log_cleanup_date, _log_warning_emitted
     if stream is None:
         stream = sys.stderr if level == "ERROR" else sys.stdout
 
     line = format_daemon_log(level, message, colorize=False)
     should_write_file = runtime.log_enabled or runtime.log_mode in ("file", "both")
-    should_print_console = (not should_write_file) or runtime.log_mode == "both"
+    should_print_console = True  # Always print to console in daemon mode
 
     if should_write_file:
         try:
@@ -591,8 +602,11 @@ def _emit_daemon_log(level: str, message: str, stream=None):
             path = log_dir / f"{today}.txt"
             with open(path, "a", encoding="utf-8") as f:
                 f.write(f"{line}\n")
-        except OSError:
-            pass
+        except OSError as e:
+            if not _log_warning_emitted:
+                sys.stderr.write(f"Warning: Failed to write to /app/log ({e}). Falling back to console-only logging.\n")
+                sys.stderr.flush()
+                _log_warning_emitted = True
 
     if should_print_console:
         is_docker = config.is_docker_environment()
@@ -632,7 +646,7 @@ def print_log(message, *, level: str | None = None) -> None:
     B14 fix: accepts an optional explicit *level* parameter instead of relying
     on heuristic emoji/keyword scanning to determine severity in daemon mode.
     """
-    global _last_log_cleanup_date
+    global _last_log_cleanup_date, _log_warning_emitted
     if runtime.daemon_enabled:
         msg_str = str(message).strip()
         if level is not None:
@@ -665,8 +679,11 @@ def print_log(message, *, level: str | None = None) -> None:
             hour = datetime.now().strftime("%H:%M:%S")
             with open(path, "a", encoding="utf-8") as f:
                 f.write(f"[{hour}] {str(message)}\n")
-        except OSError:
-            pass
+        except OSError as e:
+            if not _log_warning_emitted:
+                sys.stderr.write(f"Warning: Failed to write to /app/log ({e}). Falling back to console-only logging.\n")
+                sys.stderr.flush()
+                _log_warning_emitted = True
 
     if should_print_console:
         print(message)

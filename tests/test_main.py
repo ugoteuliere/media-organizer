@@ -523,10 +523,10 @@ def test_move_file_raises_runtime_error(tmp_path):
     new_path = tmp_path / "dest.txt"
 
     # 2. ACTION & VERIFY
-    with patch("src.ui.VERBOSE_ENABLED", True):
+    with patch("src.runtime_config.runtime.verbose_enabled", True):
         with patch("src.files.make_safe_path", side_effect=lambda x: str(x)):
             # We force shutil.move to crash with a fake PermissionError
-            with patch("shutil.move", side_effect=PermissionError("Access denied")):
+            with patch("os.rename", side_effect=PermissionError("Access denied")), patch("shutil.copy", side_effect=PermissionError("Access denied")):
                 # We catch your custom RuntimeError
                 with pytest.raises(RuntimeError) as exc_info:
                     files.move_file(old_path, new_path)
@@ -890,7 +890,7 @@ def test_send_email_success(mock_ssl_context, mock_smtp, mock_print):
     # Did it print the correct success logs?
     assert mock_print.call_count == 2
     mock_print.assert_any_call("Connecting to server...")
-    mock_print.assert_any_call("Success: Email sent successfully!")
+    mock_print.assert_any_call("Success: error alert sent successfully!")
 
 
 @patch_email_globals

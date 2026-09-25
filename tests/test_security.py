@@ -131,7 +131,7 @@ def test_send_tag_learned_email_escapes_html(monkeypatch):
 
     sent_messages = []
 
-    def mock_dispatch(msg):
+    def mock_dispatch(msg, **kwargs):
         sent_messages.append(msg)
 
     monkeypatch.setattr(mail, "_dispatch_email", mock_dispatch)

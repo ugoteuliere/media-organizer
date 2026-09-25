@@ -223,7 +223,7 @@ class ConfigManager:
             self.parser.add_section("paths")
         self.parser.set("paths", "movies_folder", "/data/Movies")
         self.parser.set("paths", "tv_shows_folder", "/data/TV_Shows")
-        self.parser.set("paths", "not_sorted_media_files_folder", "/data/input")
+        self.parser.set("paths", "not_sorted_media_files_folder", "/data/Downloads")
 
         if not self.parser.has_section("options"):
             self.parser.add_section("options")

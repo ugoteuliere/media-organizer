@@ -758,7 +758,7 @@ def test_process_media_full_flow(tmp_path):
         patch("src.files.rename_media_files", return_value=clean_df) as mock_rename,
         patch("src.files.sort_media_files", return_value=sorted_paths),
         patch("src.ui.display_sorted_files"),
-        patch("src.files.move_media_files") as mock_move,
+        patch("src.files.move_media_files", return_value=(1, 0)) as mock_move,
         patch("src.ui.user_confirmation"),
     ):
         ret = main.process_media(args, daemon=True)

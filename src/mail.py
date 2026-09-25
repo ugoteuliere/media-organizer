@@ -322,6 +322,6 @@ def send_tag_learned_email(tags: list[str], filename: str, media_title: str = No
     msg.add_alternative(html_content, subtype="html")
 
     try:
-        _dispatch_email(msg, purpose="error alert")
+        _dispatch_email(msg, purpose="tag learned notification")
     except Exception as e:
         ui.print_log(f"⚠️ Warning: Failed to send tag learned email: {e}")

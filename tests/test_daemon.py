@@ -972,3 +972,39 @@ def test_cleanup_old_logs_in_print_log(tmp_path, monkeypatch):
         # Second call on same day should not invoke cleanup_old_logs again
         ui.print_log("Second log message today")
         assert mock_cleanup.call_count == 1
+
+def test_failed_files_cooldown(tmp_path, monkeypatch):
+    import datetime
+    from src import files
+    
+    # Setup test file
+    test_file = tmp_path / "video.mkv"
+    test_file.touch()
+    
+    # Ensure it's large enough if MIN_FILE_SIZE_MB is active (which it defaults to 0)
+    with open(test_file, "wb") as f:
+        f.write(b"0" * 1024 * 1024)
+        
+    # Reset cooldown
+    files._failed_files_cooldown.clear()
+    
+    # 1. Normal collection -> finds file
+    candidates = files.collect_candidate_video_files(tmp_path)
+    assert test_file in candidates
+    
+    # 2. Add to cooldown (simulating a failure)
+    test_key = str(test_file.resolve())
+    files._failed_files_cooldown[test_key] = datetime.datetime.now()
+    
+    # 3. Collection should now skip it
+    candidates = files.collect_candidate_video_files(tmp_path)
+    assert test_file not in candidates
+    
+    # 4. Fast forward time by 25 hours
+    old_time = datetime.datetime.now() - datetime.timedelta(hours=25)
+    files._failed_files_cooldown[test_key] = old_time
+    
+    # 5. Collection should now find it again and clean up the old entry
+    candidates = files.collect_candidate_video_files(tmp_path)
+    assert test_file in candidates
+    assert test_key not in files._failed_files_cooldown

@@ -11,11 +11,13 @@ def test_format_daemon_log():
     pattern = r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \[INFO\] Test message$"
     assert re.match(pattern, line)
 
-    # Multi-line strings must be flattened to a single line
+    # Multi-line strings must be formatted correctly
     multiline = "Line 1\nLine 2\n\nLine 3"
-    flattened = ui.format_daemon_log("ERROR", multiline)
-    assert "\n" in flattened
-    pass
+    formatted = ui.format_daemon_log("ERROR", multiline)
+    lines = formatted.split("\n")
+    assert len(lines) == 3
+    for i, line in enumerate(lines):
+        assert re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \[ERROR\] Line " + str(i+1) + "$", line)
 
 
 def test_log_info_stdout(capsys, monkeypatch):
@@ -378,3 +380,35 @@ def test_docker_logging_colorization(capsys, monkeypatch):
     assert captured.out.startswith("\033[32m")
     assert captured.out.endswith("\033[0m\n")
     assert "[SUCCESS] 'source.mkv' -> 'dest.mkv'" in captured.out
+
+def test_dual_logging_in_daemon_mode(capsys, monkeypatch, tmp_path):
+    monkeypatch.setattr(ui.runtime, "daemon_enabled", True)
+    monkeypatch.setattr(ui.runtime, "log_enabled", True)
+    monkeypatch.setattr(ui.runtime, "log_mode", "file")
+    
+    import builtins
+    original_open = builtins.open
+    
+    written_files = {}
+    
+    def mock_open(file, mode="r", *args, **kwargs):
+        if "log" in str(file) or ".txt" in str(file):
+            import io
+            class StringIOWrapper(io.StringIO):
+                def close(self):
+                    written_files[str(file)] = self.getvalue()
+                    super().close()
+            return StringIOWrapper()
+        return original_open(file, mode, *args, **kwargs)
+        
+    monkeypatch.setattr(builtins, "open", mock_open)
+    
+    # Emit log
+    ui._emit_daemon_log("INFO", "Testing dual logging")
+    
+    # Check console
+    captured = capsys.readouterr()
+    assert "Testing dual logging" in captured.out
+    
+    # Check file
+    assert any("Testing dual logging" in content for content in written_files.values())

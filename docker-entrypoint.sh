@@ -32,6 +32,23 @@ if [ "$(id -u)" = "0" ]; then
     [ -d /config ] && chown -R organizer:organizer /config 2>/dev/null || true
     [ -d /app/log ] && chown -R organizer:organizer /app/log 2>/dev/null || true
 
+    
+    # T12: Startup Diagnostics
+    echo "-------------------------------------"
+    echo "media-organizer v2.0.0"
+    echo "-------------------------------------"
+    echo "UID: $CURRENT_UID  GID: $CURRENT_GID  UMASK: ${UMASK:-002}"
+    if [ -f /config/config.ini ]; then echo "Config: /config/config.ini [found]"; else echo "Config: /config/config.ini [missing]"; fi
+    echo "Volumes:"
+    for v in /data/Downloads /data/Movies /data/TV_Shows /config /app/log; do
+        if [ -d "$v" ]; then
+            if [ -w "$v" ]; then echo "  $v .. [OK: rw]"; else echo "  $v .. [ERROR: read-only]"; fi
+        else
+            echo "  $v .. [Missing]"
+        fi
+    done
+    echo "-------------------------------------"
+
     # If first argument is an existing command in PATH (like bash, sh, ffmpeg, ffprobe) and not a media-organizer subcommand
     if [ $# -gt 0 ] && command -v "$1" > /dev/null 2>&1 && [ "$1" != "config" ] && [ "$1" != "configure" ] && [ "$1" != "media-organizer" ]; then
         exec gosu organizer:organizer "$@"

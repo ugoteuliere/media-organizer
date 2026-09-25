@@ -142,10 +142,8 @@ def collect_candidate_video_files(target_dir: Path) -> list[Path]:
     # Check for minimum file size (defaults to 0, meaning only skip truly empty files)
     min_size_mb = float(os.environ.get("MIN_FILE_SIZE_MB", "0"))
     min_size_bytes = int(min_size_mb * 1024 * 1024)
-    is_testing = "PYTEST_CURRENT_TEST" in os.environ and os.environ.get("MIN_FILE_SIZE_MB") != "0"
-
-    for file_path in target_dir.rglob("*"):
-        if file_path in _failed_files_cooldown:
+        for file_path in target_dir.rglob("*"):
+        if str(file_path.resolve()) in _failed_files_cooldown:
             # Skip silently if in 24h cooldown
             continue
 
@@ -154,7 +152,7 @@ def collect_candidate_video_files(target_dir: Path) -> list[Path]:
         if file_path.suffix.lower() in VIDEO_EXTENSIONS:
             try:
                 st = file_path.stat()
-                if not is_testing and min_size_mb > 0 and st.st_size < min_size_bytes:
+                if min_size_mb > 0 and st.st_size < min_size_bytes:
                     ui.log_info(f"Skipping undersized file: {file_path.name}")
                     continue
             except OSError:
@@ -647,11 +645,13 @@ def move_media_files(
         success, failed_file = execute_single_file_move(old, new, lookup, movies_dir, tv_dir)
         if success:
             success_count += 1
-            if old in _failed_files_cooldown:
-                del _failed_files_cooldown[old]
+            old_key = str(Path(old).resolve())
+            if old_key in _failed_files_cooldown:
+                del _failed_files_cooldown[old_key]
         else:
             failed_moves.append(failed_file)
-            _failed_files_cooldown[old] = datetime.now()
+            old_key = str(Path(old).resolve())
+            _failed_files_cooldown[old_key] = datetime.now()
 
     if not runtime.daemon_enabled:
         if success_count > 0:

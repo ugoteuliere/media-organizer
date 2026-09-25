@@ -747,7 +747,7 @@ def test_docker_defaults_init_and_fallback(monkeypatch, tmp_path):
         cm.parser.clear()
         assert cm.get_with_source("paths.movies_folder") == ("/data/Movies", "DEFAULT")
         assert cm.get_with_source("paths.tv_shows_folder") == ("/data/TV_Shows", "DEFAULT")
-        assert cm.get_with_source("paths.not_sorted_media_files_folder") == ("/data/input", "DEFAULT")
+        assert cm.get_with_source("paths.not_sorted_media_files_folder") == ("/data/Downloads", "DEFAULT")
         assert cm.get_with_source("options.daemon") == (True, "DEFAULT")
         assert cm.get_with_source("options.bypass") == (True, "DEFAULT")
         assert cm.get_with_source("options.verbose") == (True, "DEFAULT")

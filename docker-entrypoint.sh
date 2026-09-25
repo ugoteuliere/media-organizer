@@ -33,6 +33,23 @@ if [ "$(id -u)" = "0" ]; then
     [ -d /app/log ] && chown -R organizer:organizer /app/log 2>/dev/null || true
 
     
+    # Dynamic volume path resolution (ConfigManager precedence: env vars -> config.ini -> defaults)
+    DIAG_PATHS=$(python3 -c '
+import configparser, os
+cfg = configparser.ConfigParser()
+if os.path.isfile("/config/config.ini"):
+    try:
+        cfg.read("/config/config.ini", encoding="utf-8")
+    except Exception:
+        pass
+inp = os.environ.get("INPUT_FOLDER") or cfg.get("paths", "not_sorted_media_files_folder", fallback="/data/Downloads")
+mov = os.environ.get("MOVIES_FOLDER") or cfg.get("paths", "movies_folder", fallback="/data/Movies")
+tv = os.environ.get("TV_SHOWS_FOLDER") or cfg.get("paths", "tv_shows_folder", fallback="/data/TV_Shows")
+print(inp)
+print(mov)
+print(tv)
+' 2>/dev/null || printf "%s\n%s\n%s\n" "${INPUT_FOLDER:-/data/Downloads}" "${MOVIES_FOLDER:-/data/Movies}" "${TV_SHOWS_FOLDER:-/data/TV_Shows}")
+
     # T12: Startup Diagnostics
     echo "-------------------------------------"
     echo "media-organizer v2.0.1"
@@ -40,13 +57,18 @@ if [ "$(id -u)" = "0" ]; then
     echo "UID: $PUID  GID: $PGID  UMASK: ${UMASK:-002}"
     if [ -f /config/config.ini ]; then echo "Config: /config/config.ini [found]"; else echo "Config: /config/config.ini [missing]"; fi
     echo "Volumes:"
-    for v in /data/Downloads /data/Movies /data/TV_Shows /config /app/log; do
+    while IFS= read -r v; do
+        [ -z "$v" ] && continue
         if [ -d "$v" ]; then
             if [ -w "$v" ]; then echo "  $v .. [OK: rw]"; else echo "  $v .. [ERROR: read-only]"; fi
         else
             echo "  $v .. [Missing]"
         fi
-    done
+    done << EOF
+$DIAG_PATHS
+/config
+/app/log
+EOF
     echo "-------------------------------------"
 
     # If first argument is an existing command in PATH (like bash, sh, ffmpeg, ffprobe) and not a media-organizer subcommand

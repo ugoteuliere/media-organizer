@@ -159,4 +159,3 @@ def mock_smtp_network_guard(monkeypatch):
     if "src.mail" in sys.modules:
         monkeypatch.setattr(sys.modules["src.mail"].smtplib, "SMTP_SSL", mock_cls)
         monkeypatch.setattr(sys.modules["src.mail"].smtplib, "SMTP", mock_cls)
-

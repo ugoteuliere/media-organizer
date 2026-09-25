@@ -17,7 +17,7 @@ def test_format_daemon_log():
     lines = formatted.split("\n")
     assert len(lines) == 3
     for i, line in enumerate(lines):
-        assert re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \[ERROR\] Line " + str(i+1) + "$", line)
+        assert re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \[ERROR\] Line " + str(i + 1) + "$", line)
 
 
 def test_log_info_stdout(capsys, monkeypatch):
@@ -388,6 +388,7 @@ def test_dual_logging_in_daemon_mode_file_fallback(capsys, monkeypatch, tmp_path
     monkeypatch.setattr(ui.runtime, "log_mode", "file")
 
     import builtins
+
     original_open = builtins.open
 
     written_files = {}
@@ -395,10 +396,12 @@ def test_dual_logging_in_daemon_mode_file_fallback(capsys, monkeypatch, tmp_path
     def mock_open(file, mode="r", *args, **kwargs):
         if "log" in str(file) or ".txt" in str(file):
             import io
+
             class StringIOWrapper(io.StringIO):
                 def close(self):
                     written_files[str(file)] = self.getvalue()
                     super().close()
+
             return StringIOWrapper()
         return original_open(file, mode, *args, **kwargs)
 

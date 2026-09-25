@@ -2410,6 +2410,7 @@ def test_process_media_clean_data_empty_daemon_logging():
         logged = " ".join([str(c[0][0]) for c in mock_log.call_args_list if c[0]])
         assert "Check 3 : No media to process" in logged
 
+
 @patch("src.files.os.rename")
 @patch("src.files.shutil.copy")
 @patch("src.files.os.stat")
@@ -2422,6 +2423,7 @@ def test_move_file_cross_device_fallback(mock_unlink, mock_utime, mock_stat, moc
     class FakeStat:
         st_atime = 1000
         st_mtime = 2000
+
     mock_stat.return_value = FakeStat()
 
     old_path = tmp_path / "src.txt"
@@ -2434,4 +2436,3 @@ def test_move_file_cross_device_fallback(mock_unlink, mock_utime, mock_stat, moc
     mock_copy.assert_called_once_with(str(old_path), str(new_path))
     mock_utime.assert_called_once_with(str(new_path), (1000, 2000))
     mock_unlink.assert_called_once_with(str(old_path))
-

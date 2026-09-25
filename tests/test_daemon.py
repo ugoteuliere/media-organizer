@@ -973,6 +973,7 @@ def test_cleanup_old_logs_in_print_log(tmp_path, monkeypatch):
         ui.print_log("Second log message today")
         assert mock_cleanup.call_count == 1
 
+
 def test_failed_files_cooldown(tmp_path, monkeypatch):
     import datetime
     from src import files

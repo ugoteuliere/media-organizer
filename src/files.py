@@ -24,9 +24,7 @@ Key improvements over the original implementation:
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta
-
-_failed_files_cooldown = {}
+from datetime import datetime
 import os
 import re
 import shutil
@@ -45,6 +43,8 @@ from src.config import config
 from src.exceptions import FileOperationError, FolderNotFoundError
 from src.filename_processing import sanitize_filename
 from src.runtime_config import runtime
+
+_failed_files_cooldown = {}
 
 
 # ── Constants ────────────────────────────────────────────────────────────────
@@ -135,7 +135,7 @@ def collect_candidate_video_files(target_dir: Path) -> list[Path]:
     global _failed_files_cooldown
     candidates: list[Path] = []
     now = datetime.now()
-    
+
     # Clean up old cooldowns (older than 24 hours)
     _failed_files_cooldown = {k: v for k, v in _failed_files_cooldown.items() if (now - v).total_seconds() < 86400}
 

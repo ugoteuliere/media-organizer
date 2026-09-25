@@ -560,13 +560,13 @@ def format_daemon_log(level: str, message: str, colorize: bool = False) -> str:
     """
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     clean_msg = _strip_emoji(str(message))
-    
+
     if level != "ERROR":
         clean_msg = re.sub(r"\s+", " ", clean_msg).strip()
     else:
         # Strip /data/ prefix for cleaner relative paths
         clean_msg = clean_msg.replace("/data/", "").strip()
-        
+
     lines = []
     for m in clean_msg.split("\n"):
         if not m.strip():

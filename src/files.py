@@ -526,6 +526,11 @@ def move_file(old_path: Path | str, new_path: Path | str) -> None:
             os.utime(safe_new, (stat_info.st_atime, stat_info.st_mtime))
             os.unlink(safe_old)
         except Exception as e:
+            if os.path.exists(safe_new) and os.path.exists(safe_old):
+                try:
+                    os.unlink(safe_new)
+                except OSError:
+                    pass
             msg = ui.print_error(f" Error: Impossible to move the file\n Old path {safe_old}\n New path {safe_new}", e)
             raise FileOperationError(msg) from e
 

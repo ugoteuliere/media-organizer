@@ -2508,3 +2508,101 @@ def test_daemon_summary_counts_on_success(monkeypatch):
         res = main.process_media(args, daemon=True, cycle=1)
         assert res == 0
         mock_print_log.assert_any_call("Check 1 : Successfully processed 3/3 file(s).")
+
+
+# ===================================================================
+# AUDIT REGRESSION TESTS (ITEMS 1, 2, 3, 4)
+# ===================================================================
+
+
+def test_docker_entrypoint_exit_code_preservation():
+    """Item 1: Verify docker-entrypoint.sh captures child exit code without || true masking."""
+    script_path = Path(__file__).resolve().parent.parent / "docker-entrypoint.sh"
+    content = script_path.read_text(encoding="utf-8")
+
+    # Assert that || true was removed from the wait call
+    assert 'wait "$CHILD_PID" 2>/dev/null || true' not in content
+    # Assert proper set +e / wait / EXIT_CODE=$? / set -e sequence
+    assert 'set +e\nwait "$CHILD_PID" 2>/dev/null\nEXIT_CODE=$?\nset -e' in content
+
+
+def test_move_file_cross_device_failure_cleans_up_incomplete_target(tmp_path):
+    """Item 2: Verify move_file deletes incomplete safe_new on copy failure."""
+    src_file = tmp_path / "source.mkv"
+    dst_file = tmp_path / "dest.mkv"
+    src_file.write_text("source video content")
+
+    # Simulate cross-device move where os.rename fails with OSError,
+    # shutil.copy creates the destination file partially, but then raises an exception (e.g. disk full)
+    def fake_copy(src, dst):
+        Path(dst).write_text("partial corrupted content")
+        raise OSError("Disk full while copying")
+
+    with (
+        patch("os.rename", side_effect=OSError("Invalid cross-device link")),
+        patch("shutil.copy", side_effect=fake_copy),
+        patch("src.files.make_safe_path", side_effect=lambda p: str(p)),
+        pytest.raises(files.FileOperationError) as exc_info,
+    ):
+        files.move_file(src_file, dst_file)
+
+    assert "Impossible to move the file" in str(exc_info.value)
+    # Source file must remain intact
+    assert src_file.exists()
+    # Incomplete target file must be cleaned up / unlinked
+    assert not dst_file.exists()
+
+
+def test_gemini_api_call_json_decode_error_logged(monkeypatch):
+    """Item 3: Verify JSONDecodeError in gemini_api_call is printed to logs."""
+    from src import ai_api
+    from src.config import config
+
+    monkeypatch.setattr(config, "GEMINI_API_KEY", "fake_key")
+    monkeypatch.setattr(config, "AI_PROVIDER", "gemini")
+
+    dummy_info = {
+        "File": "broken.mkv",
+        "Folder": "downloads",
+        "Path": "/path/broken.mkv",
+        "Clean": "broken",
+        "Parse": "broken",
+        "Media": "movie",
+    }
+
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.text = "NOT_A_VALID_JSON_OBJECT"
+    mock_client.models.generate_content.return_value = mock_response
+
+    with (
+        patch("src.ai_api.genai.Client", return_value=mock_client),
+        patch("src.api.print_log") as mock_print_log,
+    ):
+        result = ai_api.gemini_api_call(dummy_info)
+
+    assert result == [False, None, None, None, None]
+    assert any("Failed to parse Gemini response as JSON" in str(call_arg) for call_arg in mock_print_log.call_args_list)
+
+
+def test_api_call_invalid_json_response(monkeypatch):
+    """Item 4: Verify api_call catches JSONDecodeError on HTTP 200 gracefully."""
+    import json
+    from src import tmdb_api
+    from src.config import config
+
+    monkeypatch.setattr(config, "TMDB_API_KEY", "fake_key")
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.side_effect = json.JSONDecodeError("Expecting value", "<html>502 Bad Gateway</html>", 0)
+
+    with (
+        patch("src.tmdb_api.requests.get", return_value=mock_resp),
+        patch("src.api.print_log") as mock_print_log,
+    ):
+        result = tmdb_api.api_call("Inception", "2010", "en-US", "movie")
+
+    assert result == [False, None, None, None]
+    assert any("TMDB API returned invalid JSON" in str(call_arg) for call_arg in mock_print_log.call_args_list)
+

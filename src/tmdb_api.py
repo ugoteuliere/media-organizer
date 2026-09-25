@@ -82,7 +82,14 @@ def api_call(
         api.print_log(f" TMDB API call failed\n\n # Code : {response.status_code} \n\n # Query : {name} {year}\n")
         return [False, None, None, None]
 
-    data = response.json()
+    try:
+        data = response.json()
+    except Exception as e:
+        api.print_log(
+            print_error(f" Warning: TMDB API returned invalid JSON\n Query : {name} {year}", e)
+        )
+        return [False, None, None, None]
+
     results = data.get("results", [])
 
     if not results:

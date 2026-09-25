@@ -306,7 +306,7 @@ class ConfigManager:
             if section_dot_key == KEY_TV_SHOWS_FOLDER:
                 return ("/data/TV_Shows", "DEFAULT")
             if section_dot_key == KEY_INPUT_FOLDER:
-                return ("/data/input", "DEFAULT")
+                return ("/data/Downloads", "DEFAULT")
             if section_dot_key in (KEY_DAEMON, KEY_BYPASS, KEY_VERBOSE):
                 return (True, "DEFAULT")
             if section_dot_key == KEY_NOTIFY_ON_ERROR:

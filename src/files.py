@@ -154,8 +154,8 @@ def collect_candidate_video_files(target_dir: Path) -> list[Path]:
         if file_path.suffix.lower() in VIDEO_EXTENSIONS:
             try:
                 st = file_path.stat()
-                if not is_testing and min_size_mb >= 0 and (st.st_size == 0 or st.st_size < min_size_bytes):
-                    ui.log_info(f"Skipping zero-byte or undersized file: {file_path.name}")
+                if not is_testing and min_size_mb > 0 and st.st_size < min_size_bytes:
+                    ui.log_info(f"Skipping undersized file: {file_path.name}")
                     continue
             except OSError:
                 continue

@@ -52,7 +52,7 @@ print(tv)
 
     # T12: Startup Diagnostics
     echo "-------------------------------------"
-    echo "media-organizer v2.0.1"
+    echo "media-organizer"
     echo "-------------------------------------"
     echo "UID: $PUID  GID: $PGID  UMASK: ${UMASK:-002}"
     if [ -f /config/config.ini ]; then echo "Config: /config/config.ini [found]"; else echo "Config: /config/config.ini [missing]"; fi

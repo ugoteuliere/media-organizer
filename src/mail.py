@@ -179,10 +179,7 @@ def _dispatch_email(msg: EmailMessage, purpose: str = "notification email"):
         with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
             server.login(sender_email, password)
             server.send_message(msg)
-            if runtime.daemon_enabled:
-                ui.log_info(f"Success: {purpose} sent successfully")
-            else:
-                ui.print_log(f"Success: {purpose} sent successfully!")
+            ui.log_info("Email sent successfully")
     except smtplib.SMTPAuthenticationError as e:
         raise RuntimeError(ui.print_error(" ❌ Error: Authentication failed. Check your email and password", e))
     except Exception as e:
@@ -239,7 +236,7 @@ def send_media_success_email(
     try:
         _dispatch_email(msg, purpose="success notification")
     except Exception as e:
-        ui.print_log(f"⚠️ Warning: Failed to send success email: {e}")
+        ui.log_error(f"Error while trying to send the email: {e}")
 
 
 def send_email(message: str, affected_file: str = None, exception: Exception = None):
@@ -286,7 +283,7 @@ def send_error_email(error_message: str, affected_file: str = None, exception: E
     try:
         send_email(error_message, affected_file=affected_file, exception=exception)
     except Exception as e:
-        ui.print_log(f"⚠️ Warning: Failed to send error email: {e}")
+        ui.log_error(f"Error while trying to send the email: {e}")
 
 
 def send_tag_learned_email(tags: list[str], filename: str, media_title: str = None, file_path: str = None):
@@ -324,4 +321,4 @@ def send_tag_learned_email(tags: list[str], filename: str, media_title: str = No
     try:
         _dispatch_email(msg, purpose="tag learned notification")
     except Exception as e:
-        ui.print_log(f"⚠️ Warning: Failed to send tag learned email: {e}")
+        ui.log_error(f"Error while trying to send the email: {e}")

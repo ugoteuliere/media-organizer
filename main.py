@@ -96,7 +96,9 @@ def process_media(args, daemon: bool = False, cycle: int = 1) -> int:
         if not args.only_rename:
             paths = files.sort_media_files(clean_data_table)
             ui.display_sorted_files(paths)
-        ui.rich_print_log("\n[bold yellow]Simulation mode complete: No files were renamed or moved on disk.[/bold yellow]\n")
+        ui.rich_print_log(
+            "\n[bold yellow]Simulation mode complete: No files were renamed or moved on disk.[/bold yellow]\n"
+        )
         return 0
 
     if has_renames:
@@ -136,7 +138,7 @@ def process_media(args, daemon: bool = False, cycle: int = 1) -> int:
         if daemon:
             total = success_count + fail_count
             if fail_count > 0:
-                ui.log_error(f"Check {cycle} : {success_count}/{total} files processed ({fail_count} failed)")
+                ui.log_info(f"Check {cycle} : {success_count}/{total} files processed ({fail_count} failed)")
             else:
                 ui.print_log(f"Check {cycle} : Successfully processed {success_count}/{total} file(s).")
     else:
@@ -211,9 +213,7 @@ def run_daemon_loop(
                         full_tb = traceback.format_exc()
                         ui.log_error(f"Check {cycles}: Error: {e}")
                         try:
-                            mail.send_error_email(
-                                error_message=f"Check {cycles}: Error: {e}\n\n{full_tb}", exception=e
-                            )
+                            mail.send_error_email(error_message=f"Check {cycles}: Error: {e}\n\n{full_tb}", exception=e)
                         except BaseException:  # noqa: BLE001
                             pass
             else:
@@ -223,9 +223,7 @@ def run_daemon_loop(
                     full_tb = traceback.format_exc()
                     ui.log_error(f"Check {cycles}: Error: {e}")
                     try:
-                        mail.send_error_email(
-                            error_message=f"Check {cycles}: Error: {e}\n\n{full_tb}", exception=e
-                        )
+                        mail.send_error_email(error_message=f"Check {cycles}: Error: {e}\n\n{full_tb}", exception=e)
                     except BaseException:  # noqa: BLE001
                         pass
 
@@ -320,9 +318,7 @@ def main() -> int:
     except Exception as e:
         full_traceback = traceback.format_exc()
         error_message = (
-            f" Error: A critical, unexpected error occurred\n\n"
-            f" Exception: {e}\n\n"
-            f" Error logs: {full_traceback}\n"
+            f" Error: A critical, unexpected error occurred\n\n Exception: {e}\n\n Error logs: {full_traceback}\n"
         )
         ui.print_log(error_message)
         try:

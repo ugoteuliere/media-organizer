@@ -622,7 +622,7 @@ def test_move_media_files_error_email_failure_caught(tmp_path, monkeypatch):
     ):
         files.move_media_files([(bad_source, dest)])
         logged = " ".join([str(c[0][0]) for c in mock_log.call_args_list if c[0]])
-        assert "Failed to send error email" in logged
+        assert "Error while trying to send the email" in logged
 
 
 # =========================================================================
@@ -646,7 +646,7 @@ def test_send_media_success_email_dispatch_error_logged():
     ):
         mail.send_media_success_email("Test", "Test.mkv", "movie", "/dest/path")
         logged = " ".join([str(c[0][0]) for c in mock_log.call_args_list if c[0]])
-        assert "Failed to send success email: Timeout" in logged
+        assert "Error while trying to send the email: Timeout" in logged
 
 
 def test_send_email_with_exception_in_details():

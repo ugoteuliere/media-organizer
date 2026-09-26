@@ -760,7 +760,10 @@ def get_corrected_media_filenames(
     """Processes all messy media files, querying TMDB and AI as needed."""
     from src import api, ui
 
-    ui.print_log(f"\nAnalysing {len(messy_data_table)} files. Please wait...\n")
+    if not config.is_docker_environment():
+        n = len(messy_data_table)
+        file_word = "file" if n == 1 else "files"
+        ui.print_log(f"\nAnalysing {n} {file_word}. Please wait...\n")
 
     new_clean_data_rows: list[dict] = []
     failed_files: list[dict] = []

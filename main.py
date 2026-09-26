@@ -136,7 +136,7 @@ def process_media(args, daemon: bool = False, cycle: int = 1) -> int:
         if daemon:
             total = success_count + fail_count
             if fail_count > 0:
-                ui.log_error(f"Check {cycle} : {success_count}/{total} files processed ({fail_count} failed)")
+                ui.log_info(f"Check {cycle} : {success_count}/{total} files processed ({fail_count} failed)")
             else:
                 ui.print_log(f"Check {cycle} : Successfully processed {success_count}/{total} file(s).")
     else:

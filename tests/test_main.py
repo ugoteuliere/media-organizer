@@ -2485,11 +2485,13 @@ def test_daemon_summary_counts_on_failure(monkeypatch):
         patch("src.utils.get_corrected_media_filenames", return_value=dummy_df),
         patch("src.files.sort_media_files", return_value=[("/path/A.mkv", "/dest/A.mkv")]),
         patch("src.files.move_media_files", return_value=(0, 1)),
+        patch("src.ui.log_info") as mock_log_info,
         patch("src.ui.log_error") as mock_log_error,
     ):
         res = main.process_media(args, daemon=True, cycle=1)
         assert res == 0
-        mock_log_error.assert_called_once_with("Check 1 : 0/1 files processed (1 failed)")
+        mock_log_info.assert_called_once_with("Check 1 : 0/1 files processed (1 failed)")
+        mock_log_error.assert_not_called()
 
 
 def test_daemon_summary_counts_on_success(monkeypatch):

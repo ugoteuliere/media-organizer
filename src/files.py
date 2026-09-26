@@ -675,6 +675,7 @@ def move_media_files(
             failed_moves.append(failed_file)
             old_key = str(Path(old).resolve())
             _failed_files_cooldown[old_key] = datetime.now()
+            ui.log_info(f"'{Path(old).name}' will be ignored for the next 24 hours")
 
     if not runtime.daemon_enabled:
         if success_count > 0:

@@ -556,3 +556,38 @@ def test_analysing_files_docker_suppression():
                 assert "Analysing 1 file. Please wait..." in logged
     finally:
         runtime.ai_fallback_enabled = saved_ai
+
+
+def test_move_media_files_logs_cooldown_on_failure(tmp_path):
+    """Verify that failing to move a file adds it to cooldown and logs the 24h ignore notice."""
+    from unittest.mock import patch
+    from src import files
+
+    bad_file = tmp_path / "broken_movie.mkv"
+    bad_file.write_bytes(b"dummy")
+    dest_file = tmp_path / "dest.mkv"
+
+    files._failed_files_cooldown.clear()
+
+    with (
+        patch("src.files.execute_single_file_move", return_value=(False, bad_file.name)),
+        patch("src.files.remove_empty_folders"),
+        patch("src.ui.log_info") as mock_log_info,
+    ):
+        success_cnt, fail_cnt = files.move_media_files([(bad_file, dest_file)])
+        assert success_cnt == 0
+        assert fail_cnt == 1
+        assert str(bad_file.resolve()) in files._failed_files_cooldown
+        mock_log_info.assert_called_with(f"'{bad_file.name}' will be ignored for the next 24 hours")
+
+    # Now verify success removes it from cooldown and does not log ignore notice
+    with (
+        patch("src.files.execute_single_file_move", return_value=(True, None)),
+        patch("src.files.remove_empty_folders"),
+        patch("src.ui.log_info") as mock_log_info,
+    ):
+        success_cnt, fail_cnt = files.move_media_files([(bad_file, dest_file)])
+        assert success_cnt == 1
+        assert fail_cnt == 0
+        assert str(bad_file.resolve()) not in files._failed_files_cooldown
+        assert not any("will be ignored" in str(call) for call in mock_log_info.call_args_list)

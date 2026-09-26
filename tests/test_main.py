@@ -893,7 +893,7 @@ def test_send_email_success(mock_ssl_context, mock_smtp, mock_print):
     # Did it print the correct success logs?
     assert mock_print.call_count == 2
     mock_print.assert_any_call("Connecting to server...")
-    mock_print.assert_any_call("Success: error alert sent successfully!")
+    mock_print.assert_any_call("Email sent successfully")
 
 
 @patch_email_globals

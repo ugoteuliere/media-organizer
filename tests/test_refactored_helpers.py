@@ -334,7 +334,7 @@ def test_execute_single_file_move_daemon_mode(tmp_path, monkeypatch):
         assert success is False
         assert failed == old_file.name
         assert mock_log_err.call_count == 2
-        mock_log_err.assert_any_call("Failed to send error email: SMTP down")
+        mock_log_err.assert_any_call("Error while trying to send the email: SMTP down")
 
 
 def test_extract_parse_tokens():
@@ -428,3 +428,131 @@ def test_build_clean_media_entry(tmp_path):
     # Unknown / Neither entry
     entry_none = files.build_clean_media_entry(other_file, "clip", (), "unknown", is_movie=False, is_series=False)
     assert entry_none is None
+
+
+def test_folder_scan_report_permutations():
+    """Validates dynamic folder scan report formatting, pluralization, and optional sections."""
+    from unittest.mock import patch
+    from src import files
+
+    with patch("src.ui.log_info") as mock_log_info:
+        # Case 1: Empty folder (no media files) -> line is NOT printed
+        files.build_search_result_tables([], [], exit_if_empty=False, ignored_files_count=0)
+        mock_log_info.assert_not_called()
+
+    with patch("src.ui.log_info") as mock_log_info:
+        # Case 2: 1 file to rename -> singular '1 file to rename'
+        messy_1 = [{"File": "a.mkv", "Folder": "f", "Path": "/a.mkv", "Clean": "a", "Parse": (), "Media": "movie"}]
+        files.build_search_result_tables(messy_1, [], exit_if_empty=False, ignored_files_count=0)
+        mock_log_info.assert_called_once_with("Folder scan report: 1 file to rename")
+
+    with patch("src.ui.log_info") as mock_log_info:
+        # Case 3: 2 files to rename -> plural '2 files to rename'
+        messy_2 = [
+            {"File": "a.mkv", "Folder": "f", "Path": "/a.mkv", "Clean": "a", "Parse": (), "Media": "movie"},
+            {"File": "b.mkv", "Folder": "f", "Path": "/b.mkv", "Clean": "b", "Parse": (), "Media": "movie"},
+        ]
+        files.build_search_result_tables(messy_2, [], exit_if_empty=False, ignored_files_count=0)
+        mock_log_info.assert_called_once_with("Folder scan report: 2 files to rename")
+
+    with patch("src.ui.log_info") as mock_log_info:
+        # Case 4: Only clean files (1 file with clean filename) -> singular
+        clean_1 = [
+            {
+                "Original": "Good (2020)",
+                "Corrected": "Good (2020)",
+                "Path": "/Good.mkv",
+                "Media": "movie",
+                "Season": None,
+                "Episode": None,
+            }
+        ]
+        files.build_search_result_tables([], clean_1, exit_if_empty=False, ignored_files_count=0)
+        mock_log_info.assert_called_once_with("Folder scan report: 1 file with clean filename")
+
+    with patch("src.ui.log_info") as mock_log_info:
+        # Case 5: 2 clean files -> plural '2 files with clean filename'
+        clean_2 = [
+            {
+                "Original": "A (2020)",
+                "Corrected": "A (2020)",
+                "Path": "/A.mkv",
+                "Media": "movie",
+                "Season": None,
+                "Episode": None,
+            },
+            {
+                "Original": "B (2021)",
+                "Corrected": "B (2021)",
+                "Path": "/B.mkv",
+                "Media": "movie",
+                "Season": None,
+                "Episode": None,
+            },
+        ]
+        files.build_search_result_tables([], clean_2, exit_if_empty=False, ignored_files_count=0)
+        mock_log_info.assert_called_once_with("Folder scan report: 2 files with clean filename")
+
+    with patch("src.ui.log_info") as mock_log_info:
+        # Case 6: Only ignored files -> singular & plural
+        files.build_search_result_tables([], [], exit_if_empty=False, ignored_files_count=1)
+        mock_log_info.assert_called_once_with("Folder scan report: 1 file ignored because of previous errors")
+
+    with patch("src.ui.log_info") as mock_log_info:
+        files.build_search_result_tables([], [], exit_if_empty=False, ignored_files_count=3)
+        mock_log_info.assert_called_once_with("Folder scan report: 3 files ignored because of previous errors")
+
+    with patch("src.ui.log_info") as mock_log_info:
+        # Case 7: Combined sections with comma separator
+        messy = [{"File": "a.mkv", "Folder": "f", "Path": "/a.mkv", "Clean": "a", "Parse": (), "Media": "movie"}]
+        clean = [
+            {
+                "Original": "A (2020)",
+                "Corrected": "A (2020)",
+                "Path": "/A.mkv",
+                "Media": "movie",
+                "Season": None,
+                "Episode": None,
+            },
+            {
+                "Original": "B (2021)",
+                "Corrected": "B (2021)",
+                "Path": "/B.mkv",
+                "Media": "movie",
+                "Season": None,
+                "Episode": None,
+            },
+        ]
+        files.build_search_result_tables(messy, clean, exit_if_empty=False, ignored_files_count=1)
+        mock_log_info.assert_called_once_with(
+            "Folder scan report: 1 file to rename, 2 files with clean filename, 1 file ignored because of previous errors"
+        )
+
+
+def test_analysing_files_docker_suppression():
+    """Validates that 'Analysing X files. Please wait...' is suppressed in Docker mode."""
+    import pandas as pd
+    from unittest.mock import patch
+    from src import utils
+    from src.runtime_config import runtime
+    from src.config import config
+
+    messy_df = pd.DataFrame([{"File": "A.mkv", "Path": "/A.mkv", "Media": "movie", "Parse": ("A", "2020", None, None)}])
+    clean_df = pd.DataFrame()
+
+    saved_ai = runtime.ai_fallback_enabled
+    runtime.ai_fallback_enabled = False
+    try:
+        with patch.object(config, "is_docker_environment", return_value=True), patch("src.ui.print_log") as mock_log:
+            with patch("src.utils.correct_movie_filename", return_value="A (2020).mkv"):
+                utils.get_corrected_media_filenames(messy_df, clean_df)
+                for call_item in mock_log.call_args_list:
+                    assert "Please wait" not in str(call_item)
+
+        with patch.object(config, "is_docker_environment", return_value=False), patch("src.ui.print_log") as mock_log:
+            with patch("src.utils.correct_movie_filename", return_value="A (2020).mkv"):
+                utils.get_corrected_media_filenames(messy_df, clean_df)
+                logged = " ".join([str(c[0][0]) for c in mock_log.call_args_list if c[0]])
+                assert "Analysing 1 file. Please wait..." in logged
+    finally:
+        runtime.ai_fallback_enabled = saved_ai

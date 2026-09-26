@@ -187,7 +187,7 @@ def test_send_tag_learned_email_dispatch_exception(monkeypatch):
     ):
         mail.send_tag_learned_email(tags=["CustomGroup"], filename="Movie.mkv")
         logged = " ".join([str(c[0][0]) for c in mock_log.call_args_list if c[0]])
-        assert "Failed to send tag learned email" in logged
+        assert "Error while trying to send the email" in logged
 
 
 def test_send_error_email_dispatch_exception(monkeypatch):
@@ -202,4 +202,4 @@ def test_send_error_email_dispatch_exception(monkeypatch):
     ):
         mail.send_error_email(error_message="Something failed")
         logged = " ".join([str(c[0][0]) for c in mock_log.call_args_list if c[0]])
-        assert "Failed to send error email" in logged
+        assert "Error while trying to send the email" in logged

@@ -130,7 +130,7 @@ def resolve_search_directory(path: str | None = None) -> Path | None:
     return target_dir
 
 
-def collect_candidate_video_files(target_dir: Path) -> list[Path]:
+def collect_candidate_video_files(target_dir: Path, ignored_files: list[Path] | None = None) -> list[Path]:
     """Recursively scans *target_dir* and returns non-locked video files."""
     global _failed_files_cooldown
     candidates: list[Path] = []
@@ -143,13 +143,14 @@ def collect_candidate_video_files(target_dir: Path) -> list[Path]:
     min_size_mb = float(os.environ.get("MIN_FILE_SIZE_MB", "0"))
     min_size_bytes = int(min_size_mb * 1024 * 1024)
     for file_path in target_dir.rglob("*"):
-        if str(file_path.resolve()) in _failed_files_cooldown:
-            # Skip silently if in 24h cooldown
-            continue
-
         if file_path.suffix.lower() in PARTIAL_EXTENSIONS:
             continue
         if file_path.suffix.lower() in VIDEO_EXTENSIONS:
+            if str(file_path.resolve()) in _failed_files_cooldown:
+                if ignored_files is not None:
+                    ignored_files.append(file_path)
+                continue
+
             try:
                 st = file_path.stat()
                 if min_size_mb > 0 and st.st_size < min_size_bytes:
@@ -301,6 +302,7 @@ def build_search_result_tables(
     messy_data_table: list,
     clean_data_table: list,
     exit_if_empty: bool = True,
+    ignored_files_count: int = 0,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Converts result lists into sorted DataFrames.
 
@@ -308,17 +310,28 @@ def build_search_result_tables(
     ``exit_if_empty=False``.  When ``exit_if_empty=True`` the caller (main)
     handles the empty case gracefully.
     """
+    files_to_rename_count = len(messy_data_table) + sum(1 for f in clean_data_table if f["Original"] != f["Corrected"])
+    clean_files_count = sum(1 for f in clean_data_table if f["Original"] == f["Corrected"])
+
+    parts = []
+    if files_to_rename_count > 0:
+        word = "file" if files_to_rename_count == 1 else "files"
+        parts.append(f"{files_to_rename_count} {word} to rename")
+    if clean_files_count > 0:
+        word = "file" if clean_files_count == 1 else "files"
+        parts.append(f"{clean_files_count} {word} with clean filename")
+    if ignored_files_count > 0:
+        word = "file" if ignored_files_count == 1 else "files"
+        parts.append(f"{ignored_files_count} {word} ignored because of previous errors")
+
+    if parts:
+        ui.log_info(f"Folder scan report: {', '.join(parts)}")
+
     if len(messy_data_table) == 0 and len(clean_data_table) == 0:
         if exit_if_empty:
             ui.print_log("No media files found in that folder")
             sys.exit(1)
         return pd.DataFrame(), pd.DataFrame()
-
-    files_to_rename_count = len(messy_data_table) + sum(1 for f in clean_data_table if f["Original"] != f["Corrected"])
-    clean_files_count = sum(1 for f in clean_data_table if f["Original"] == f["Corrected"])
-    ui.print_log(
-        f"\nFolder scan report:\n - {files_to_rename_count} files to rename\n - {clean_files_count} files with clean filename\n"
-    )
 
     messy_data = pd.DataFrame(messy_data_table)
     clean_data = pd.DataFrame(clean_data_table, columns=["Original", "Corrected", "Path", "Media", "Season", "Episode"])
@@ -339,12 +352,18 @@ def search_media_files(
 
     messy_data_table: list = []
     clean_data_table: list = []
+    ignored_files: list[Path] = []
 
-    candidate_files = collect_candidate_video_files(target_dir)
+    candidate_files = collect_candidate_video_files(target_dir, ignored_files=ignored_files)
     for file_path in candidate_files:
         classify_video_file(file_path, messy_data_table, clean_data_table)
 
-    return build_search_result_tables(messy_data_table, clean_data_table, exit_if_empty=exit_if_empty)
+    return build_search_result_tables(
+        messy_data_table,
+        clean_data_table,
+        exit_if_empty=exit_if_empty,
+        ignored_files_count=len(ignored_files),
+    )
 
 
 # ── Windows long-path helper ─────────────────────────────────────────────────
@@ -621,10 +640,7 @@ def execute_single_file_move(
         try:
             mail.send_error_email(error_message=str(e), affected_file=p_old.name)
         except Exception as mail_err:
-            if runtime.daemon_enabled:
-                ui.log_error(f"Failed to send error email: {mail_err}")
-            else:
-                ui.print_log(f"Warning: Failed to send error email: {mail_err}")
+            ui.log_error(f"Error while trying to send the email: {mail_err}")
         return False, p_old.name
 
 
